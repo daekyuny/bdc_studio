@@ -118,8 +118,8 @@ const renderStats = (sprint, burndown) => {
   const doneTasks = sprint.tasks.filter((task) => task.status === "Done").length;
   const availableDays = burndown.effectiveManDays - burndown.totalPoints;
   dom.totalPoints.textContent = burndown.totalPoints.toFixed(1).replace(/\.0$/, "");
-  dom.remainingPoints.textContent =
-    (burndown.actual[burndown.actual.length - 1] || 0).toFixed(1).replace(/\.0$/, "");
+  const lastActual = [...burndown.actual].reverse().find((v) => v !== null) ?? 0;
+  dom.remainingPoints.textContent = lastActual.toFixed(1).replace(/\.0$/, "");
   dom.workingDays.textContent = burndown.dates.length;
   dom.doneTasks.textContent = doneTasks;
   dom.manDays.textContent = burndown.manDays.toFixed(1).replace(/\.0$/, "");
@@ -145,14 +145,28 @@ export const render = () => {
 
   patchActiveSprint({ developers: 4, efficiency: 0.8 });
 
+  const real = todayIso();
+  const defaultToday =
+    real >= sprint.startDate && real <= sprint.endDate ? real :
+    real < sprint.startDate ? sprint.startDate : sprint.endDate;
+  patchActiveSprint({ today: defaultToday });
+
+  const effectiveToday =
+    sprint.today < sprint.startDate ? sprint.startDate :
+    sprint.today > sprint.endDate ? sprint.endDate :
+    sprint.today;
+
   dom.sprintName.value = sprint.name;
   dom.startDate.value = sprint.startDate;
   dom.endDate.value = sprint.endDate;
   dom.developers.value = sprint.developers ?? "";
   dom.efficiency.value = sprint.efficiency ?? "";
+  dom.sprintToday.value = effectiveToday;
+  dom.sprintToday.min = sprint.startDate || "";
+  dom.sprintToday.max = sprint.endDate || "";
 
   renderTasks(sprint);
-  const burndown = calculateBurndown(sprint);
+  const burndown = calculateBurndown(sprint, effectiveToday);
   renderStats(sprint, burndown);
   drawChart(burndown);
 };

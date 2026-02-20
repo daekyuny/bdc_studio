@@ -1,5 +1,5 @@
 import { dom } from "./dom.js";
-import { setOnStateChange, addSprint, deleteActiveSprint, updateSprint, addTask } from "./state.js";
+import { setOnStateChange, addSprint, deleteActiveSprint, updateSprint, addTask, updateToday } from "./state.js";
 import { render } from "./render.js";
 import { exportData, importData } from "./io.js";
 
@@ -53,6 +53,9 @@ dom.efficiency.addEventListener("keydown", (event) => {
     dom.efficiency.blur();
   }
 });
+const commitToday = () => updateToday(dom.sprintToday.value);
+dom.sprintToday.addEventListener("change", commitToday);
+
 dom.showDayNumbers.addEventListener("change", render);
 
 render();

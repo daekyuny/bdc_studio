@@ -7,8 +7,8 @@
   --muted: #6b7080;
   --accent: #5c67f2;
   --accent-soft: #a5b4fc;
-  --ideal: #16a34a;
-  --actual: #3d405b;
+  --ideal: #3b82f6;
+  --actual: #ef4444;
   --stroke: rgba(44, 47, 58, 0.12);
   --shadow: 0 12px 28px rgba(44, 47, 58, 0.10);
 }
@@ -375,6 +375,9 @@ select:focus {
 .chart-wrap {
   width: 100%;
   overflow-x: auto;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 10px;
+  padding: 6px 2px;
 }
 
 svg {
@@ -388,6 +391,27 @@ svg {
   gap: 8px;
   font-size: 0.85rem;
   color: var(--muted);
+}
+
+.today-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.today-field label {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.today-field input[type="date"] {
+  padding: 3px 8px;
+  font-size: 0.82rem;
+  border-radius: 8px;
 }
 
 @keyframes fadeIn {

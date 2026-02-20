@@ -1,6 +1,6 @@
 import { getWorkingDates } from "./utils.js";
 
-export const calculateBurndown = (sprint) => {
+export const calculateBurndown = (sprint, today) => {
   const dates = getWorkingDates(sprint.startDate, sprint.endDate);
   const totalPoints = sprint.tasks.reduce((sum, task) => sum + Number(task.points || 0), 0);
   const workingDays = dates.length || 0;
@@ -14,7 +14,9 @@ export const calculateBurndown = (sprint) => {
     const remaining = totalPoints - idealDailyBurn * index;
     return Math.round(Math.max(remaining, 0) * 100) / 100;
   });
-  const actual = dates.map((date) => {
+  const todayIndex = dates.reduce((last, date, i) => (date <= today ? i : last), -1);
+  const actual = dates.map((date, i) => {
+    if (todayIndex < 0 || i > todayIndex) return null;
     return sprint.tasks.reduce((sum, task) => {
       const points = Number(task.points || 0);
       if (!task.doneDate) return sum + points;
@@ -22,5 +24,5 @@ export const calculateBurndown = (sprint) => {
     }, 0);
   });
 
-  return { dates, totalPoints, ideal, actual, manDays, effectiveManDays, idealDailyBurn };
+  return { dates, totalPoints, ideal, actual, manDays, effectiveManDays, idealDailyBurn, todayIndex };
 };

@@ -149,6 +149,17 @@ export const removeTask = (taskId) => {
   onChange();
 };
 
+export const updateToday = (date) => {
+  const sprint = getActiveSprint();
+  if (!sprint || !date) return;
+  const clamped =
+    date < sprint.startDate ? sprint.startDate :
+    date > sprint.endDate ? sprint.endDate : date;
+  sprint.today = clamped;
+  save();
+  onChange();
+};
+
 export const replaceState = (newState) => {
   state = newState;
   save();
