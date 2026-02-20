@@ -1,6 +1,6 @@
 # Burndown Studio — Technical Design Document
 
-**Version:** 0.1 (Draft)
+**Version:** 0.3
 **Last updated:** 2026-02-20
 **Status:** Draft — open for review
 
@@ -8,20 +8,33 @@
 
 ## 1. Architecture Overview
 
-Burndown Studio is a **zero-dependency, static single-page application**. There is no build step, no framework, and no backend. The entire app is three files served as static assets.
+Burndown Studio is a **static single-page application** with a modular JavaScript source and an esbuild bundling step. There is no framework and no backend. The source code is organized as ES modules under `src/`, which are bundled into a single `app.js` for browser consumption.
 
 ```
 Browser
-  ├── index.html    (UI structure + templates)
-  ├── styles.css    (layout, theming, animations)
-  └── app.js        (state management, calculations, rendering)
+  ├── index.html        (UI structure + templates)
+  ├── styles.css        (layout, theming, animations)
+  └── app.js            (bundled from src/ via esbuild)
           │
           └── localStorage ("burndown-studio" key)
+
+Development
+  └── src/
+      ├── main.js       → entry point, event wiring
+      ├── dom.js        → DOM element references
+      ├── state.js      → state management, CRUD
+      ├── burndown.js   → pure calculation functions
+      ├── chart.js      → SVG chart rendering
+      ├── render.js     → DOM rendering (sidebar, tasks, stats)
+      ├── io.js         → JSON export/import
+      └── utils.js      → shared helpers (dates, IDs)
 ```
 
-### Design Principles (current)
-- **No build step** — open `index.html` and it works.
-- **No dependencies** — no npm packages, no CDN libraries (except Google Fonts).
+### Design Principles
+- **Open and run** — open `index.html` directly in a browser (`file://` works, no server required).
+- **Modular source** — 8 focused ES modules for clean separation and parallel development.
+- **Single build step** — `npm run build` bundles `src/` → `app.js` via esbuild.
+- **Minimal dependencies** — only dev dependency is esbuild. No runtime dependencies (except Google Fonts via CDN).
 - **Single global state** — one JS object, one localStorage key.
 - **Full re-render** — every state change triggers a complete DOM rebuild via `render()`.
 
@@ -31,13 +44,29 @@ Browser
 |---|---|---|
 | Markup | HTML5 | Semantic elements, `<template>` for row/item cloning |
 | Styling | Vanilla CSS | CSS custom properties, grid, responsive breakpoints |
-| Logic | Vanilla JS (ES2020+) | `crypto.randomUUID()`, arrow functions, template literals |
+| Logic | Vanilla JS (ES2020+) | `crypto.randomUUID()`, ES modules, arrow functions |
 | Chart | Hand-rolled SVG | `<polyline>` elements built via DOM API |
-| Fonts | Google Fonts | Fraunces (headings), Source Sans 3 (body) |
+| Fonts | Google Fonts (CDN) | Fraunces (headings), Source Sans 3 (body) |
 | Storage | localStorage | Single JSON blob under `burndown-studio` key |
-| Serving | Any static server | `python3 -m http.server`, or just `file://` |
+| Bundler | esbuild | Bundles ES modules into single `app.js` |
+| Serving | Any static server or `file://` | `python3 -m http.server`, or open `index.html` directly |
+| Version control | Git + GitHub | Remote: `git@github.com:daekyuny/bdc_studio.git` |
 
-## 3. Data Model
+## 3. Build Pipeline
+
+```
+src/*.js  ──esbuild──▶  app.js  ──browser──▶  runs in any browser
+```
+
+| Command | Description |
+|---|---|
+| `npm install` | Install esbuild (first time only) |
+| `npm run build` | Bundle `src/main.js` → `app.js` |
+| `npm run dev` | Start local dev server on port 5173 |
+
+`app.js` is committed to git so the app works out-of-the-box after cloning — no build step needed to just use the app. The build step is only required after editing files in `src/`.
+
+## 4. Data Model
 
 All state is stored as a single JSON object in `localStorage`:
 
@@ -68,15 +97,19 @@ burndown-studio (localStorage key)
 - A sprint with 50 tasks is roughly 3-4 KB of JSON.
 - Practical limit: ~1,000+ sprints before hitting storage concerns.
 
-## 4. Key Algorithms
+### Data Safety
+- JSON export/import provides backup and portability (`io.js`).
+- `loadState()` in `state.js` wraps `JSON.parse` in try/catch — corrupt data is detected, logged, and reset to defaults.
 
-### 4.1 Working Days Calculation (`getWorkingDates`)
+## 5. Key Algorithms
+
+### 5.1 Working Days Calculation (`getWorkingDates` in `utils.js`)
 - Iterates from `startDate` to `endDate` inclusive.
 - Excludes Saturday (day 6) and Sunday (day 0).
 - Returns an array of ISO date strings.
 - **Gap:** Does not exclude holidays or PTO.
 
-### 4.2 Burndown Calculation (`calculateBurndown`)
+### 5.2 Burndown Calculation (`calculateBurndown` in `burndown.js`)
 - **Total points:** Sum of all task `points` values.
 - **Man-days:** `developers * workingDays`.
 - **Effective man-days:** `manDays * efficiency`.
@@ -84,11 +117,11 @@ burndown-studio (localStorage key)
 - **Ideal line:** Starts at `totalPoints`, decreases by `idealDailyBurn` per working day.
 - **Actual line:** For each working day, sums the points of tasks whose `doneDate` is after that day (i.e., not yet done).
 
-### 4.3 Available Days
+### 5.3 Available Days (`renderStats` in `render.js`)
 - Formula: `effectiveManDays - totalPoints`.
 - Color coding: green if between -1.0 and 1.0, red if < -1.0.
 
-## 5. Rendering Strategy
+## 6. Rendering Strategy
 
 The app uses a **full re-render** approach:
 1. State mutations in `state.js` call `save()` then fire the `onStateChange` callback.
@@ -102,11 +135,12 @@ The app uses a **full re-render** approach:
 - Will degrade with 50+ tasks due to full DOM teardown/rebuild.
 - SVG chart is rebuilt from scratch each time.
 
-## 6. File Structure
+## 7. File Structure
 
 ```
 bdc/
 ├── index.html          # UI structure, templates
+├── app.js              # Bundled output (built from src/, committed to git)
 ├── styles.css          # All styling (no preprocessor)
 ├── src/
 │   ├── main.js         # Entry point — event wiring, init
@@ -121,6 +155,7 @@ bdc/
 │   ├── PRD.md          # Product requirements
 │   ├── TECHNICAL_DESIGN.md   # This document
 │   └── ROADMAP.md      # Delivery roadmap
+├── package.json        # Build scripts and dev dependencies
 ├── .gitignore
 └── README.md
 ```
@@ -143,7 +178,20 @@ main.js
 No circular dependencies. `state.js` communicates with `render.js` via a callback
 (`setOnStateChange`) registered by `main.js`, avoiding a direct import cycle.
 
-## 7. Technical Debt & Risks
+### Module Responsibilities
+
+| Module | Lines | Responsibility |
+|---|---|---|
+| `utils.js` | ~35 | Pure helpers: date math, formatting, UUID generation |
+| `dom.js` | ~28 | Queries and exports all DOM element references |
+| `state.js` | ~143 | State CRUD, localStorage load/save, change callback |
+| `burndown.js` | ~27 | Pure burndown calculation (ideal/actual lines, capacity) |
+| `chart.js` | ~89 | SVG chart rendering (grid, lines, labels) |
+| `render.js` | ~148 | DOM rendering: sprint list, task table, stats card |
+| `io.js` | ~36 | JSON export (file download) and import (file read + validation) |
+| `main.js` | ~55 | Entry point: registers callbacks, attaches event listeners |
+
+## 8. Technical Debt & Risks
 
 | ID | Issue | Severity | Status | Notes |
 |---|---|---|---|---|
@@ -156,21 +204,26 @@ No circular dependencies. `state.js` communicates with `render.js` via a callbac
 | TD-07 | No error handling | Low | **Resolved** | `loadState` now has try/catch with graceful fallback. |
 | TD-08 | Date handling uses string comparison | Low | Open | `task.doneDate > date` works for ISO strings but is fragile. |
 
-## 8. Future Architecture Considerations
+## 9. Future Architecture Considerations
 
 ### If adding a backend (Phase 4):
 - The data model is already JSON-serializable — drop-in compatible with a REST API.
 - Consider: SQLite file per user (simplest), or PostgreSQL for multi-user.
-- The frontend would need to switch from `localStorage` calls to `fetch()` calls — a straightforward refactor if the state management is kept centralized.
+- The frontend would need to switch from `localStorage` calls to `fetch()` calls in `state.js` — a straightforward refactor since state management is centralized in one module.
 
-### If adding a build step:
-- Vite is recommended (minimal config, fast dev server, handles ES modules).
-- Would enable: TypeScript, CSS modules, tree-shaking, proper test runner (Vitest).
-- Migration path: add `vite.config.js`, the existing `src/main.js` entry point already works.
+### If migrating to Vite:
+- Vite could replace esbuild for a richer dev experience (HMR, CSS modules, TypeScript).
+- Migration path: add `vite.config.js`, update `package.json` scripts. The existing `src/main.js` entry point and module structure already work with Vite.
 
-## 9. Revision History
+### If adding TypeScript:
+- Rename `.js` → `.ts` files incrementally.
+- Define interfaces for `Sprint`, `Task`, and `State` in a shared `types.ts`.
+- esbuild already supports TypeScript out of the box (type-stripping only; add `tsc --noEmit` for type checking).
+
+## 10. Revision History
 
 | Date | Version | Changes |
 |---|---|---|
 | 2026-02-20 | 0.1 | Initial draft based on MVP codebase analysis |
 | 2026-02-20 | 0.2 | Updated for ES module refactor, resolved tech debt items, updated file structure and dependency graph |
+| 2026-02-20 | 0.3 | Comprehensive update: added build pipeline section, module responsibilities table, data safety notes, updated architecture overview for esbuild bundling, updated tech stack, updated future architecture considerations |

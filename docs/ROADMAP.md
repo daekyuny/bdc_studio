@@ -1,6 +1,6 @@
 # Burndown Studio — Project Roadmap
 
-**Version:** 0.1 (Draft)
+**Version:** 0.2
 **Last updated:** 2026-02-20
 **Status:** Draft — open for review
 
@@ -9,56 +9,74 @@
 ## Roadmap Overview
 
 ```
-Phase 0 (Done)     Phase 1            Phase 2            Phase 3            Phase 4
+Phase 0 (Done)     Phase 1 (Active)   Phase 2            Phase 3            Phase 4
 ──────────────     ────────────       ────────────       ────────────       ────────────
 MVP baseline       Data Safety        Daily Usability    Insights           Multi-user
-                   & Accuracy                            & History          & Integrations
++ Tech Foundation  & Accuracy                            & History          & Integrations
 ```
 
 ---
 
-## Phase 0 — MVP Baseline (DONE)
+## Phase 0 — MVP Baseline + Tech Foundation (DONE)
 
-**Goal:** A working burndown tracker that runs locally in the browser.
+**Goal:** A working burndown tracker that runs locally in the browser, with a solid technical foundation for further development.
 
+### Core Features
 - [x] Multiple sprint management (create, switch, delete)
 - [x] Sprint setup (name, dates, developers, efficiency)
 - [x] Weekend auto-skip in working-day calculations
 - [x] Task CRUD with name, days, status, done date
 - [x] Ideal vs actual burndown chart (SVG)
 - [x] Stats dashboard (7 metrics)
-- [x] Available Days capacity indicator
+- [x] Available Days capacity indicator (formula: `effectiveManDays - totalPoints`)
 - [x] localStorage persistence
 - [x] Responsive layout
+- [x] JSON export/import for data backup and portability
+- [x] Show day numbers toggle (D1/D2 vs calendar dates)
+- [x] Graceful recovery from corrupt localStorage data
 
-**Delivered:** 2026-02-19
+### Technical Foundation
+- [x] Git repository initialized, connected to GitHub remote
+- [x] Codebase split into 8 ES modules under `src/`
+- [x] esbuild bundling (`npm run build` → `app.js`)
+- [x] `app.js` committed to git for zero-build-step usage
+- [x] Project documentation: PRD, Technical Design, Roadmap
+- [x] `.gitignore` configured
+
+**Delivered:** 2026-02-19 (MVP) / 2026-02-20 (tech foundation + bug fixes)
 
 ---
 
-## Phase 1 — Data Safety & Accuracy
+## Phase 1 — Data Safety & Accuracy (ACTIVE)
 
-**Goal:** Make the tool trustworthy for daily use. No more data loss risk, and the burndown chart reflects real-world capacity.
+**Goal:** Make the burndown chart accurate for real-world sprints. Complete the data safety story.
 
 ### Features
 
-| ID | Feature | Priority | Effort | Description |
-|---|---|---|---|---|
-| F-101 | JSON export/import | P0 | Small | Download/upload full state as `.json` file |
-| F-102 | Holiday/PTO exclusions | P0 | Medium | Per-sprint list of excluded dates; reflected in working days & ideal line |
-| F-103 | CSV task export | P1 | Small | Download active sprint's task list as `.csv` |
+| ID | Feature | Priority | Effort | Status | Description |
+|---|---|---|---|---|---|
+| F-101 | JSON export/import | P0 | Small | **Done** | Download/upload full state as `.json` file |
+| F-102 | Holiday/PTO exclusions | P0 | Medium | Open | Per-sprint list of excluded dates; reflected in working days & ideal line |
+| F-103 | CSV task export | P1 | Small | Open | Download active sprint's task list as `.csv` |
 
 ### Technical Foundation
 
-| ID | Item | Priority | Effort | Description |
-|---|---|---|---|---|
-| T-101 | Initialize git repo | P0 | Trivial | `git init` + initial commit of MVP |
-| T-102 | Add basic input validation | P1 | Small | Validate dates, points, efficiency in JS (not just HTML attributes) |
-| T-103 | Graceful localStorage error handling | P1 | Small | Try/catch around `JSON.parse`, fallback to fresh state on corruption |
+| ID | Item | Priority | Effort | Status | Description |
+|---|---|---|---|---|---|
+| T-101 | Initialize git repo | P0 | Trivial | **Done** | `git init` + initial commit, GitHub remote |
+| T-102 | Add basic input validation | P1 | Small | Open | Validate dates, points, efficiency in JS (not just HTML attributes) |
+| T-103 | Graceful localStorage error handling | P1 | Small | **Done** | Try/catch around `JSON.parse`, fallback to fresh state on corruption |
+| T-104 | Split into ES modules | P1 | Medium | **Done** | 8 modules under `src/` with esbuild bundling |
 
 ### Exit Criteria
-- User can export all data, clear browser, import, and have everything restored.
+- User can export all data, clear browser, import, and have everything restored. **(Done)**
 - Holiday dates are excluded from working-day count and ideal burn line.
-- Git repo exists with clean commit history.
+- Git repo exists with clean commit history. **(Done)**
+
+### Remaining Work
+- F-102: Holiday/PTO exclusions
+- F-103: CSV task export
+- T-102: Input validation
 
 ---
 
@@ -80,9 +98,7 @@ MVP baseline       Data Safety        Daily Usability    Insights           Mult
 
 | ID | Item | Priority | Effort | Description |
 |---|---|---|---|---|
-| T-201 | Introduce Vite build tool | P2 | Small | Enable ES modules, dev server with HMR, future TypeScript support |
-| T-202 | Split app.js into modules | P2 | Medium | Separate state, calculations, rendering, chart into distinct files |
-| T-203 | Add unit tests for calculations | P1 | Small | Test `calculateBurndown`, `getWorkingDates` with edge cases |
+| T-201 | Add unit tests for calculations | P1 | Small | Test `calculateBurndown`, `getWorkingDates` with edge cases |
 
 ### Exit Criteria
 - Tasks can be reordered by drag-and-drop.
@@ -152,3 +168,4 @@ MVP baseline       Data Safety        Daily Usability    Insights           Mult
 | Date | Version | Changes |
 |---|---|---|
 | 2026-02-20 | 0.1 | Initial draft based on MVP codebase analysis |
+| 2026-02-20 | 0.2 | Merged Phase 0 with completed tech items. Marked F-101, T-101, T-103, T-104 as Done. Removed completed T-201/T-202 (module split and build tool) from Phase 2. Added remaining work summary to Phase 1. |

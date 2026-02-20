@@ -1,6 +1,6 @@
 # Burndown Studio — Product Requirements Document
 
-**Version:** 0.1 (Draft)
+**Version:** 0.2
 **Last updated:** 2026-02-20
 **Author:** [Your Name]
 **Status:** Draft — open for review
@@ -37,7 +37,7 @@ Key pain points:
 - Needs cross-sprint velocity trends and team-level dashboards.
 - Requires multi-user access and shared data.
 
-## 4. Current Features (MVP — v0.1)
+## 4. Current Features (v0.2)
 
 | Feature | Description | Status |
 |---|---|---|
@@ -47,46 +47,50 @@ Key pain points:
 | Task management | Add/remove tasks with name, days, status, done date | Done |
 | Burndown chart | SVG ideal vs actual line chart with animation | Done |
 | Stats dashboard | Total days, remaining, working days, done tasks, man-days, effective man-days, ideal burn rate | Done |
-| Available Days indicator | `working days - total points`, color-coded green/red | Done |
+| Available Days indicator | `effective man-days - total points`, color-coded green/red | Done |
 | Input commit on blur/Enter | No mid-typing recalculations | Done |
 | localStorage persistence | All data stored in browser localStorage | Done |
 | Responsive layout | Adapts to screens down to 900px | Done |
+| JSON export/import | Download full state as `.json` file; import to restore | Done |
+| Show day numbers toggle | Switch between D1/D2 labels and calendar dates on the chart X-axis | Done |
+| Graceful error recovery | Corrupt localStorage data is detected and reset to defaults | Done |
+| Modular codebase | Source split into 8 ES modules, bundled via esbuild | Done |
 
 ## 5. Planned Features
 
-### 5.1 Phase 1 — Data Safety & Accuracy
+### 5.1 Phase 1 — Data Safety & Accuracy (partially complete)
 
-| ID | Feature | Priority | Description |
-|---|---|---|---|
-| F-101 | JSON export/import | P0 | Export full app state as JSON file; import to restore. Protects against data loss. |
-| F-102 | Holiday / PTO exclusions | P0 | Mark specific dates as non-working. These dates are excluded from working-day calculations and the ideal burn line. |
-| F-103 | CSV export | P1 | Export the task list of the active sprint as a CSV file for stakeholder reporting. |
+| ID | Feature | Priority | Status | Description |
+|---|---|---|---|---|
+| F-101 | JSON export/import | P0 | **Done** | Export full app state as JSON file; import to restore. Protects against data loss. |
+| F-102 | Holiday / PTO exclusions | P0 | Open | Mark specific dates as non-working. These dates are excluded from working-day calculations and the ideal burn line. |
+| F-103 | CSV export | P1 | Open | Export the task list of the active sprint as a CSV file for stakeholder reporting. |
 
 ### 5.2 Phase 2 — Daily Usability
 
-| ID | Feature | Priority | Description |
-|---|---|---|---|
-| F-201 | Task drag-and-drop reordering | P1 | Reorder tasks by dragging rows. Persisted order is used in the table. |
-| F-202 | Sprint progress percentage | P1 | Show "X% complete" in the stats card based on done points vs total points. |
-| F-203 | Sprint cloning / templates | P2 | Clone an existing sprint's task structure (names + points) into a new sprint with all statuses reset to Todo. |
-| F-204 | Scope change tracking | P2 | Record when tasks are added/removed mid-sprint. Optionally display a "scope line" on the burndown chart. |
+| ID | Feature | Priority | Status | Description |
+|---|---|---|---|---|
+| F-201 | Task drag-and-drop reordering | P1 | Open | Reorder tasks by dragging rows. Persisted order is used in the table. |
+| F-202 | Sprint progress percentage | P1 | Open | Show "X% complete" in the stats card based on done points vs total points. |
+| F-203 | Sprint cloning / templates | P2 | Open | Clone an existing sprint's task structure (names + points) into a new sprint with all statuses reset to Todo. |
+| F-204 | Scope change tracking | P2 | Open | Record when tasks are added/removed mid-sprint. Optionally display a "scope line" on the burndown chart. |
 
 ### 5.3 Phase 3 — Insights & History
 
-| ID | Feature | Priority | Description |
-|---|---|---|---|
-| F-301 | Sprint velocity chart | P1 | After 2+ completed sprints, show a bar chart of points completed per sprint over time. |
-| F-302 | Sprint archive / completion | P2 | Mark a sprint as "completed." Completed sprints are visually distinct and read-only. |
-| F-303 | Burndown chart tooltips | P2 | Hover over a data point on the chart to see the date, ideal value, and actual value. |
+| ID | Feature | Priority | Status | Description |
+|---|---|---|---|---|
+| F-301 | Sprint velocity chart | P1 | Open | After 2+ completed sprints, show a bar chart of points completed per sprint over time. |
+| F-302 | Sprint archive / completion | P2 | Open | Mark a sprint as "completed." Completed sprints are visually distinct and read-only. |
+| F-303 | Burndown chart tooltips | P2 | Open | Hover over a data point on the chart to see the date, ideal value, and actual value. |
 
 ### 5.4 Phase 4 — Multi-user & Integrations (deferred)
 
-| ID | Feature | Priority | Description |
-|---|---|---|---|
-| F-401 | Backend storage | P1 | Move from localStorage to a server-side store (or file-based sync) for durability and sharing. |
-| F-402 | User authentication | P2 | Simple auth (email/password or OAuth) to support per-user data. |
-| F-403 | Multi-team support | P2 | Organize sprints by team. Each team sees only its own sprints. |
-| F-404 | Issue tracker integration | P3 | Pull tasks from Jira, Linear, or GitHub Issues. |
+| ID | Feature | Priority | Status | Description |
+|---|---|---|---|---|
+| F-401 | Backend storage | P1 | Open | Move from localStorage to a server-side store (or file-based sync) for durability and sharing. |
+| F-402 | User authentication | P2 | Open | Simple auth (email/password or OAuth) to support per-user data. |
+| F-403 | Multi-team support | P2 | Open | Organize sprints by team. Each team sees only its own sprints. |
+| F-404 | Issue tracker integration | P3 | Open | Pull tasks from Jira, Linear, or GitHub Issues. |
 
 ## 6. Out of Scope (for now)
 
@@ -116,3 +120,4 @@ Key pain points:
 | Date | Version | Changes |
 |---|---|---|
 | 2026-02-20 | 0.1 | Initial draft based on MVP codebase analysis |
+| 2026-02-20 | 0.2 | Updated feature table with completed items (JSON export/import, day toggle, error recovery, modular codebase). Added status column to planned features. Updated Available Days formula. |

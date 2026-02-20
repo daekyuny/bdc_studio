@@ -1,4 +1,4 @@
-# Burndown Studio (MVP)
+# Burndown Studio
 
 Local, single-user web app for sprint burndown tracking with task-level updates. Data is stored in browser `localStorage`.
 
@@ -90,16 +90,20 @@ bdc/
 }
 ```
 
-## Known Next Steps (optional)
+## Documentation
 
-- Holiday exclusions in working days.
-- CSV export.
-- Multi-team / multi-manager support with auth.
+See `docs/` for detailed project documents:
+- [PRD](docs/PRD.md) — Product requirements, personas, feature inventory
+- [Technical Design](docs/TECHNICAL_DESIGN.md) — Architecture, data model, algorithms, module graph
+- [Roadmap](docs/ROADMAP.md) — Phased delivery plan with status tracking
 
 ## Change Log
 
-- 2026-02-19: MVP baseline.
-- 2026-02-19: Sprint delete + layout/input polish.
-- 2026-02-19: Capacity inputs + Available Days.
-- 2026-02-20: JSON export/import, show day numbers toggle fix, localStorage error handling, Available Days formula fix (now uses effective man-days).
-- 2026-02-20: Refactored app.js into ES modules under src/. Added esbuild bundling (npm run build).
+| Date | Changes |
+|---|---|
+| 2026-02-19 | MVP baseline |
+| 2026-02-19 | Sprint delete + layout/input polish |
+| 2026-02-19 | Capacity inputs + Available Days |
+| 2026-02-20 | JSON export/import, show day numbers toggle fix, localStorage error handling, Available Days formula fix (now uses effective man-days) |
+| 2026-02-20 | Refactored into ES modules under src/. Added esbuild bundling (`npm run build`) |
+| 2026-02-20 | Project docs: PRD, Technical Design, Roadmap |
