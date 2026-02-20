@@ -85,16 +85,17 @@ burndown-studio (localStorage key)
 - **Actual line:** For each working day, sums the points of tasks whose `doneDate` is after that day (i.e., not yet done).
 
 ### 4.3 Available Days
-- Formula: `workingDays - totalPoints` (total points treated as total person-days).
+- Formula: `effectiveManDays - totalPoints`.
 - Color coding: green if between -1.0 and 1.0, red if < -1.0.
 
 ## 5. Rendering Strategy
 
 The app uses a **full re-render** approach:
-1. Any state mutation calls `saveState()` then `render()`.
-2. `render()` rebuilds: sprint sidebar, form fields, task table, stats, SVG chart.
-3. Templates (`<template>` elements) are cloned for sprint items and task rows.
-4. Event listeners are re-attached on every render.
+1. State mutations in `state.js` call `save()` then fire the `onStateChange` callback.
+2. `main.js` registers `render()` as the callback via `setOnStateChange(render)`.
+3. `render()` rebuilds: sprint sidebar, form fields, task table, stats, SVG chart.
+4. Templates (`<template>` elements) are cloned for sprint items and task rows.
+5. Event listeners are re-attached on every render.
 
 ### Performance Characteristics
 - Fine for small task lists (< 30 tasks per sprint).
@@ -107,27 +108,53 @@ The app uses a **full re-render** approach:
 bdc/
 ├── index.html          # UI structure, templates
 ├── styles.css          # All styling (no preprocessor)
-├── app.js              # All application logic (~500 lines)
-├── package-lock.json   # Empty — no dependencies
-├── README.md           # Project overview
-└── docs/
-    ├── PRD.md          # Product requirements
-    ├── TECHNICAL_DESIGN.md   # This document
-    └── ROADMAP.md      # Delivery roadmap
+├── src/
+│   ├── main.js         # Entry point — event wiring, init
+│   ├── dom.js          # DOM element references
+│   ├── state.js        # State management — load, save, CRUD
+│   ├── burndown.js     # Pure burndown calculation functions
+│   ├── chart.js        # SVG chart rendering
+│   ├── render.js       # DOM rendering (sprint list, tasks, stats)
+│   ├── io.js           # JSON export/import
+│   └── utils.js        # Shared helpers (dates, IDs, formatting)
+├── docs/
+│   ├── PRD.md          # Product requirements
+│   ├── TECHNICAL_DESIGN.md   # This document
+│   └── ROADMAP.md      # Delivery roadmap
+├── .gitignore
+└── README.md
 ```
+
+### Module Dependency Graph
+
+```
+main.js
+├── dom.js
+├── state.js ← utils.js
+├── render.js
+│   ├── dom.js
+│   ├── state.js
+│   ├── burndown.js ← utils.js
+│   ├── chart.js ← dom.js, utils.js
+│   └── utils.js
+└── io.js ← state.js, utils.js
+```
+
+No circular dependencies. `state.js` communicates with `render.js` via a callback
+(`setOnStateChange`) registered by `main.js`, avoiding a direct import cycle.
 
 ## 7. Technical Debt & Risks
 
-| ID | Issue | Severity | Notes |
-|---|---|---|---|
-| TD-01 | No git repository | High | No version control. Any accidental file deletion is unrecoverable. |
-| TD-02 | Full re-render on every change | Medium | Works now but won't scale to large task lists. |
-| TD-03 | No tests | Medium | `calculateBurndown`, `getWorkingDates` are pure functions and easy to unit test. |
-| TD-04 | Single JS file (~500 lines) | Low | Manageable now. Should split into modules if it grows past ~800 lines. |
-| TD-05 | localStorage only | Medium | Data tied to single browser. Clearing browser data = total data loss. |
-| TD-06 | No input validation | Low | Invalid dates, negative points, or efficiency > 1 are not explicitly prevented (HTML `min`/`max` helps but isn't enforced in JS). |
-| TD-07 | No error handling | Low | `JSON.parse` on corrupt localStorage will throw and break the app. |
-| TD-08 | Date handling uses string comparison | Low | `task.doneDate > date` works for ISO strings but is fragile. |
+| ID | Issue | Severity | Status | Notes |
+|---|---|---|---|---|
+| TD-01 | No git repository | High | **Resolved** | Git initialized, connected to GitHub remote. |
+| TD-02 | Full re-render on every change | Medium | Open | Works now but won't scale to large task lists. |
+| TD-03 | No tests | Medium | Open | `calculateBurndown`, `getWorkingDates` are pure functions and easy to unit test. |
+| TD-04 | Single JS file (~500 lines) | Low | **Resolved** | Split into 8 ES modules under `src/`. |
+| TD-05 | localStorage only | Medium | **Mitigated** | JSON export/import added. localStorage is still the primary store. |
+| TD-06 | No input validation | Low | Open | Invalid dates, negative points, or efficiency > 1 are not explicitly prevented (HTML `min`/`max` helps but isn't enforced in JS). |
+| TD-07 | No error handling | Low | **Resolved** | `loadState` now has try/catch with graceful fallback. |
+| TD-08 | Date handling uses string comparison | Low | Open | `task.doneDate > date` works for ISO strings but is fragile. |
 
 ## 8. Future Architecture Considerations
 
@@ -139,18 +166,11 @@ bdc/
 ### If adding a build step:
 - Vite is recommended (minimal config, fast dev server, handles ES modules).
 - Would enable: TypeScript, CSS modules, tree-shaking, proper test runner (Vitest).
-- Migration path: move `app.js` to `src/main.js`, add `vite.config.js`, done.
-
-### If splitting app.js into modules:
-- Suggested split:
-  - `state.js` — load/save, state mutations
-  - `burndown.js` — calculation logic (pure functions)
-  - `render.js` — DOM rendering
-  - `chart.js` — SVG chart drawing
-  - `main.js` — initialization, event wiring
+- Migration path: add `vite.config.js`, the existing `src/main.js` entry point already works.
 
 ## 9. Revision History
 
 | Date | Version | Changes |
 |---|---|---|
 | 2026-02-20 | 0.1 | Initial draft based on MVP codebase analysis |
+| 2026-02-20 | 0.2 | Updated for ES module refactor, resolved tech debt items, updated file structure and dependency graph |

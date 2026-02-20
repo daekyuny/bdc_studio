@@ -1,0 +1,12 @@
+{
+  "name": "burndown-studio",
+  "private": true,
+  "scripts": {
+    "build": "esbuild src/main.js --bundle --outfile=app.js",
+    "dev": "python3 -m http.server 5173"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.3",
+    "jsdom": "^28.1.0"
+  }
+}
