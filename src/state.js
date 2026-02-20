@@ -1,4 +1,4 @@
-import { todayIso, addDays, createId } from "./utils.js";
+import { todayIso, addWorkingDays, createId, getNextWorkingDay } from "./utils.js";
 
 const STORAGE_KEY = "burndown-studio";
 
@@ -7,16 +7,20 @@ export const setOnStateChange = (callback) => {
   onChange = callback;
 };
 
+const sortSprints = () => {
+  state.sprints.sort((a, b) => a.startDate.localeCompare(b.startDate));
+};
+
 const defaultState = () => {
   const start = todayIso();
-  const end = addDays(start, 13);
+  const end = addWorkingDays(start, 9);
   const sprintId = createId();
   return {
     activeSprintId: sprintId,
     sprints: [
       {
         id: sprintId,
-        name: "Sprint Alpha",
+        description: "",
         startDate: start,
         endDate: end,
         developers: 4,
@@ -59,10 +63,59 @@ export const setActiveSprint = (id) => {
   onChange();
 };
 
-export const updateSprint = (updates) => {
-  const sprint = getActiveSprint();
+export const createSprint = ({ description, startDate, endDate, developers, efficiency }) => {
+  const newSprint = {
+    id: createId(),
+    description: description || "",
+    startDate,
+    endDate,
+    developers,
+    efficiency,
+    tasks: [],
+    createdAt: new Date().toISOString(),
+  };
+  state.sprints.push(newSprint);
+  sortSprints();
+  state.activeSprintId = newSprint.id;
+  save();
+  onChange();
+};
+
+export const updateSprintById = (id, updates) => {
+  const sprint = state.sprints.find((s) => s.id === id);
   if (!sprint) return;
   Object.assign(sprint, updates);
+  sortSprints();
+  save();
+  onChange();
+};
+
+export const deleteActiveSprint = () => {
+  const sprint = getActiveSprint();
+  if (!sprint) return;
+  const sortedIndex = state.sprints.findIndex((s) => s.id === sprint.id) + 1;
+  const label = sprint.description || `Sprint ${sortedIndex}`;
+  if (!window.confirm(`Delete "${label}"? This cannot be undone.`)) return;
+
+  state.sprints = state.sprints.filter((s) => s.id !== sprint.id);
+  if (state.sprints.length === 0) {
+    const start = todayIso();
+    const end = addWorkingDays(start, 9);
+    const newSprint = {
+      id: createId(),
+      description: "",
+      startDate: start,
+      endDate: end,
+      developers: 0,
+      efficiency: 1,
+      tasks: [],
+      createdAt: new Date().toISOString(),
+    };
+    state.sprints = [newSprint];
+    state.activeSprintId = newSprint.id;
+  } else {
+    state.activeSprintId = state.sprints[0].id;
+  }
   save();
   onChange();
 };
@@ -73,56 +126,6 @@ export const updateTask = (taskId, updates) => {
   const task = sprint.tasks.find((item) => item.id === taskId);
   if (!task) return;
   Object.assign(task, updates);
-  save();
-  onChange();
-};
-
-export const addSprint = () => {
-  const start = todayIso();
-  const end = addDays(start, 13);
-  const newSprint = {
-    id: createId(),
-    name: `Sprint ${state.sprints.length + 1}`,
-    startDate: start,
-    endDate: end,
-    developers: 4,
-    efficiency: 0.8,
-    tasks: [],
-    createdAt: new Date().toISOString(),
-  };
-  state.sprints = [newSprint, ...state.sprints];
-  state.activeSprintId = newSprint.id;
-  save();
-  onChange();
-};
-
-export const deleteActiveSprint = () => {
-  const sprint = getActiveSprint();
-  if (!sprint) return;
-  const confirmDelete = window.confirm(
-    `Delete "${sprint.name || "Untitled Sprint"}"? This cannot be undone.`
-  );
-  if (!confirmDelete) return;
-
-  state.sprints = state.sprints.filter((item) => item.id !== sprint.id);
-  if (state.sprints.length === 0) {
-    const start = todayIso();
-    const end = addDays(start, 13);
-    const newSprint = {
-      id: createId(),
-      name: "Sprint 1",
-      startDate: start,
-      endDate: end,
-      developers: 4,
-      efficiency: 0.8,
-      tasks: [],
-      createdAt: new Date().toISOString(),
-    };
-    state.sprints = [newSprint];
-    state.activeSprintId = newSprint.id;
-  } else {
-    state.activeSprintId = state.sprints[0].id;
-  }
   save();
   onChange();
 };

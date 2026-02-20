@@ -1,24 +1,26 @@
 import { dom } from "./dom.js";
-import { statusOptions, todayIso } from "./utils.js";
+import { statusOptions, todayIso, formatSprintRange } from "./utils.js";
 import {
   getState,
   getActiveSprint,
   setActiveSprint,
   updateTask,
   removeTask,
+  updateToday,
   patchActiveSprint,
 } from "./state.js";
 import { calculateBurndown } from "./burndown.js";
 import { drawChart } from "./chart.js";
-import { formatSprintRange } from "./utils.js";
+
+let fpToday = null;
+const WEEKEND = (date) => date.getDay() === 0 || date.getDay() === 6;
 
 const renderSprintList = () => {
   const state = getState();
   dom.sprintList.innerHTML = "";
-  state.sprints.forEach((sprint) => {
+  state.sprints.forEach((sprint, index) => {
     const node = dom.sprintItemTemplate.content.firstElementChild.cloneNode(true);
-    node.querySelector(".sprint-title").textContent = sprint.name || "Untitled Sprint";
-    node.querySelector(".sprint-dates").textContent = formatSprintRange(sprint);
+    node.querySelector(".sprint-label").textContent = `Sprint ${index + 1}`;
     if (sprint.id === state.activeSprintId) node.classList.add("active");
     node.addEventListener("click", () => setActiveSprint(sprint.id));
     dom.sprintList.appendChild(node);
@@ -44,27 +46,18 @@ const renderTasks = (sprint) => {
     doneInput.disabled = statusSelect.value !== "Done";
 
     const commitName = () => updateTask(task.id, { name: nameInput.value });
-    const commitPoints = () =>
-      updateTask(task.id, { points: Number(pointsInput.value) });
+    const commitPoints = () => updateTask(task.id, { points: Number(pointsInput.value) });
 
     nameInput.addEventListener("change", commitName);
     nameInput.addEventListener("blur", commitName);
-    nameInput.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        commitName();
-        nameInput.blur();
-      }
+    nameInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); commitName(); nameInput.blur(); }
     });
 
     pointsInput.addEventListener("change", commitPoints);
     pointsInput.addEventListener("blur", commitPoints);
-    pointsInput.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        commitPoints();
-        pointsInput.blur();
-      }
+    pointsInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); commitPoints(); pointsInput.blur(); }
     });
 
     const commitStatus = (statusValue) => {
@@ -81,18 +74,10 @@ const renderTasks = (sprint) => {
       updateTask(task.id, { status, doneDate });
     };
 
-    statusSelect.addEventListener("change", (event) => {
-      commitStatus(event.target.value);
-    });
-    statusSelect.addEventListener("blur", (event) => {
-      commitStatus(event.target.value);
-    });
-    statusSelect.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        commitStatus(event.target.value);
-        statusSelect.blur();
-      }
+    statusSelect.addEventListener("change", (e) => commitStatus(e.target.value));
+    statusSelect.addEventListener("blur", (e) => commitStatus(e.target.value));
+    statusSelect.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); commitStatus(e.target.value); statusSelect.blur(); }
     });
 
     const commitDoneDate = () =>
@@ -100,36 +85,27 @@ const renderTasks = (sprint) => {
 
     doneInput.addEventListener("change", commitDoneDate);
     doneInput.addEventListener("blur", commitDoneDate);
-    doneInput.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        commitDoneDate();
-        doneInput.blur();
-      }
+    doneInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); commitDoneDate(); doneInput.blur(); }
     });
 
     deleteBtn.addEventListener("click", () => removeTask(task.id));
-
     dom.taskRows.appendChild(row);
   });
 };
 
 const renderStats = (sprint, burndown) => {
-  const doneTasks = sprint.tasks.filter((task) => task.status === "Done").length;
+  const doneTasks = sprint.tasks.filter((t) => t.status === "Done").length;
   const availableDays = burndown.effectiveManDays - burndown.totalPoints;
+
+  dom.summaryDuration.textContent = formatSprintRange(sprint);
+  dom.workingDays.textContent = burndown.dates.length;
   dom.totalPoints.textContent = burndown.totalPoints.toFixed(1).replace(/\.0$/, "");
   const lastActual = [...burndown.actual].reverse().find((v) => v !== null) ?? 0;
   dom.remainingPoints.textContent = lastActual.toFixed(1).replace(/\.0$/, "");
-  dom.workingDays.textContent = burndown.dates.length;
   dom.doneTasks.textContent = doneTasks;
-  dom.manDays.textContent = burndown.manDays.toFixed(1).replace(/\.0$/, "");
-  dom.effectiveManDays.textContent = burndown.effectiveManDays.toFixed(1).replace(/\.0$/, "");
-  dom.idealBurn.textContent = burndown.idealDailyBurn
-    .toFixed(2)
-    .replace(/0$/, "")
-    .replace(/\.0$/, "");
-
   dom.availableDaysValue.textContent = availableDays.toFixed(1).replace(/\.0$/, "");
+
   dom.availableDays.classList.remove("ok", "alert");
   if (availableDays < -1) {
     dom.availableDays.classList.add("alert");
@@ -143,7 +119,7 @@ export const render = () => {
   const sprint = getActiveSprint();
   if (!sprint) return;
 
-  patchActiveSprint({ developers: 4, efficiency: 0.8 });
+  patchActiveSprint({ developers: 0, efficiency: 1 });
 
   const real = todayIso();
   const defaultToday =
@@ -156,14 +132,22 @@ export const render = () => {
     sprint.today > sprint.endDate ? sprint.endDate :
     sprint.today;
 
-  dom.sprintName.value = sprint.name;
-  dom.startDate.value = sprint.startDate;
-  dom.endDate.value = sprint.endDate;
-  dom.developers.value = sprint.developers ?? "";
-  dom.efficiency.value = sprint.efficiency ?? "";
-  dom.sprintToday.value = effectiveToday;
-  dom.sprintToday.min = sprint.startDate || "";
-  dom.sprintToday.max = sprint.endDate || "";
+  const state = getState();
+  const sprintNumber = state.sprints.findIndex((s) => s.id === sprint.id) + 1;
+  dom.sprintTitleText.textContent = sprint.description || `Sprint ${sprintNumber}`;
+
+  if (fpToday) fpToday.destroy();
+  fpToday = flatpickr(dom.sprintToday, {
+    dateFormat: "Y-m-d",
+    defaultDate: effectiveToday,
+    minDate: sprint.startDate || null,
+    maxDate: sprint.endDate || null,
+    disableMobile: true,
+    disable: [WEEKEND],
+    onChange: ([date]) => {
+      if (date) updateToday(date.toISOString().slice(0, 10));
+    },
+  });
 
   renderTasks(sprint);
   const burndown = calculateBurndown(sprint, effectiveToday);

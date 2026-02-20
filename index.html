@@ -10,6 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=Source+Sans+3:wght@400;600;700&display=swap"
       rel="stylesheet"
     />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
@@ -19,9 +20,6 @@
         <div>
           <p class="eyebrow">Sprint Burndown</p>
           <h1>Burndown Studio</h1>
-          <p class="subtitle">
-            Track sprint progress with task-level updates and a clean ideal vs actual view.
-          </p>
         </div>
         <div class="header-actions">
           <button class="btn ghost" id="exportBtn">Export</button>
@@ -36,71 +34,41 @@
         <aside class="sprint-list" id="sprintList"></aside>
 
         <section class="content">
-          <div class="setup-row">
-          <div class="card">
-            <div class="card-header">
-              <h2>Sprint Setup</h2>
-            </div>
-            <div class="form-grid">
-              <label>
-                Sprint Name
-                <input type="text" id="sprintName" placeholder="Sprint 14" />
-              </label>
-              <label>
-                Start Date
-                <input type="date" id="startDate" />
-              </label>
-              <label>
-                End Date
-                <input type="date" id="endDate" />
-              </label>
-              <label>
-                Number of Developers
-                <input type="number" id="developers" min="1" step="1" placeholder="4" />
-              </label>
-              <label>
-                Efficiency Factor (0-1)
-                <input type="number" id="efficiency" min="0" max="1" step="0.05" placeholder="0.8" />
-              </label>
-            </div>
-            <p class="hint">
-              Weekends are auto-skipped. Holiday configuration is planned for a later version.
-            </p>
+          <div class="sprint-title-bar">
+            <p class="sprint-title-text" id="sprintTitleText">Sprint 1</p>
           </div>
 
           <div class="card" id="statsCard">
-            <div class="stats-grid">
-              <div>
-                <p class="stat-label">Total Days</p>
-                <p class="stat-value" id="totalPoints">0</p>
+            <div class="summary-list">
+              <div class="summary-row">
+                <span class="summary-label">Duration</span>
+                <span class="summary-value" id="summaryDuration">—</span>
               </div>
-              <div>
-                <p class="stat-label">Remaining</p>
-                <p class="stat-value" id="remainingPoints">0</p>
+              <div class="summary-row">
+                <span class="summary-label">Working Days</span>
+                <span class="summary-value" id="workingDays">0</span>
               </div>
-              <div>
-                <p class="stat-label">Working Days</p>
-                <p class="stat-value" id="workingDays">0</p>
+              <div class="summary-row">
+                <span class="summary-label">Total Points</span>
+                <span class="summary-value" id="totalPoints">0</span>
               </div>
-              <div>
-                <p class="stat-label">Done Tasks</p>
-                <p class="stat-value" id="doneTasks">0</p>
+              <div class="summary-row">
+                <span class="summary-label">Remaining</span>
+                <span class="summary-value" id="remainingPoints">0</span>
               </div>
-              <div>
-                <p class="stat-label">Man Days</p>
-                <p class="stat-value" id="manDays">0</p>
+              <div class="summary-row">
+                <span class="summary-label">Done Tasks</span>
+                <span class="summary-value" id="doneTasks">0</span>
               </div>
-              <div>
-                <p class="stat-label">Effective Man Days</p>
-                <p class="stat-value" id="effectiveManDays">0</p>
-              </div>
-              <div>
-                <p class="stat-label">Ideal Burn</p>
-                <p class="stat-value" id="idealBurn">0</p>
+              <div class="summary-row" id="availableDays">
+                <span class="summary-label">Available Days</span>
+                <span class="summary-value" id="availableDaysValue">0</span>
               </div>
             </div>
+            <div class="summary-footer">
+              <button class="btn ghost small" id="editSprintBtn">Edit Sprint</button>
+            </div>
           </div>
-          </div><!-- /.setup-row -->
 
           <div class="card">
             <div class="card-header">
@@ -108,10 +76,6 @@
               <div class="today-field">
                 <label for="sprintToday">Today</label>
                 <input type="date" id="sprintToday" />
-              </div>
-              <div class="availability" id="availableDays">
-                <span class="availability-label">Available Days</span>
-                <span class="availability-value" id="availableDaysValue">0</span>
               </div>
               <button class="btn ghost" id="addTaskBtn">Add Task</button>
             </div>
@@ -155,10 +119,46 @@
       </main>
     </div>
 
+    <!-- Sprint edit/create modal -->
+    <div class="modal-overlay" id="sprintModal" hidden>
+      <div class="modal">
+        <div class="modal-header">
+          <h3 id="modalTitle">Edit Sprint</h3>
+          <button class="modal-close" id="modalClose">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="modal-error" id="modalError" hidden></div>
+          <label>
+            Description (optional)
+            <input type="text" id="modalDescription" placeholder="e.g. User auth, payment flow" />
+          </label>
+          <label>
+            Start Date
+            <input type="date" id="modalStartDate" />
+          </label>
+          <label>
+            End Date
+            <input type="date" id="modalEndDate" />
+          </label>
+          <label>
+            Developers
+            <input type="number" id="modalDevelopers" min="1" step="1" />
+          </label>
+          <label>
+            Efficiency (0–1)
+            <input type="number" id="modalEfficiency" min="0" max="1" step="0.05" />
+          </label>
+        </div>
+        <div class="modal-footer">
+          <button class="btn ghost" id="modalCancel">Cancel</button>
+          <button class="btn" id="modalSave">Save</button>
+        </div>
+      </div>
+    </div>
+
     <template id="sprintItemTemplate">
       <button class="sprint-item">
-        <span class="sprint-title"></span>
-        <span class="sprint-dates"></span>
+        <span class="sprint-label"></span>
       </button>
     </template>
 
@@ -186,6 +186,7 @@
       </tr>
     </template>
 
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

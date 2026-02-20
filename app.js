@@ -4,11 +4,9 @@
     sprintList: document.getElementById("sprintList"),
     newSprintBtn: document.getElementById("newSprintBtn"),
     deleteSprintBtn: document.getElementById("deleteSprintBtn"),
-    sprintName: document.getElementById("sprintName"),
-    startDate: document.getElementById("startDate"),
-    endDate: document.getElementById("endDate"),
-    developers: document.getElementById("developers"),
-    efficiency: document.getElementById("efficiency"),
+    sprintTitleText: document.getElementById("sprintTitleText"),
+    editSprintBtn: document.getElementById("editSprintBtn"),
+    summaryDuration: document.getElementById("summaryDuration"),
     addTaskBtn: document.getElementById("addTaskBtn"),
     sprintToday: document.getElementById("sprintToday"),
     taskRows: document.getElementById("taskRows"),
@@ -16,9 +14,6 @@
     remainingPoints: document.getElementById("remainingPoints"),
     workingDays: document.getElementById("workingDays"),
     doneTasks: document.getElementById("doneTasks"),
-    manDays: document.getElementById("manDays"),
-    effectiveManDays: document.getElementById("effectiveManDays"),
-    idealBurn: document.getElementById("idealBurn"),
     availableDays: document.getElementById("availableDays"),
     availableDaysValue: document.getElementById("availableDaysValue"),
     chart: document.getElementById("burndownChart"),
@@ -26,18 +21,30 @@
     exportBtn: document.getElementById("exportBtn"),
     importBtn: document.getElementById("importBtn"),
     importFile: document.getElementById("importFile"),
+    sprintModal: document.getElementById("sprintModal"),
+    modalTitle: document.getElementById("modalTitle"),
+    modalDescription: document.getElementById("modalDescription"),
+    modalStartDate: document.getElementById("modalStartDate"),
+    modalEndDate: document.getElementById("modalEndDate"),
+    modalDevelopers: document.getElementById("modalDevelopers"),
+    modalEfficiency: document.getElementById("modalEfficiency"),
+    modalError: document.getElementById("modalError"),
+    modalSave: document.getElementById("modalSave"),
+    modalCancel: document.getElementById("modalCancel"),
+    modalClose: document.getElementById("modalClose"),
     sprintItemTemplate: document.getElementById("sprintItemTemplate"),
     taskRowTemplate: document.getElementById("taskRowTemplate")
   };
 
   // src/utils.js
   var statusOptions = ["Todo", "In Progress", "Done"];
-  var todayIso = () => (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-  var addDays = (isoDate, days) => {
-    const date = new Date(isoDate);
-    date.setDate(date.getDate() + days);
-    return date.toISOString().slice(0, 10);
+  var localIso = (date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
   };
+  var todayIso = () => localIso(/* @__PURE__ */ new Date());
   var toShortDate = (isoDate) => {
     if (!isoDate) return "";
     const date = /* @__PURE__ */ new Date(isoDate + "T00:00:00");
@@ -51,7 +58,7 @@
     while (cursor <= end) {
       const day = cursor.getDay();
       if (day !== 0 && day !== 6) {
-        dates.push(cursor.toISOString().slice(0, 10));
+        dates.push(localIso(cursor));
       }
       cursor.setDate(cursor.getDate() + 1);
     }
@@ -59,6 +66,34 @@
   };
   var formatSprintRange = (sprint) => `${toShortDate(sprint.startDate)} \u2013 ${toShortDate(sprint.endDate)}`;
   var createId = () => crypto.randomUUID();
+  var getNextWorkingDay = (isoDate) => {
+    const d = /* @__PURE__ */ new Date(isoDate + "T00:00:00");
+    d.setDate(d.getDate() + 1);
+    while (d.getDay() === 0 || d.getDay() === 6) {
+      d.setDate(d.getDate() + 1);
+    }
+    return localIso(d);
+  };
+  var addWorkingDays = (isoDate, n) => {
+    const d = /* @__PURE__ */ new Date(isoDate + "T00:00:00");
+    let count = 0;
+    while (count < n) {
+      d.setDate(d.getDate() + 1);
+      if (d.getDay() !== 0 && d.getDay() !== 6) count++;
+    }
+    return localIso(d);
+  };
+  var sprintsOverlap = (a, b) => a.startDate <= b.endDate && a.endDate >= b.startDate;
+  var findGaps = (sprints) => {
+    const gaps = [];
+    for (let i = 0; i < sprints.length - 1; i++) {
+      const nextWorking = getNextWorkingDay(sprints[i].endDate);
+      if (nextWorking < sprints[i + 1].startDate) {
+        gaps.push({ after: sprints[i], before: sprints[i + 1] });
+      }
+    }
+    return gaps;
+  };
 
   // src/state.js
   var STORAGE_KEY = "burndown-studio";
@@ -67,16 +102,19 @@
   var setOnStateChange = (callback) => {
     onChange = callback;
   };
+  var sortSprints = () => {
+    state.sprints.sort((a, b) => a.startDate.localeCompare(b.startDate));
+  };
   var defaultState = () => {
     const start = todayIso();
-    const end = addDays(start, 13);
+    const end = addWorkingDays(start, 9);
     const sprintId = createId();
     return {
       activeSprintId: sprintId,
       sprints: [
         {
           id: sprintId,
-          name: "Sprint Alpha",
+          description: "",
           startDate: start,
           endDate: end,
           developers: 4,
@@ -111,10 +149,56 @@
     save();
     onChange();
   };
-  var updateSprint = (updates) => {
-    const sprint = getActiveSprint();
+  var createSprint = ({ description, startDate, endDate, developers, efficiency }) => {
+    const newSprint = {
+      id: createId(),
+      description: description || "",
+      startDate,
+      endDate,
+      developers,
+      efficiency,
+      tasks: [],
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    state.sprints.push(newSprint);
+    sortSprints();
+    state.activeSprintId = newSprint.id;
+    save();
+    onChange();
+  };
+  var updateSprintById = (id, updates) => {
+    const sprint = state.sprints.find((s) => s.id === id);
     if (!sprint) return;
     Object.assign(sprint, updates);
+    sortSprints();
+    save();
+    onChange();
+  };
+  var deleteActiveSprint = () => {
+    const sprint = getActiveSprint();
+    if (!sprint) return;
+    const sortedIndex = state.sprints.findIndex((s) => s.id === sprint.id) + 1;
+    const label = sprint.description || `Sprint ${sortedIndex}`;
+    if (!window.confirm(`Delete "${label}"? This cannot be undone.`)) return;
+    state.sprints = state.sprints.filter((s) => s.id !== sprint.id);
+    if (state.sprints.length === 0) {
+      const start = todayIso();
+      const end = addWorkingDays(start, 9);
+      const newSprint = {
+        id: createId(),
+        description: "",
+        startDate: start,
+        endDate: end,
+        developers: 0,
+        efficiency: 1,
+        tasks: [],
+        createdAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      state.sprints = [newSprint];
+      state.activeSprintId = newSprint.id;
+    } else {
+      state.activeSprintId = state.sprints[0].id;
+    }
     save();
     onChange();
   };
@@ -124,53 +208,6 @@
     const task = sprint.tasks.find((item) => item.id === taskId);
     if (!task) return;
     Object.assign(task, updates);
-    save();
-    onChange();
-  };
-  var addSprint = () => {
-    const start = todayIso();
-    const end = addDays(start, 13);
-    const newSprint = {
-      id: createId(),
-      name: `Sprint ${state.sprints.length + 1}`,
-      startDate: start,
-      endDate: end,
-      developers: 4,
-      efficiency: 0.8,
-      tasks: [],
-      createdAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    state.sprints = [newSprint, ...state.sprints];
-    state.activeSprintId = newSprint.id;
-    save();
-    onChange();
-  };
-  var deleteActiveSprint = () => {
-    const sprint = getActiveSprint();
-    if (!sprint) return;
-    const confirmDelete = window.confirm(
-      `Delete "${sprint.name || "Untitled Sprint"}"? This cannot be undone.`
-    );
-    if (!confirmDelete) return;
-    state.sprints = state.sprints.filter((item) => item.id !== sprint.id);
-    if (state.sprints.length === 0) {
-      const start = todayIso();
-      const end = addDays(start, 13);
-      const newSprint = {
-        id: createId(),
-        name: "Sprint 1",
-        startDate: start,
-        endDate: end,
-        developers: 4,
-        efficiency: 0.8,
-        tasks: [],
-        createdAt: (/* @__PURE__ */ new Date()).toISOString()
-      };
-      state.sprints = [newSprint];
-      state.activeSprintId = newSprint.id;
-    } else {
-      state.activeSprintId = state.sprints[0].id;
-    }
     save();
     onChange();
   };
@@ -345,13 +382,14 @@
   };
 
   // src/render.js
+  var fpToday = null;
+  var WEEKEND = (date) => date.getDay() === 0 || date.getDay() === 6;
   var renderSprintList = () => {
     const state2 = getState();
     dom.sprintList.innerHTML = "";
-    state2.sprints.forEach((sprint) => {
+    state2.sprints.forEach((sprint, index) => {
       const node = dom.sprintItemTemplate.content.firstElementChild.cloneNode(true);
-      node.querySelector(".sprint-title").textContent = sprint.name || "Untitled Sprint";
-      node.querySelector(".sprint-dates").textContent = formatSprintRange(sprint);
+      node.querySelector(".sprint-label").textContent = `Sprint ${index + 1}`;
       if (sprint.id === state2.activeSprintId) node.classList.add("active");
       node.addEventListener("click", () => setActiveSprint(sprint.id));
       dom.sprintList.appendChild(node);
@@ -377,18 +415,18 @@
       const commitPoints = () => updateTask(task.id, { points: Number(pointsInput.value) });
       nameInput.addEventListener("change", commitName);
       nameInput.addEventListener("blur", commitName);
-      nameInput.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") {
-          event.preventDefault();
+      nameInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
           commitName();
           nameInput.blur();
         }
       });
       pointsInput.addEventListener("change", commitPoints);
       pointsInput.addEventListener("blur", commitPoints);
-      pointsInput.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") {
-          event.preventDefault();
+      pointsInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
           commitPoints();
           pointsInput.blur();
         }
@@ -403,25 +441,21 @@
         if (status !== "Done") doneDate = "";
         updateTask(task.id, { status, doneDate });
       };
-      statusSelect.addEventListener("change", (event) => {
-        commitStatus(event.target.value);
-      });
-      statusSelect.addEventListener("blur", (event) => {
-        commitStatus(event.target.value);
-      });
-      statusSelect.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") {
-          event.preventDefault();
-          commitStatus(event.target.value);
+      statusSelect.addEventListener("change", (e) => commitStatus(e.target.value));
+      statusSelect.addEventListener("blur", (e) => commitStatus(e.target.value));
+      statusSelect.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commitStatus(e.target.value);
           statusSelect.blur();
         }
       });
       const commitDoneDate = () => updateTask(task.id, { doneDate: doneInput.value, status: "Done" });
       doneInput.addEventListener("change", commitDoneDate);
       doneInput.addEventListener("blur", commitDoneDate);
-      doneInput.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") {
-          event.preventDefault();
+      doneInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
           commitDoneDate();
           doneInput.blur();
         }
@@ -431,16 +465,14 @@
     });
   };
   var renderStats = (sprint, burndown) => {
-    const doneTasks = sprint.tasks.filter((task) => task.status === "Done").length;
+    const doneTasks = sprint.tasks.filter((t) => t.status === "Done").length;
     const availableDays = burndown.effectiveManDays - burndown.totalPoints;
+    dom.summaryDuration.textContent = formatSprintRange(sprint);
+    dom.workingDays.textContent = burndown.dates.length;
     dom.totalPoints.textContent = burndown.totalPoints.toFixed(1).replace(/\.0$/, "");
     const lastActual = [...burndown.actual].reverse().find((v) => v !== null) ?? 0;
     dom.remainingPoints.textContent = lastActual.toFixed(1).replace(/\.0$/, "");
-    dom.workingDays.textContent = burndown.dates.length;
     dom.doneTasks.textContent = doneTasks;
-    dom.manDays.textContent = burndown.manDays.toFixed(1).replace(/\.0$/, "");
-    dom.effectiveManDays.textContent = burndown.effectiveManDays.toFixed(1).replace(/\.0$/, "");
-    dom.idealBurn.textContent = burndown.idealDailyBurn.toFixed(2).replace(/0$/, "").replace(/\.0$/, "");
     dom.availableDaysValue.textContent = availableDays.toFixed(1).replace(/\.0$/, "");
     dom.availableDays.classList.remove("ok", "alert");
     if (availableDays < -1) {
@@ -453,19 +485,26 @@
     renderSprintList();
     const sprint = getActiveSprint();
     if (!sprint) return;
-    patchActiveSprint({ developers: 4, efficiency: 0.8 });
+    patchActiveSprint({ developers: 0, efficiency: 1 });
     const real = todayIso();
     const defaultToday = real >= sprint.startDate && real <= sprint.endDate ? real : real < sprint.startDate ? sprint.startDate : sprint.endDate;
     patchActiveSprint({ today: defaultToday });
     const effectiveToday = sprint.today < sprint.startDate ? sprint.startDate : sprint.today > sprint.endDate ? sprint.endDate : sprint.today;
-    dom.sprintName.value = sprint.name;
-    dom.startDate.value = sprint.startDate;
-    dom.endDate.value = sprint.endDate;
-    dom.developers.value = sprint.developers ?? "";
-    dom.efficiency.value = sprint.efficiency ?? "";
-    dom.sprintToday.value = effectiveToday;
-    dom.sprintToday.min = sprint.startDate || "";
-    dom.sprintToday.max = sprint.endDate || "";
+    const state2 = getState();
+    const sprintNumber = state2.sprints.findIndex((s) => s.id === sprint.id) + 1;
+    dom.sprintTitleText.textContent = sprint.description || `Sprint ${sprintNumber}`;
+    if (fpToday) fpToday.destroy();
+    fpToday = flatpickr(dom.sprintToday, {
+      dateFormat: "Y-m-d",
+      defaultDate: effectiveToday,
+      minDate: sprint.startDate || null,
+      maxDate: sprint.endDate || null,
+      disableMobile: true,
+      disable: [WEEKEND],
+      onChange: ([date]) => {
+        if (date) updateToday(date.toISOString().slice(0, 10));
+      }
+    });
     renderTasks(sprint);
     const burndown = calculateBurndown(sprint, effectiveToday);
     renderStats(sprint, burndown);
@@ -509,7 +548,112 @@
 
   // src/main.js
   setOnStateChange(render);
-  dom.newSprintBtn.addEventListener("click", addSprint);
+  var fpStart = null;
+  var fpEnd = null;
+  var getDisabledRanges = (excludeId) => {
+    const others = getState().sprints.filter((s) => s.id !== excludeId);
+    return [
+      (date) => date.getDay() === 0 || date.getDay() === 6,
+      // weekends
+      ...others.map((s) => ({ from: s.startDate, to: s.endDate }))
+      // occupied ranges
+    ];
+  };
+  var fixCalendarPosition = (instance) => {
+    setTimeout(() => {
+      const rect = instance.input.getBoundingClientRect();
+      const cal = instance.calendarContainer;
+      cal.style.position = "fixed";
+      cal.style.top = rect.bottom + 4 + "px";
+      cal.style.left = rect.left + "px";
+      cal.style.zIndex = "1000";
+    }, 0);
+  };
+  var initDatePickers = (excludeId, defaultStart, defaultEnd) => {
+    if (fpStart) fpStart.destroy();
+    if (fpEnd) fpEnd.destroy();
+    const disabled = getDisabledRanges(excludeId);
+    const base = {
+      dateFormat: "Y-m-d",
+      disableMobile: true,
+      disable: disabled,
+      onOpen: (_, __, instance) => fixCalendarPosition(instance)
+    };
+    fpStart = flatpickr(dom.modalStartDate, { ...base, defaultDate: defaultStart || null });
+    fpEnd = flatpickr(dom.modalEndDate, { ...base, defaultDate: defaultEnd || null });
+  };
+  var modalMode = "edit";
+  var modalSprintId = null;
+  var openModal = (mode, sprint) => {
+    modalMode = mode;
+    modalSprintId = sprint ? sprint.id : null;
+    dom.modalTitle.textContent = mode === "create" ? "New Sprint" : "Edit Sprint";
+    dom.modalDescription.value = sprint?.description || "";
+    dom.modalDevelopers.value = sprint?.developers ?? 4;
+    dom.modalEfficiency.value = sprint?.efficiency ?? 0.8;
+    dom.modalError.hidden = true;
+    dom.sprintModal.hidden = false;
+    initDatePickers(sprint?.id || null, sprint?.startDate, sprint?.endDate);
+  };
+  var closeModal = () => {
+    dom.sprintModal.hidden = true;
+    if (fpStart) {
+      fpStart.destroy();
+      fpStart = null;
+    }
+    if (fpEnd) {
+      fpEnd.destroy();
+      fpEnd = null;
+    }
+  };
+  dom.modalClose.addEventListener("click", closeModal);
+  dom.modalCancel.addEventListener("click", closeModal);
+  dom.sprintModal.addEventListener("click", (e) => {
+    if (e.target === dom.sprintModal) closeModal();
+  });
+  dom.modalSave.addEventListener("click", () => {
+    const description = dom.modalDescription.value.trim();
+    const startDate = dom.modalStartDate.value;
+    const endDate = dom.modalEndDate.value;
+    const developers = Number(dom.modalDevelopers.value);
+    const efficiency = Number(dom.modalEfficiency.value);
+    if (!startDate || !endDate || startDate > endDate) {
+      dom.modalError.textContent = "Please select a valid start and end date.";
+      dom.modalError.hidden = false;
+      return;
+    }
+    const state2 = getState();
+    const otherSprints = state2.sprints.filter((s) => s.id !== modalSprintId);
+    const conflicting = otherSprints.find((s) => sprintsOverlap({ startDate, endDate }, s));
+    if (conflicting) {
+      const conflictNum = state2.sprints.indexOf(conflicting) + 1;
+      dom.modalError.textContent = `Date range overlaps with Sprint ${conflictNum}. Please choose different dates.`;
+      dom.modalError.hidden = false;
+      return;
+    }
+    const updates = { description, startDate, endDate, developers, efficiency };
+    if (modalMode === "create") {
+      createSprint(updates);
+    } else {
+      updateSprintById(modalSprintId, updates);
+    }
+    closeModal();
+    const gaps = findGaps(getState().sprints);
+    if (gaps.length > 0) {
+      alert("Note: There is a gap of working days between some sprints. You can close the gap by editing the sprint dates.");
+    }
+  });
+  dom.newSprintBtn.addEventListener("click", () => {
+    const sprints = getState().sprints;
+    const latestEnd = sprints.length > 0 ? sprints[sprints.length - 1].endDate : "";
+    const start = latestEnd ? getNextWorkingDay(latestEnd) : todayIso();
+    const end = addWorkingDays(start, 10);
+    openModal("create", { description: "", startDate: start, endDate: end, developers: 0, efficiency: 1 });
+  });
+  dom.editSprintBtn.addEventListener("click", () => {
+    const sprint = getActiveSprint();
+    if (sprint) openModal("edit", sprint);
+  });
   dom.deleteSprintBtn.addEventListener("click", deleteActiveSprint);
   dom.addTaskBtn.addEventListener("click", addTask);
   dom.exportBtn.addEventListener("click", exportData);
@@ -518,42 +662,6 @@
     if (e.target.files[0]) importData(e.target.files[0]);
     e.target.value = "";
   });
-  var commitSprintName = () => updateSprint({ name: dom.sprintName.value });
-  var commitStartDate = () => updateSprint({ startDate: dom.startDate.value });
-  var commitEndDate = () => updateSprint({ endDate: dom.endDate.value });
-  var commitDevelopers = () => updateSprint({ developers: Number(dom.developers.value) });
-  var commitEfficiency = () => updateSprint({ efficiency: Number(dom.efficiency.value) });
-  dom.sprintName.addEventListener("change", commitSprintName);
-  dom.sprintName.addEventListener("blur", commitSprintName);
-  dom.sprintName.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      commitSprintName();
-      dom.sprintName.blur();
-    }
-  });
-  dom.startDate.addEventListener("change", commitStartDate);
-  dom.endDate.addEventListener("change", commitEndDate);
-  dom.developers.addEventListener("change", commitDevelopers);
-  dom.efficiency.addEventListener("change", commitEfficiency);
-  dom.developers.addEventListener("blur", commitDevelopers);
-  dom.efficiency.addEventListener("blur", commitEfficiency);
-  dom.developers.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      commitDevelopers();
-      dom.developers.blur();
-    }
-  });
-  dom.efficiency.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      commitEfficiency();
-      dom.efficiency.blur();
-    }
-  });
-  var commitToday = () => updateToday(dom.sprintToday.value);
-  dom.sprintToday.addEventListener("change", commitToday);
   dom.showDayNumbers.addEventListener("change", render);
   render();
 })();
