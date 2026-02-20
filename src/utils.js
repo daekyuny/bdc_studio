@@ -20,7 +20,9 @@ export const addDays = (isoDate, days) => {
 export const toShortDate = (isoDate) => {
   if (!isoDate) return "";
   const date = new Date(isoDate + "T00:00:00");
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${m}/${d}`;
 };
 
 export const getWorkingDates = (startIso, endIso) => {

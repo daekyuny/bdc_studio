@@ -49,7 +49,9 @@
   var toShortDate = (isoDate) => {
     if (!isoDate) return "";
     const date = /* @__PURE__ */ new Date(isoDate + "T00:00:00");
-    return date.toLocaleDateString(void 0, { month: "short", day: "numeric" });
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${m}/${d}`;
   };
   var getWorkingDates = (startIso, endIso) => {
     if (!startIso || !endIso) return [];

@@ -38,35 +38,58 @@
             <p class="sprint-title-text" id="sprintTitleText">Sprint 1</p>
           </div>
 
-          <div class="card" id="statsCard">
-            <div class="summary-list">
-              <div class="summary-row">
-                <span class="summary-label">Duration</span>
-                <span class="summary-value" id="summaryDuration">—</span>
+          <div class="info-row">
+            <div class="card" id="statsCard">
+              <div class="summary-list">
+                <div class="summary-row">
+                  <span class="summary-label">Duration</span>
+                  <span class="summary-value" id="summaryDuration">—</span>
+                </div>
+                <div class="summary-row">
+                  <span class="summary-label">Working Days</span>
+                  <span class="summary-value" id="workingDays">0</span>
+                </div>
+                <div class="summary-row">
+                  <span class="summary-label">Total Points</span>
+                  <span class="summary-value" id="totalPoints">0</span>
+                </div>
+                <div class="summary-row">
+                  <span class="summary-label">Remaining</span>
+                  <span class="summary-value" id="remainingPoints">0</span>
+                </div>
+                <div class="summary-row">
+                  <span class="summary-label">Done Tasks</span>
+                  <span class="summary-value" id="doneTasks">0</span>
+                </div>
+                <div class="summary-row" id="availableDays">
+                  <span class="summary-label">Available Days</span>
+                  <span class="summary-value" id="availableDaysValue">0</span>
+                </div>
               </div>
-              <div class="summary-row">
-                <span class="summary-label">Working Days</span>
-                <span class="summary-value" id="workingDays">0</span>
-              </div>
-              <div class="summary-row">
-                <span class="summary-label">Total Points</span>
-                <span class="summary-value" id="totalPoints">0</span>
-              </div>
-              <div class="summary-row">
-                <span class="summary-label">Remaining</span>
-                <span class="summary-value" id="remainingPoints">0</span>
-              </div>
-              <div class="summary-row">
-                <span class="summary-label">Done Tasks</span>
-                <span class="summary-value" id="doneTasks">0</span>
-              </div>
-              <div class="summary-row" id="availableDays">
-                <span class="summary-label">Available Days</span>
-                <span class="summary-value" id="availableDaysValue">0</span>
+              <div class="summary-footer">
+                <button class="btn ghost small" id="editSprintBtn">Edit Sprint</button>
               </div>
             </div>
-            <div class="summary-footer">
-              <button class="btn ghost small" id="editSprintBtn">Edit Sprint</button>
+
+            <div class="card">
+              <div class="card-header">
+                <h2>Burndown</h2>
+                <div class="toggle">
+                  <input type="checkbox" id="showDayNumbers" checked />
+                  <label for="showDayNumbers">Show day numbers</label>
+                </div>
+                <div class="legend">
+                  <span class="legend-item">
+                    <span class="swatch ideal"></span>Ideal
+                  </span>
+                  <span class="legend-item">
+                    <span class="swatch actual"></span>Actual
+                  </span>
+                </div>
+              </div>
+              <div class="chart-wrap">
+                <svg id="burndownChart" viewBox="0 0 800 320" role="img"></svg>
+              </div>
             </div>
           </div>
 
@@ -95,26 +118,6 @@
             </div>
           </div>
 
-          <div class="card">
-            <div class="card-header">
-              <h2>Burndown</h2>
-              <div class="toggle">
-                <input type="checkbox" id="showDayNumbers" checked />
-                <label for="showDayNumbers">Show day numbers</label>
-              </div>
-              <div class="legend">
-                <span class="legend-item">
-                  <span class="swatch ideal"></span>Ideal
-                </span>
-                <span class="legend-item">
-                  <span class="swatch actual"></span>Actual
-                </span>
-              </div>
-            </div>
-            <div class="chart-wrap">
-              <svg id="burndownChart" viewBox="0 0 800 320" role="img"></svg>
-            </div>
-          </div>
         </section>
       </main>
     </div>
