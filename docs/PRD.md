@@ -1,7 +1,7 @@
 # Burndown Studio — Product Requirements Document
 
-**Version:** 0.2
-**Last updated:** 2026-02-20
+**Version:** 0.3
+**Last updated:** 2026-02-21
 **Author:** [Your Name]
 **Status:** Draft — open for review
 
@@ -37,22 +37,30 @@ Key pain points:
 - Needs cross-sprint velocity trends and team-level dashboards.
 - Requires multi-user access and shared data.
 
-## 4. Current Features (v0.2)
+## 4. Current Features (v0.3)
 
 | Feature | Description | Status |
 |---|---|---|
-| Multiple sprints | Create, switch between, and delete sprints | Done |
-| Sprint setup | Name, start/end dates, developer count, efficiency factor | Done |
+| Multiple sprints | Create, switch, delete; auto-sorted by start date; numbered dynamically | Done |
+| Sprint modal | Create/edit via modal dialog: optional description, date pickers, developers, efficiency | Done |
+| Calendar date pickers | Flatpickr pickers for sprint start/end dates; weekends and occupied ranges greyed out | Done |
+| Overlap validation | Overlapping sprint date ranges are blocked at save with an inline error | Done |
+| Gap warning | Alert when unassigned working days exist between consecutive sprints | Done |
+| Sprint title | Optional description shown as scrollable heading above the main content area | Done |
 | Weekend skipping | Working-day calculation auto-excludes Sat/Sun | Done |
 | Task management | Add/remove tasks with name, days, status, done date | Done |
-| Burndown chart | SVG ideal vs actual line chart with animation | Done |
-| Stats dashboard | Total days, remaining, working days, done tasks, man-days, effective man-days, ideal burn rate | Done |
+| Today override | "Today" date field in Tasks header; overrides real date for chart; persisted per sprint | Done |
+| Burndown chart | SVG ideal (blue) vs actual (red) line chart; actual clips at today; dashed today marker | Done |
+| Side-by-side layout | Sprint summary and burndown chart displayed side by side; tasks below | Done |
+| Stats dashboard | Duration, working days, total points, remaining, done tasks, available days | Done |
 | Available Days indicator | `effective man-days - total points`, color-coded green/red | Done |
+| Working days chip | Live working-day count shown in sprint modal as start/end dates are selected | Done |
+| Date format | Dates displayed as mm/dd throughout (summary, chart x-axis) | Done |
 | Input commit on blur/Enter | No mid-typing recalculations | Done |
 | localStorage persistence | All data stored in browser localStorage | Done |
 | Responsive layout | Adapts to screens down to 900px | Done |
 | JSON export/import | Download full state as `.json` file; import to restore | Done |
-| Show day numbers toggle | Switch between D1/D2 labels and calendar dates on the chart X-axis | Done |
+| Show day numbers toggle | Switch between D1/D2 labels and mm/dd dates on the chart X-axis | Done |
 | Graceful error recovery | Corrupt localStorage data is detected and reset to defaults | Done |
 | Modular codebase | Source split into 8 ES modules, bundled via esbuild | Done |
 
@@ -121,3 +129,4 @@ Key pain points:
 |---|---|---|
 | 2026-02-20 | 0.1 | Initial draft based on MVP codebase analysis |
 | 2026-02-20 | 0.2 | Updated feature table with completed items (JSON export/import, day toggle, error recovery, modular codebase). Added status column to planned features. Updated Available Days formula. |
+| 2026-02-21 | 0.3 | Rewrote current features table to reflect UI redesign: modal sprint edit, Flatpickr pickers, overlap/gap validation, sprint title, Today override, side-by-side layout, working days chip, mm/dd date format. |

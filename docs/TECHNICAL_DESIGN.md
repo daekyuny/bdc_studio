@@ -1,7 +1,7 @@
 # Burndown Studio — Technical Design Document
 
-**Version:** 0.3
-**Last updated:** 2026-02-20
+**Version:** 0.4
+**Last updated:** 2026-02-21
 **Status:** Draft — open for review
 
 ---
@@ -47,6 +47,7 @@ Development
 | Logic | Vanilla JS (ES2020+) | `crypto.randomUUID()`, ES modules, arrow functions |
 | Chart | Hand-rolled SVG | `<polyline>` elements built via DOM API |
 | Fonts | Google Fonts (CDN) | Fraunces (headings), Source Sans 3 (body) |
+| Date picker | Flatpickr (CDN) | Calendar UI for sprint dates and Today field; weekends/occupied ranges disabled |
 | Storage | localStorage | Single JSON blob under `burndown-studio` key |
 | Bundler | esbuild | Bundles ES modules into single `app.js` |
 | Serving | Any static server or `file://` | `python3 -m http.server`, or open `index.html` directly |
@@ -77,11 +78,12 @@ burndown-studio (localStorage key)
 └── sprints: Array
     └── Sprint
         ├── id: string (UUID)
-        ├── name: string
+        ├── description: string (optional display title)
         ├── startDate: string (YYYY-MM-DD)
         ├── endDate: string (YYYY-MM-DD)
-        ├── developers: number
-        ├── efficiency: number (0-1)
+        ├── today: string (YYYY-MM-DD, optional — overrides real today for chart)
+        ├── developers: number (default 0)
+        ├── efficiency: number 0-1 (default 1)
         ├── createdAt: string (ISO 8601)
         └── tasks: Array
             └── Task
@@ -91,6 +93,10 @@ burndown-studio (localStorage key)
                 ├── status: "Todo" | "In Progress" | "Done"
                 └── doneDate: string (YYYY-MM-DD) or ""
 ```
+
+**Sprint numbering** is computed dynamically (sorted index + 1) and never stored. Sprints are always kept sorted by `startDate` via `sortSprints()` after every create or update.
+
+**New sprint defaults:** `developers: 0`, `efficiency: 1`. Start date defaults to next working day after last sprint end; end date is 10 working days after start.
 
 ### Storage Limits
 - localStorage is typically capped at **5-10 MB** per origin.
@@ -109,7 +115,16 @@ burndown-studio (localStorage key)
 - Returns an array of ISO date strings.
 - **Gap:** Does not exclude holidays or PTO.
 
-### 5.2 Burndown Calculation (`calculateBurndown` in `burndown.js`)
+### 5.2 Timezone-Safe Date Formatting (`localIso` in `utils.js`)
+- All date arithmetic uses `getFullYear() / getMonth() / getDate()` (local time) instead of `toISOString().slice(0,10)` (UTC).
+- Critical for UTC+ users (e.g. UTC+9): `toISOString()` at midnight local time returns the previous UTC day, causing off-by-one errors in every date function.
+- `localIso(date)` is a private helper used by `todayIso`, `addDays`, `getWorkingDates`, `getNextWorkingDay`, and `addWorkingDays`.
+
+### 5.3 Sprint Overlap & Gap Detection (`utils.js`)
+- **Overlap:** `sprintsOverlap(a, b)` — `a.startDate <= b.endDate && a.endDate >= b.startDate`. Used in the modal save handler to block overlapping sprints.
+- **Gap:** `findGaps(sprints)` — iterates sorted sprints; if `getNextWorkingDay(sprint[i].endDate) < sprint[i+1].startDate`, a gap exists. Warns after save but does not block.
+
+### 5.4 Burndown Calculation (`calculateBurndown` in `burndown.js`)
 - **Total points:** Sum of all task `points` values.
 - **Man-days:** `developers * workingDays`.
 - **Effective man-days:** `manDays * efficiency`.
@@ -117,7 +132,13 @@ burndown-studio (localStorage key)
 - **Ideal line:** Starts at `totalPoints`, decreases by `idealDailyBurn` per working day.
 - **Actual line:** For each working day, sums the points of tasks whose `doneDate` is after that day (i.e., not yet done).
 
-### 5.3 Available Days (`renderStats` in `render.js`)
+### 5.5 Today Override & Actual Line Clipping
+- `sprint.today` persists an overridden "today" date, useful for demos or past-sprint review.
+- `calculateBurndown(sprint, today)` accepts `today` and computes `todayIndex` — the last date index ≤ today.
+- Actual burn values are `null` for indices after `todayIndex`, so the red line never extends into the future.
+- A dashed vertical "Today" marker is drawn on the chart at `todayIndex`.
+
+### 5.6 Available Days (`renderStats` in `render.js`)
 - Formula: `effectiveManDays - totalPoints`.
 - Color coding: green if between -1.0 and 1.0, red if < -1.0.
 
@@ -126,9 +147,14 @@ burndown-studio (localStorage key)
 The app uses a **full re-render** approach:
 1. State mutations in `state.js` call `save()` then fire the `onStateChange` callback.
 2. `main.js` registers `render()` as the callback via `setOnStateChange(render)`.
-3. `render()` rebuilds: sprint sidebar, form fields, task table, stats, SVG chart.
+3. `render()` rebuilds: sprint sidebar, task table, stats, SVG chart.
 4. Templates (`<template>` elements) are cloned for sprint items and task rows.
 5. Event listeners are re-attached on every render.
+
+### Flatpickr Instance Management
+- **Modal date pickers** (`fpStart`, `fpEnd`): module-level variables in `main.js`. Destroyed and recreated on each modal open via `initDatePickers(excludeId, defaultStart, defaultEnd)`. Occupied sprint date ranges and weekends are passed to Flatpickr's `disable` array.
+- **Today picker** (`fpToday`): module-level variable in `render.js`. Destroyed and recreated on every `render()` call to keep `minDate`/`maxDate` in sync with sprint dates.
+- **Calendar popup positioning**: Flatpickr appends its calendar to `<body>` with `position: absolute`, which scrolls with the page while the modal is `position: fixed`. Fixed via an `onOpen` callback that overrides position to `fixed` using `getBoundingClientRect()` after a `setTimeout(0)`.
 
 ### Performance Characteristics
 - Fine for small task lists (< 30 tasks per sprint).
@@ -182,14 +208,14 @@ No circular dependencies. `state.js` communicates with `render.js` via a callbac
 
 | Module | Lines | Responsibility |
 |---|---|---|
-| `utils.js` | ~35 | Pure helpers: date math, formatting, UUID generation |
-| `dom.js` | ~28 | Queries and exports all DOM element references |
-| `state.js` | ~143 | State CRUD, localStorage load/save, change callback |
-| `burndown.js` | ~27 | Pure burndown calculation (ideal/actual lines, capacity) |
-| `chart.js` | ~89 | SVG chart rendering (grid, lines, labels) |
-| `render.js` | ~148 | DOM rendering: sprint list, task table, stats card |
+| `utils.js` | ~79 | Pure helpers: timezone-safe date math, overlap/gap detection, UUID, formatting |
+| `dom.js` | ~36 | Queries and exports all DOM element references |
+| `state.js` | ~185 | State CRUD, localStorage load/save, change callback, sprint sorting |
+| `burndown.js` | ~30 | Pure burndown calculation (ideal/actual lines, today clipping, capacity) |
+| `chart.js` | ~111 | SVG chart rendering (grid, lines, today marker, labels) |
+| `render.js` | ~157 | DOM rendering: sprint list, task table, stats card, Flatpickr Today picker |
 | `io.js` | ~36 | JSON export (file download) and import (file read + validation) |
-| `main.js` | ~55 | Entry point: registers callbacks, attaches event listeners |
+| `main.js` | ~149 | Entry point: modal logic, Flatpickr date pickers, event wiring |
 
 ## 8. Technical Debt & Risks
 
@@ -202,7 +228,7 @@ No circular dependencies. `state.js` communicates with `render.js` via a callbac
 | TD-05 | localStorage only | Medium | **Mitigated** | JSON export/import added. localStorage is still the primary store. |
 | TD-06 | No input validation | Low | Open | Invalid dates, negative points, or efficiency > 1 are not explicitly prevented (HTML `min`/`max` helps but isn't enforced in JS). |
 | TD-07 | No error handling | Low | **Resolved** | `loadState` now has try/catch with graceful fallback. |
-| TD-08 | Date handling uses string comparison | Low | Open | `task.doneDate > date` works for ISO strings but is fragile. |
+| TD-08 | Date handling uses string comparison | Low | **Partially resolved** | `task.doneDate > date` works for ISO strings. Timezone off-by-one bug fixed via `localIso()` helper; string comparison retained where safe. |
 
 ## 9. Future Architecture Considerations
 
@@ -227,3 +253,4 @@ No circular dependencies. `state.js` communicates with `render.js` via a callbac
 | 2026-02-20 | 0.1 | Initial draft based on MVP codebase analysis |
 | 2026-02-20 | 0.2 | Updated for ES module refactor, resolved tech debt items, updated file structure and dependency graph |
 | 2026-02-20 | 0.3 | Comprehensive update: added build pipeline section, module responsibilities table, data safety notes, updated architecture overview for esbuild bundling, updated tech stack, updated future architecture considerations |
+| 2026-02-21 | 0.4 | Updated data model (description, today fields; sprint numbering computed not stored); added Flatpickr to tech stack; added algorithms for timezone-safe dates, overlap/gap detection, today clipping; updated Flatpickr instance management in rendering strategy; updated module line counts; partially resolved TD-08 |

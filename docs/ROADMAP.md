@@ -1,7 +1,7 @@
 # Burndown Studio — Project Roadmap
 
-**Version:** 0.2
-**Last updated:** 2026-02-20
+**Version:** 0.3
+**Last updated:** 2026-02-21
 **Status:** Draft — open for review
 
 ---
@@ -22,17 +22,22 @@ MVP baseline       Data Safety        Daily Usability    Insights           Mult
 **Goal:** A working burndown tracker that runs locally in the browser, with a solid technical foundation for further development.
 
 ### Core Features
-- [x] Multiple sprint management (create, switch, delete)
-- [x] Sprint setup (name, dates, developers, efficiency)
-- [x] Weekend auto-skip in working-day calculations
+- [x] Multiple sprint management (create, switch, delete); auto-sorted by start date
+- [x] Sprint setup via modal: optional description, Flatpickr date pickers, developers, efficiency
+- [x] Overlap validation (block) and gap warning (alert) between sprints
+- [x] Sprint title bar: optional description as scrollable heading
+- [x] Weekend auto-skip in working-day calculations; timezone-safe date arithmetic
 - [x] Task CRUD with name, days, status, done date
-- [x] Ideal vs actual burndown chart (SVG)
-- [x] Stats dashboard (7 metrics)
-- [x] Available Days capacity indicator (formula: `effectiveManDays - totalPoints`)
+- [x] Today override field per sprint; actual burn line clips at today
+- [x] Ideal (blue) vs actual (red) burndown chart (SVG) with dashed today marker
+- [x] Side-by-side layout: sprint summary + burndown chart; tasks below
+- [x] Stats dashboard; Available Days capacity indicator (`effectiveManDays - totalPoints`)
+- [x] Working days chip in modal (live count as dates are picked)
+- [x] Date format: mm/dd throughout
 - [x] localStorage persistence
 - [x] Responsive layout
 - [x] JSON export/import for data backup and portability
-- [x] Show day numbers toggle (D1/D2 vs calendar dates)
+- [x] Show day numbers toggle (D1/D2 vs mm/dd dates)
 - [x] Graceful recovery from corrupt localStorage data
 
 ### Technical Foundation
@@ -169,3 +174,4 @@ MVP baseline       Data Safety        Daily Usability    Insights           Mult
 |---|---|---|
 | 2026-02-20 | 0.1 | Initial draft based on MVP codebase analysis |
 | 2026-02-20 | 0.2 | Merged Phase 0 with completed tech items. Marked F-101, T-101, T-103, T-104 as Done. Removed completed T-201/T-202 (module split and build tool) from Phase 2. Added remaining work summary to Phase 1. |
+| 2026-02-21 | 0.3 | Updated Phase 0 completed list to reflect UI redesign: modal sprint edit, Flatpickr, overlap/gap, Today override, side-by-side layout, mm/dd dates, working days chip, timezone fix. Phase 1 remaining work unchanged (F-102, F-103, T-102). |
