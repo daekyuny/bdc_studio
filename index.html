@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Burndown Studio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=Source+Sans+3:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="bg-orbit"></div>
+    <div class="app">
+      <header class="app-header">
+        <div>
+          <p class="eyebrow">Sprint Burndown</p>
+          <h1>Burndown Studio</h1>
+          <p class="subtitle">
+            Track sprint progress with task-level updates and a clean ideal vs actual view.
+          </p>
+        </div>
+        <div class="header-actions">
+          <button class="btn ghost danger" id="deleteSprintBtn">Delete Sprint</button>
+          <button class="btn" id="newSprintBtn">New Sprint</button>
+        </div>
+      </header>
+
+      <main class="layout">
+        <aside class="sprint-list" id="sprintList"></aside>
+
+        <section class="content">
+          <div class="card">
+            <div class="card-header">
+              <h2>Sprint Setup</h2>
+              <div class="toggle">
+                <input type="checkbox" id="showDayNumbers" checked />
+                <label for="showDayNumbers">Show day numbers</label>
+              </div>
+            </div>
+            <div class="form-grid">
+              <label>
+                Sprint Name
+                <input type="text" id="sprintName" placeholder="Sprint 14" />
+              </label>
+              <label>
+                Start Date
+                <input type="date" id="startDate" />
+              </label>
+              <label>
+                End Date
+                <input type="date" id="endDate" />
+              </label>
+              <label>
+                Number of Developers
+                <input type="number" id="developers" min="1" step="1" placeholder="4" />
+              </label>
+              <label>
+                Efficiency Factor (0-1)
+                <input type="number" id="efficiency" min="0" max="1" step="0.05" placeholder="0.8" />
+              </label>
+            </div>
+            <p class="hint">
+              Weekends are auto-skipped. Holiday configuration is planned for a later version.
+            </p>
+          </div>
+
+          <div class="card" id="statsCard">
+            <div class="stats-grid">
+              <div>
+                <p class="stat-label">Total Days</p>
+                <p class="stat-value" id="totalPoints">0</p>
+              </div>
+              <div>
+                <p class="stat-label">Remaining</p>
+                <p class="stat-value" id="remainingPoints">0</p>
+              </div>
+              <div>
+                <p class="stat-label">Working Days</p>
+                <p class="stat-value" id="workingDays">0</p>
+              </div>
+              <div>
+                <p class="stat-label">Done Tasks</p>
+                <p class="stat-value" id="doneTasks">0</p>
+              </div>
+              <div>
+                <p class="stat-label">Man Days</p>
+                <p class="stat-value" id="manDays">0</p>
+              </div>
+              <div>
+                <p class="stat-label">Effective Man Days</p>
+                <p class="stat-value" id="effectiveManDays">0</p>
+              </div>
+              <div>
+                <p class="stat-label">Ideal Burn</p>
+                <p class="stat-value" id="idealBurn">0</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h2>Tasks</h2>
+              <button class="btn ghost" id="addTaskBtn">Add Task</button>
+            </div>
+            <div class="availability" id="availableDays">
+              <span class="availability-label">Available Days</span>
+              <span class="availability-value" id="availableDaysValue">0</span>
+            </div>
+            <div class="task-table-wrap">
+              <table class="task-table">
+                <thead>
+                  <tr>
+                    <th class="col-task">Task</th>
+                    <th class="col-points">Days</th>
+                    <th class="col-status">Status</th>
+                    <th class="col-done">Done Date</th>
+                    <th class="col-actions"></th>
+                  </tr>
+                </thead>
+                <tbody id="taskRows"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h2>Burndown</h2>
+              <div class="legend">
+                <span class="legend-item">
+                  <span class="swatch ideal"></span>Ideal
+                </span>
+                <span class="legend-item">
+                  <span class="swatch actual"></span>Actual
+                </span>
+              </div>
+            </div>
+            <div class="chart-wrap">
+              <svg id="burndownChart" viewBox="0 0 800 320" role="img"></svg>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <template id="sprintItemTemplate">
+      <button class="sprint-item">
+        <span class="sprint-title"></span>
+        <span class="sprint-dates"></span>
+      </button>
+    </template>
+
+    <template id="taskRowTemplate">
+      <tr class="task-row">
+        <td class="col-task">
+          <input class="task-name" type="text" placeholder="Task name" />
+        </td>
+        <td class="col-points">
+          <input class="task-points" type="number" min="0" step="0.5" placeholder="0" />
+        </td>
+        <td class="col-status">
+          <select class="task-status">
+            <option value="Todo">Todo</option>
+            <option value="In Progress">In Progress</option>
+            <option value="Done">Done</option>
+          </select>
+        </td>
+        <td class="col-done">
+          <input class="task-done" type="date" />
+        </td>
+        <td class="col-actions">
+          <button class="btn ghost small task-delete">Remove</button>
+        </td>
+      </tr>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
