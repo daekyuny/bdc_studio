@@ -491,6 +491,18 @@ h3 {
   justify-content: flex-end;
 }
 
+.label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.working-days-chip {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;

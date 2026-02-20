@@ -11,7 +11,7 @@ import {
 } from "./state.js";
 import { render } from "./render.js";
 import { exportData, importData } from "./io.js";
-import { getNextWorkingDay, addWorkingDays, findGaps, sprintsOverlap, todayIso } from "./utils.js";
+import { getNextWorkingDay, addWorkingDays, findGaps, sprintsOverlap, todayIso, getWorkingDates } from "./utils.js";
 
 setOnStateChange(render);
 
@@ -38,6 +38,19 @@ const fixCalendarPosition = (instance) => {
   }, 0);
 };
 
+const updateWorkingDaysChip = () => {
+  const start = fpStart?.selectedDates[0];
+  const end = fpEnd?.selectedDates[0];
+  if (start && end) {
+    const startIso = `${start.getFullYear()}-${String(start.getMonth()+1).padStart(2,"0")}-${String(start.getDate()).padStart(2,"0")}`;
+    const endIso = `${end.getFullYear()}-${String(end.getMonth()+1).padStart(2,"0")}-${String(end.getDate()).padStart(2,"0")}`;
+    const count = getWorkingDates(startIso, endIso).length;
+    dom.modalWorkingDays.textContent = `${count} working days`;
+  } else {
+    dom.modalWorkingDays.textContent = "";
+  }
+};
+
 const initDatePickers = (excludeId, defaultStart, defaultEnd) => {
   if (fpStart) fpStart.destroy();
   if (fpEnd) fpEnd.destroy();
@@ -47,9 +60,11 @@ const initDatePickers = (excludeId, defaultStart, defaultEnd) => {
     disableMobile: true,
     disable: disabled,
     onOpen: (_, __, instance) => fixCalendarPosition(instance),
+    onChange: () => updateWorkingDaysChip(),
   };
   fpStart = flatpickr(dom.modalStartDate, { ...base, defaultDate: defaultStart || null });
   fpEnd = flatpickr(dom.modalEndDate, { ...base, defaultDate: defaultEnd || null });
+  updateWorkingDaysChip();
 };
 
 // --- Modal ---

@@ -25,6 +25,7 @@
     modalTitle: document.getElementById("modalTitle"),
     modalDescription: document.getElementById("modalDescription"),
     modalStartDate: document.getElementById("modalStartDate"),
+    modalWorkingDays: document.getElementById("modalWorkingDays"),
     modalEndDate: document.getElementById("modalEndDate"),
     modalDevelopers: document.getElementById("modalDevelopers"),
     modalEfficiency: document.getElementById("modalEfficiency"),
@@ -569,6 +570,18 @@
       cal.style.zIndex = "1000";
     }, 0);
   };
+  var updateWorkingDaysChip = () => {
+    const start = fpStart?.selectedDates[0];
+    const end = fpEnd?.selectedDates[0];
+    if (start && end) {
+      const startIso = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}`;
+      const endIso = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`;
+      const count = getWorkingDates(startIso, endIso).length;
+      dom.modalWorkingDays.textContent = `${count} working days`;
+    } else {
+      dom.modalWorkingDays.textContent = "";
+    }
+  };
   var initDatePickers = (excludeId, defaultStart, defaultEnd) => {
     if (fpStart) fpStart.destroy();
     if (fpEnd) fpEnd.destroy();
@@ -577,10 +590,12 @@
       dateFormat: "Y-m-d",
       disableMobile: true,
       disable: disabled,
-      onOpen: (_, __, instance) => fixCalendarPosition(instance)
+      onOpen: (_, __, instance) => fixCalendarPosition(instance),
+      onChange: () => updateWorkingDaysChip()
     };
     fpStart = flatpickr(dom.modalStartDate, { ...base, defaultDate: defaultStart || null });
     fpEnd = flatpickr(dom.modalEndDate, { ...base, defaultDate: defaultEnd || null });
+    updateWorkingDaysChip();
   };
   var modalMode = "edit";
   var modalSprintId = null;

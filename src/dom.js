@@ -23,6 +23,7 @@ export const dom = {
   modalTitle: document.getElementById("modalTitle"),
   modalDescription: document.getElementById("modalDescription"),
   modalStartDate: document.getElementById("modalStartDate"),
+  modalWorkingDays: document.getElementById("modalWorkingDays"),
   modalEndDate: document.getElementById("modalEndDate"),
   modalDevelopers: document.getElementById("modalDevelopers"),
   modalEfficiency: document.getElementById("modalEfficiency"),
