@@ -137,6 +137,13 @@ p {
   gap: 22px;
 }
 
+.setup-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px;
+  align-items: start;
+}
+
 .card {
   background: var(--panel);
   border-radius: 20px;
@@ -408,6 +415,10 @@ svg {
   .app-header {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .setup-row {
+    grid-template-columns: 1fr;
   }
 
   .task-table {

@@ -36,13 +36,10 @@
         <aside class="sprint-list" id="sprintList"></aside>
 
         <section class="content">
+          <div class="setup-row">
           <div class="card">
             <div class="card-header">
               <h2>Sprint Setup</h2>
-              <div class="toggle">
-                <input type="checkbox" id="showDayNumbers" checked />
-                <label for="showDayNumbers">Show day numbers</label>
-              </div>
             </div>
             <div class="form-grid">
               <label>
@@ -103,6 +100,7 @@
               </div>
             </div>
           </div>
+          </div><!-- /.setup-row -->
 
           <div class="card">
             <div class="card-header">
@@ -132,6 +130,10 @@
           <div class="card">
             <div class="card-header">
               <h2>Burndown</h2>
+              <div class="toggle">
+                <input type="checkbox" id="showDayNumbers" checked />
+                <label for="showDayNumbers">Show day numbers</label>
+              </div>
               <div class="legend">
                 <span class="legend-item">
                   <span class="swatch ideal"></span>Ideal
