@@ -18,6 +18,7 @@
     availableDaysValue: document.getElementById("availableDaysValue"),
     chart: document.getElementById("burndownChart"),
     showDayNumbers: document.getElementById("showDayNumbers"),
+    exportCsvBtn: document.getElementById("exportCsvBtn"),
     exportBtn: document.getElementById("exportBtn"),
     importBtn: document.getElementById("importBtn"),
     importFile: document.getElementById("importFile"),
@@ -525,6 +526,26 @@
     a.click();
     URL.revokeObjectURL(url);
   };
+  var exportCsv = () => {
+    const sprint = getActiveSprint();
+    if (!sprint) return;
+    const state2 = getState();
+    const sprintNumber = state2.sprints.findIndex((s) => s.id === sprint.id) + 1;
+    const escape = (val) => `"${String(val ?? "").replace(/"/g, '""')}"`;
+    const rows = [
+      ["Task", "Days", "Status", "Done Date"].join(","),
+      ...sprint.tasks.map(
+        (t) => [escape(t.name), t.points, escape(t.status), escape(t.doneDate || "")].join(",")
+      )
+    ];
+    const blob = new Blob([rows.join("\r\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `sprint-${sprintNumber}-tasks-${todayIso()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
   var importData = (file) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -673,6 +694,7 @@
   });
   dom.deleteSprintBtn.addEventListener("click", deleteActiveSprint);
   dom.addTaskBtn.addEventListener("click", addTask);
+  dom.exportCsvBtn.addEventListener("click", exportCsv);
   dom.exportBtn.addEventListener("click", exportData);
   dom.importBtn.addEventListener("click", () => dom.importFile.click());
   dom.importFile.addEventListener("change", (e) => {

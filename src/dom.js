@@ -16,6 +16,7 @@ export const dom = {
   availableDaysValue: document.getElementById("availableDaysValue"),
   chart: document.getElementById("burndownChart"),
   showDayNumbers: document.getElementById("showDayNumbers"),
+  exportCsvBtn: document.getElementById("exportCsvBtn"),
   exportBtn: document.getElementById("exportBtn"),
   importBtn: document.getElementById("importBtn"),
   importFile: document.getElementById("importFile"),

@@ -10,7 +10,7 @@ import {
   getState,
 } from "./state.js";
 import { render } from "./render.js";
-import { exportData, importData } from "./io.js";
+import { exportData, exportCsv, importData } from "./io.js";
 import { getNextWorkingDay, addWorkingDays, findGaps, sprintsOverlap, todayIso, getWorkingDates } from "./utils.js";
 
 setOnStateChange(render);
@@ -151,6 +151,7 @@ dom.editSprintBtn.addEventListener("click", () => {
 // --- Other controls ---
 dom.deleteSprintBtn.addEventListener("click", deleteActiveSprint);
 dom.addTaskBtn.addEventListener("click", addTask);
+dom.exportCsvBtn.addEventListener("click", exportCsv);
 dom.exportBtn.addEventListener("click", exportData);
 dom.importBtn.addEventListener("click", () => dom.importFile.click());
 dom.importFile.addEventListener("change", (e) => {
