@@ -1,7 +1,7 @@
 # Burndown Studio — Project Roadmap
 
-**Version:** 0.3
-**Last updated:** 2026-02-21
+**Version:** 0.4
+**Last updated:** 2026-02-23
 **Status:** Draft — open for review
 
 ---
@@ -54,7 +54,7 @@ MVP baseline       Data Safety        Daily Usability    Insights           Mult
 
 ## Phase 1 — Data Safety & Accuracy (ACTIVE)
 
-**Goal:** Make the burndown chart accurate for real-world sprints. Complete the data safety story.
+**Goal:** Make the burndown chart accurate for real-world sprints. Complete the data safety story. Establish a structured backlog to source sprint tasks from.
 
 ### Features
 
@@ -62,25 +62,27 @@ MVP baseline       Data Safety        Daily Usability    Insights           Mult
 |---|---|---|---|---|---|
 | F-101 | JSON export/import | P0 | Small | **Done** | Download/upload full state as `.json` file |
 | F-102 | Holiday/PTO exclusions | P0 | Medium | Open | Per-sprint list of excluded dates; reflected in working days & ideal line |
-| F-103 | CSV task export | P1 | Small | Open | Download active sprint's task list as `.csv` |
+| F-103 | Sprint task export | P1 | Small | **Done** | Export active sprint's task list as `.xlsx` (Excel) |
+| F-104 | Product Backlog | P0 | Large | **Done** | Story→Task hierarchy; tasks assigned to sprint from backlog; estimate/actual split; Excel import/export |
 
 ### Technical Foundation
 
 | ID | Item | Priority | Effort | Status | Description |
 |---|---|---|---|---|---|
 | T-101 | Initialize git repo | P0 | Trivial | **Done** | `git init` + initial commit, GitHub remote |
-| T-102 | Add basic input validation | P1 | Small | Open | Validate dates, points, efficiency in JS (not just HTML attributes) |
+| T-102 | Add basic input validation | P1 | Small | Open | Validate dates, estimates, efficiency in JS (not just HTML attributes) |
 | T-103 | Graceful localStorage error handling | P1 | Small | **Done** | Try/catch around `JSON.parse`, fallback to fresh state on corruption |
 | T-104 | Split into ES modules | P1 | Medium | **Done** | 8 modules under `src/` with esbuild bundling |
 
 ### Exit Criteria
 - User can export all data, clear browser, import, and have everything restored. **(Done)**
+- Sprint tasks originate from a structured backlog; estimate and actual are tracked separately. **(Done)**
+- Sprint and backlog data can be exported to Excel and re-imported. **(Done)**
 - Holiday dates are excluded from working-day count and ideal burn line.
 - Git repo exists with clean commit history. **(Done)**
 
 ### Remaining Work
 - F-102: Holiday/PTO exclusions
-- F-103: CSV task export
 - T-102: Input validation
 
 ---
@@ -93,7 +95,7 @@ MVP baseline       Data Safety        Daily Usability    Insights           Mult
 
 | ID | Feature | Priority | Effort | Description |
 |---|---|---|---|---|
-| F-201 | Task drag-and-drop reordering | P1 | Medium | Drag task rows to reorder; order persisted |
+| F-201 | Task drag-and-drop reordering | P1 | Medium | Drag sprint task rows to reorder; order persisted |
 | F-202 | Sprint progress percentage | P1 | Small | "X% complete" stat based on done points / total points |
 | F-203 | Sprint cloning | P2 | Small | Clone sprint structure with statuses reset to Todo |
 | F-204 | Scope change tracking | P2 | Medium | Log task additions/removals with timestamps; optional scope line on chart |
@@ -175,3 +177,4 @@ MVP baseline       Data Safety        Daily Usability    Insights           Mult
 | 2026-02-20 | 0.1 | Initial draft based on MVP codebase analysis |
 | 2026-02-20 | 0.2 | Merged Phase 0 with completed tech items. Marked F-101, T-101, T-103, T-104 as Done. Removed completed T-201/T-202 (module split and build tool) from Phase 2. Added remaining work summary to Phase 1. |
 | 2026-02-21 | 0.3 | Updated Phase 0 completed list to reflect UI redesign: modal sprint edit, Flatpickr, overlap/gap, Today override, side-by-side layout, mm/dd dates, working days chip, timezone fix. Phase 1 remaining work unchanged (F-102, F-103, T-102). |
+| 2026-02-23 | 0.4 | Marked F-103 Done (Excel export); added F-104 (Product Backlog) as Done; updated Phase 1 goal and exit criteria to reflect backlog feature; removed F-103/F-104 from remaining work; updated Phase 1 remaining to F-102 + T-102 only. |

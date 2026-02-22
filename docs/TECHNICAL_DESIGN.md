@@ -1,7 +1,7 @@
 # Burndown Studio — Technical Design Document
 
-**Version:** 0.4
-**Last updated:** 2026-02-21
+**Version:** 0.5
+**Last updated:** 2026-02-23
 **Status:** Draft — open for review
 
 ---
@@ -25,8 +25,8 @@ Development
       ├── state.js      → state management, CRUD
       ├── burndown.js   → pure calculation functions
       ├── chart.js      → SVG chart rendering
-      ├── render.js     → DOM rendering (sidebar, tasks, stats)
-      ├── io.js         → JSON export/import
+      ├── render.js     → DOM rendering (sidebar, tasks, backlog, stats)
+      ├── io.js         → JSON/Excel export and import
       └── utils.js      → shared helpers (dates, IDs)
 ```
 
@@ -34,7 +34,7 @@ Development
 - **Open and run** — open `index.html` directly in a browser (`file://` works, no server required).
 - **Modular source** — 8 focused ES modules for clean separation and parallel development.
 - **Single build step** — `npm run build` bundles `src/` → `app.js` via esbuild.
-- **Minimal dependencies** — only dev dependency is esbuild. No runtime dependencies (except Google Fonts via CDN).
+- **Minimal dependencies** — only dev dependency is esbuild. Runtime CDN dependencies: Google Fonts, Flatpickr, SheetJS.
 - **Single global state** — one JS object, one localStorage key.
 - **Full re-render** — every state change triggers a complete DOM rebuild via `render()`.
 
@@ -48,6 +48,7 @@ Development
 | Chart | Hand-rolled SVG | `<polyline>` elements built via DOM API |
 | Fonts | Google Fonts (CDN) | Fraunces (headings), Source Sans 3 (body) |
 | Date picker | Flatpickr (CDN) | Calendar UI for sprint dates and Today field; weekends/occupied ranges disabled |
+| Excel I/O | SheetJS / xlsx (CDN) | Backlog Excel import (.xlsx/.xls) and export; sprint task export |
 | Storage | localStorage | Single JSON blob under `burndown-studio` key |
 | Bundler | esbuild | Bundles ES modules into single `app.js` |
 | Serving | Any static server or `file://` | `python3 -m http.server`, or open `index.html` directly |
@@ -75,6 +76,20 @@ All state is stored as a single JSON object in `localStorage`:
 burndown-studio (localStorage key)
 │
 ├── activeSprintId: string (UUID)
+├── backlog
+│   └── stories: Array
+│       └── Story
+│           ├── id: string (UUID)
+│           ├── storyId: string (display ID, e.g. "0.1")
+│           ├── description: string
+│           ├── priority: number (default 100, min 0)
+│           └── tasks: Array
+│               └── BacklogTask
+│                   ├── id: string (UUID)
+│                   ├── taskId: string (display ID, e.g. "0.1.1")
+│                   ├── description: string
+│                   ├── estimate: number (days)
+│                   └── assignedTo: string
 └── sprints: Array
     └── Sprint
         ├── id: string (UUID)
@@ -86,10 +101,14 @@ burndown-studio (localStorage key)
         ├── efficiency: number 0-1 (default 1)
         ├── createdAt: string (ISO 8601)
         └── tasks: Array
-            └── Task
+            └── SprintTask
                 ├── id: string (UUID)
-                ├── name: string
-                ├── points: number
+                ├── backlogTaskId: string (UUID — link to BacklogTask)
+                ├── taskId: string (denormalized from backlog)
+                ├── name: string (denormalized from backlog description)
+                ├── assignedTo: string (denormalized from backlog)
+                ├── estimate: number (denormalized from backlog — read-only in sprint)
+                ├── actual: number | null (entered by user when task is Done)
                 ├── status: "Todo" | "In Progress" | "Done"
                 └── doneDate: string (YYYY-MM-DD) or ""
 ```
@@ -97,6 +116,16 @@ burndown-studio (localStorage key)
 **Sprint numbering** is computed dynamically (sorted index + 1) and never stored. Sprints are always kept sorted by `startDate` via `sortSprints()` after every create or update.
 
 **New sprint defaults:** `developers: 0`, `efficiency: 1`. Start date defaults to next working day after last sprint end; end date is 10 working days after start.
+
+**Estimate vs Actual:** `estimate` is copied from the backlog task when a task is added to a sprint and is read-only thereafter. `actual` is entered by the user when the task is marked Done (pre-filled with `estimate`). Only `estimate` is used in burndown chart math; `actual` is for retrospective reporting only.
+
+**Denormalization:** Sprint tasks copy `taskId`, `name`, and `assignedTo` from the backlog at the time of assignment. These copies are not kept in sync if the backlog is edited after assignment.
+
+### Data Migration
+
+`migrateState()` in `state.js` (and `migrateImported()` in `io.js`) runs on every load:
+- If `backlog` key is missing, adds `{ stories: [] }`.
+- If a sprint task has `points` but no `estimate`, renames `points → estimate`, sets `actual = null`.
 
 ### Storage Limits
 - localStorage is typically capped at **5-10 MB** per origin.
@@ -113,7 +142,7 @@ burndown-studio (localStorage key)
 - Iterates from `startDate` to `endDate` inclusive.
 - Excludes Saturday (day 6) and Sunday (day 0).
 - Returns an array of ISO date strings.
-- **Gap:** Does not exclude holidays or PTO.
+- **Gap:** Does not exclude holidays or PTO (planned as F-102).
 
 ### 5.2 Timezone-Safe Date Formatting (`localIso` in `utils.js`)
 - All date arithmetic uses `getFullYear() / getMonth() / getDate()` (local time) instead of `toISOString().slice(0,10)` (UTC).
@@ -125,12 +154,12 @@ burndown-studio (localStorage key)
 - **Gap:** `findGaps(sprints)` — iterates sorted sprints; if `getNextWorkingDay(sprint[i].endDate) < sprint[i+1].startDate`, a gap exists. Warns after save but does not block.
 
 ### 5.4 Burndown Calculation (`calculateBurndown` in `burndown.js`)
-- **Total points:** Sum of all task `points` values.
+- **Total points:** Sum of all sprint task `estimate` values.
 - **Man-days:** `developers * workingDays`.
 - **Effective man-days:** `manDays * efficiency`.
 - **Ideal daily burn:** `effectiveManDays / workingDays`.
 - **Ideal line:** Starts at `totalPoints`, decreases by `idealDailyBurn` per working day.
-- **Actual line:** For each working day, sums the points of tasks whose `doneDate` is after that day (i.e., not yet done).
+- **Actual line:** For each working day, sums the `estimate` of tasks whose `doneDate` is after that day (i.e., not yet done). The `actual` field is **not used** in chart math — it's for retrospective reporting only.
 
 ### 5.5 Today Override & Actual Line Clipping
 - `sprint.today` persists an overridden "today" date, useful for demos or past-sprint review.
@@ -142,14 +171,34 @@ burndown-studio (localStorage key)
 - Formula: `effectiveManDays - totalPoints`.
 - Color coding: green if between -1.0 and 1.0, red if < -1.0.
 
+### 5.7 Priority Snapping
+- The backlog story priority field uses `<input type="number" step="10" min="0">`.
+- Native spinner arrows (mouse click) snap to multiples of 10 automatically via `step="10"`.
+- Keyboard ArrowUp/ArrowDown are intercepted with `e.preventDefault()` and apply custom logic:
+  - ArrowUp: `Math.floor(cur / 10) * 10 + 10`
+  - ArrowDown: `Math.max(0, Math.ceil(cur / 10) * 10 - 10)`
+- Example: current = 45 → Up → 50; current = 45 → Down → 40.
+
 ## 6. Rendering Strategy
 
 The app uses a **full re-render** approach:
 1. State mutations in `state.js` call `save()` then fire the `onStateChange` callback.
 2. `main.js` registers `render()` as the callback via `setOnStateChange(render)`.
-3. `render()` rebuilds: sprint sidebar, task table, stats, SVG chart.
-4. Templates (`<template>` elements) are cloned for sprint items and task rows.
+3. `render()` rebuilds: sprint sidebar, task table, stats, SVG chart — or the backlog table, depending on the active tab.
+4. Templates (`<template>` elements) are cloned for sprint items, sprint task rows, backlog panel rows, backlog story rows, and backlog task rows.
 5. Event listeners are re-attached on every render.
+
+### Tab State
+- `activeTab` (`"sprint"` | `"backlog"`) is a module-level variable in `render.js`.
+- `setActiveTab(tab)` updates it and calls `render()`.
+- `render()` toggles visibility of `#sprintView` / `#backlogView` and which content is built.
+
+### Backlog UI State
+Two module-level Sets in `render.js` persist across renders:
+- `editingIds` — UUIDs of stories/tasks currently in edit mode.
+- `expandedStoryIds` — UUIDs of stories whose task rows are visible.
+
+`startEditing(id, focusAfter)` adds to `editingIds`, triggers a render, then uses `setTimeout(0)` to scroll the new row into view and focus its first input.
 
 ### Flatpickr Instance Management
 - **Modal date pickers** (`fpStart`, `fpEnd`): module-level variables in `main.js`. Destroyed and recreated on each modal open via `initDatePickers(excludeId, defaultStart, defaultEnd)`. Occupied sprint date ranges and weekends are passed to Flatpickr's `disable` array.
@@ -157,8 +206,8 @@ The app uses a **full re-render** approach:
 - **Calendar popup positioning**: Flatpickr appends its calendar to `<body>` with `position: absolute`, which scrolls with the page while the modal is `position: fixed`. Fixed via an `onOpen` callback that overrides position to `fixed` using `getBoundingClientRect()` after a `setTimeout(0)`.
 
 ### Performance Characteristics
-- Fine for small task lists (< 30 tasks per sprint).
-- Will degrade with 50+ tasks due to full DOM teardown/rebuild.
+- Fine for small task lists (< 30 tasks per sprint, < 50 backlog tasks).
+- Will degrade with 50+ sprint tasks or 100+ backlog tasks due to full DOM teardown/rebuild.
 - SVG chart is rebuilt from scratch each time.
 
 ## 7. File Structure
@@ -169,13 +218,13 @@ bdc/
 ├── app.js              # Bundled output (built from src/, committed to git)
 ├── styles.css          # All styling (no preprocessor)
 ├── src/
-│   ├── main.js         # Entry point — event wiring, init
+│   ├── main.js         # Entry point — event wiring, init, modal logic
 │   ├── dom.js          # DOM element references
-│   ├── state.js        # State management — load, save, CRUD
+│   ├── state.js        # State management — load, save, CRUD (sprints + backlog)
 │   ├── burndown.js     # Pure burndown calculation functions
 │   ├── chart.js        # SVG chart rendering
-│   ├── render.js       # DOM rendering (sprint list, tasks, stats)
-│   ├── io.js           # JSON export/import
+│   ├── render.js       # DOM rendering (sprint list, tasks, backlog, stats)
+│   ├── io.js           # JSON/Excel export and import
 │   └── utils.js        # Shared helpers (dates, IDs, formatting)
 ├── docs/
 │   ├── PRD.md          # Product requirements
@@ -206,16 +255,16 @@ No circular dependencies. `state.js` communicates with `render.js` via a callbac
 
 ### Module Responsibilities
 
-| Module | Lines | Responsibility |
-|---|---|---|
-| `utils.js` | ~79 | Pure helpers: timezone-safe date math, overlap/gap detection, UUID, formatting |
-| `dom.js` | ~36 | Queries and exports all DOM element references |
-| `state.js` | ~185 | State CRUD, localStorage load/save, change callback, sprint sorting |
-| `burndown.js` | ~30 | Pure burndown calculation (ideal/actual lines, today clipping, capacity) |
-| `chart.js` | ~111 | SVG chart rendering (grid, lines, today marker, labels) |
-| `render.js` | ~157 | DOM rendering: sprint list, task table, stats card, Flatpickr Today picker |
-| `io.js` | ~36 | JSON export (file download) and import (file read + validation) |
-| `main.js` | ~149 | Entry point: modal logic, Flatpickr date pickers, event wiring |
+| Module | Responsibility |
+|---|---|
+| `utils.js` | Pure helpers: timezone-safe date math, overlap/gap detection, UUID, formatting |
+| `dom.js` | Queries and exports all DOM element references (~60 elements) |
+| `state.js` | State CRUD for sprints and backlog, localStorage load/save, change callback, migration |
+| `burndown.js` | Pure burndown calculation (ideal/actual lines, today clipping, capacity) |
+| `chart.js` | SVG chart rendering (grid, lines, today marker, labels) |
+| `render.js` | Full DOM rebuild: tab switching, sprint list, task table, backlog table (stories + tasks), stats card, Flatpickr Today picker |
+| `io.js` | JSON export/import; sprint Excel export; backlog Excel export and import (SheetJS) |
+| `main.js` | Entry point: tab/toolbar event wiring, modal logic, Flatpickr date pickers, Add-by-ID, drag-to-sprint, Delete All |
 
 ## 8. Technical Debt & Risks
 
@@ -226,9 +275,10 @@ No circular dependencies. `state.js` communicates with `render.js` via a callbac
 | TD-03 | No tests | Medium | Open | `calculateBurndown`, `getWorkingDates` are pure functions and easy to unit test. |
 | TD-04 | Single JS file (~500 lines) | Low | **Resolved** | Split into 8 ES modules under `src/`. |
 | TD-05 | localStorage only | Medium | **Mitigated** | JSON export/import added. localStorage is still the primary store. |
-| TD-06 | No input validation | Low | Open | Invalid dates, negative points, or efficiency > 1 are not explicitly prevented (HTML `min`/`max` helps but isn't enforced in JS). |
+| TD-06 | No input validation | Low | Open | Invalid dates, negative estimates, or efficiency > 1 are not explicitly prevented in JS. |
 | TD-07 | No error handling | Low | **Resolved** | `loadState` now has try/catch with graceful fallback. |
 | TD-08 | Date handling uses string comparison | Low | **Partially resolved** | `task.doneDate > date` works for ISO strings. Timezone off-by-one bug fixed via `localIso()` helper; string comparison retained where safe. |
+| TD-09 | Backlog denormalization | Low | Open | Sprint tasks copy name/taskId/assignedTo from backlog at assignment time; edits to backlog tasks after assignment are not reflected in sprint tasks. |
 
 ## 9. Future Architecture Considerations
 
@@ -243,7 +293,7 @@ No circular dependencies. `state.js` communicates with `render.js` via a callbac
 
 ### If adding TypeScript:
 - Rename `.js` → `.ts` files incrementally.
-- Define interfaces for `Sprint`, `Task`, and `State` in a shared `types.ts`.
+- Define interfaces for `Sprint`, `SprintTask`, `BacklogStory`, `BacklogTask`, and `AppState` in a shared `types.ts`.
 - esbuild already supports TypeScript out of the box (type-stripping only; add `tsc --noEmit` for type checking).
 
 ## 10. Revision History
@@ -254,3 +304,4 @@ No circular dependencies. `state.js` communicates with `render.js` via a callbac
 | 2026-02-20 | 0.2 | Updated for ES module refactor, resolved tech debt items, updated file structure and dependency graph |
 | 2026-02-20 | 0.3 | Comprehensive update: added build pipeline section, module responsibilities table, data safety notes, updated architecture overview for esbuild bundling, updated tech stack, updated future architecture considerations |
 | 2026-02-21 | 0.4 | Updated data model (description, today fields; sprint numbering computed not stored); added Flatpickr to tech stack; added algorithms for timezone-safe dates, overlap/gap detection, today clipping; updated Flatpickr instance management in rendering strategy; updated module line counts; partially resolved TD-08 |
+| 2026-02-23 | 0.5 | Major update for Product Backlog feature: added backlog data model (Story, BacklogTask, denormalized SprintTask); updated data migration section; added SheetJS to tech stack; updated io.js responsibilities (Excel import/export); rewrote burndown algorithm (estimate not points); added tab state and backlog UI state sections to rendering strategy; added priority snapping algorithm; added TD-09 (denormalization); updated module responsibilities table |
