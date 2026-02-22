@@ -5,7 +5,6 @@ export const dom = {
   sprintTitleText: document.getElementById("sprintTitleText"),
   editSprintBtn: document.getElementById("editSprintBtn"),
   summaryDuration: document.getElementById("summaryDuration"),
-  addTaskBtn: document.getElementById("addTaskBtn"),
   sprintToday: document.getElementById("sprintToday"),
   taskRows: document.getElementById("taskRows"),
   totalPoints: document.getElementById("totalPoints"),
@@ -34,4 +33,28 @@ export const dom = {
   modalClose: document.getElementById("modalClose"),
   sprintItemTemplate: document.getElementById("sprintItemTemplate"),
   taskRowTemplate: document.getElementById("taskRowTemplate"),
+  // Tabs
+  tabSprint: document.getElementById("tabSprint"),
+  tabBacklog: document.getElementById("tabBacklog"),
+  sprintView: document.getElementById("sprintView"),
+  backlogView: document.getElementById("backlogView"),
+  // Sprint task card — add-by-ID
+  addByIdInput: document.getElementById("addByIdInput"),
+  addByIdBtn: document.getElementById("addByIdBtn"),
+  // Backlog panel (sprint view, drag-to-add)
+  backlogPanel: document.getElementById("backlogPanel"),
+  backlogPanelToggle: document.getElementById("backlogPanelToggle"),
+  backlogPanelRows: document.getElementById("backlogPanelRows"),
+  backlogPanelRowTemplate: document.getElementById("backlogPanelRowTemplate"),
+  // Backlog view
+  backlogExpandAllBtn: document.getElementById("backlogExpandAllBtn"),
+  backlogCollapseAllBtn: document.getElementById("backlogCollapseAllBtn"),
+  backlogAddStoryBtn: document.getElementById("backlogAddStoryBtn"),
+  backlogImportCsvBtn: document.getElementById("backlogImportCsvBtn"),
+  backlogExportCsvBtn: document.getElementById("backlogExportCsvBtn"),
+  backlogDeleteAllBtn: document.getElementById("backlogDeleteAllBtn"),
+  backlogImportFile: document.getElementById("backlogImportFile"),
+  backlogTableBody: document.getElementById("backlogTableBody"),
+  backlogStoryRowTemplate: document.getElementById("backlogStoryRowTemplate"),
+  backlogTaskRowTemplate: document.getElementById("backlogTaskRowTemplate"),
 };

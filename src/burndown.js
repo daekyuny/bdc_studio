@@ -2,7 +2,7 @@ import { getWorkingDates } from "./utils.js";
 
 export const calculateBurndown = (sprint, today) => {
   const dates = getWorkingDates(sprint.startDate, sprint.endDate);
-  const totalPoints = sprint.tasks.reduce((sum, task) => sum + Number(task.points || 0), 0);
+  const totalPoints = sprint.tasks.reduce((sum, task) => sum + Number(task.estimate || 0), 0);
   const workingDays = dates.length || 0;
   const developers = Math.max(0, Number(sprint.developers || 0));
   const efficiency = Math.min(1, Math.max(0, Number(sprint.efficiency || 0)));
@@ -18,9 +18,9 @@ export const calculateBurndown = (sprint, today) => {
   const actual = dates.map((date, i) => {
     if (todayIndex < 0 || i > todayIndex) return null;
     return sprint.tasks.reduce((sum, task) => {
-      const points = Number(task.points || 0);
-      if (!task.doneDate) return sum + points;
-      return task.doneDate > date ? sum + points : sum;
+      const est = Number(task.estimate || 0);
+      if (!task.doneDate || task.doneDate > date) return sum + est;
+      return sum; // done on or before this date: fully burned
     }, 0);
   });
 

@@ -4,13 +4,15 @@ import {
   createSprint,
   deleteActiveSprint,
   updateSprintById,
-  addTask,
+  addTaskFromBacklog,
+  addStory,
   updateToday,
   getActiveSprint,
   getState,
+  replaceBacklog,
 } from "./state.js";
-import { render } from "./render.js";
-import { exportData, exportCsv, importData } from "./io.js";
+import { render, setActiveTab, startEditing, expandAll, collapseAll } from "./render.js";
+import { exportData, exportSprintExcel, importData, exportBacklogExcel, importBacklogExcel } from "./io.js";
 import { getNextWorkingDay, addWorkingDays, findGaps, sprintsOverlap, todayIso, getWorkingDates } from "./utils.js";
 
 setOnStateChange(render);
@@ -150,8 +152,7 @@ dom.editSprintBtn.addEventListener("click", () => {
 
 // --- Other controls ---
 dom.deleteSprintBtn.addEventListener("click", deleteActiveSprint);
-dom.addTaskBtn.addEventListener("click", addTask);
-dom.exportCsvBtn.addEventListener("click", exportCsv);
+dom.exportCsvBtn.addEventListener("click", exportSprintExcel);
 dom.exportBtn.addEventListener("click", exportData);
 dom.importBtn.addEventListener("click", () => dom.importFile.click());
 dom.importFile.addEventListener("change", (e) => {
@@ -160,5 +161,69 @@ dom.importFile.addEventListener("change", (e) => {
 });
 
 dom.showDayNumbers.addEventListener("change", render);
+
+// --- Tabs ---
+dom.tabSprint.addEventListener("click", () => setActiveTab("sprint"));
+dom.tabBacklog.addEventListener("click", () => setActiveTab("backlog"));
+
+// --- Add-by-ID ---
+const commitAddById = () => {
+  const input = dom.addByIdInput.value.trim();
+  if (!input) return;
+  const backlog = getState().backlog;
+  let uuid = null;
+  for (const story of backlog?.stories ?? []) {
+    const found = story.tasks.find(t => t.taskId === input);
+    if (found) { uuid = found.id; break; }
+  }
+  if (!uuid) { alert(`Task "${input}" not found in backlog.`); return; }
+  addTaskFromBacklog(uuid);
+  dom.addByIdInput.value = "";
+};
+dom.addByIdBtn.addEventListener("click", commitAddById);
+dom.addByIdInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); commitAddById(); }
+});
+
+// --- Backlog panel toggle (open state persists across re-renders) ---
+let backlogPanelOpen = false;
+dom.backlogPanelToggle.addEventListener("click", () => {
+  backlogPanelOpen = !backlogPanelOpen;
+  dom.backlogPanelRows.hidden = !backlogPanelOpen;
+  dom.backlogPanelToggle.querySelector(".panel-toggle-chevron").textContent =
+    backlogPanelOpen ? "▲" : "▼";
+});
+
+// --- Backlog panel: tbody drop target ---
+dom.taskRows.addEventListener("dragover", (e) => {
+  e.preventDefault();
+  dom.taskRows.classList.add("drag-over");
+});
+dom.taskRows.addEventListener("dragleave", () => dom.taskRows.classList.remove("drag-over"));
+dom.taskRows.addEventListener("drop", (e) => {
+  e.preventDefault();
+  dom.taskRows.classList.remove("drag-over");
+  const backlogTaskId = e.dataTransfer.getData("backlogTaskId");
+  if (backlogTaskId) addTaskFromBacklog(backlogTaskId);
+});
+
+// --- Backlog CRUD + CSV ---
+dom.backlogExpandAllBtn.addEventListener("click", expandAll);
+dom.backlogCollapseAllBtn.addEventListener("click", collapseAll);
+dom.backlogAddStoryBtn.addEventListener("click", () => {
+  const newId = addStory();
+  startEditing(newId, true);
+});
+dom.backlogExportCsvBtn.addEventListener("click", exportBacklogExcel);
+dom.backlogDeleteAllBtn.addEventListener("click", () => {
+  if (window.confirm("Delete all backlog data? This cannot be undone.")) {
+    replaceBacklog({ stories: [] });
+  }
+});
+dom.backlogImportCsvBtn.addEventListener("click", () => dom.backlogImportFile.click());
+dom.backlogImportFile.addEventListener("change", (e) => {
+  if (e.target.files[0]) importBacklogExcel(e.target.files[0]);
+  e.target.value = "";
+});
 
 render();

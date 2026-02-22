@@ -21,104 +21,152 @@
           <p class="eyebrow">Sprint Burndown</p>
           <h1>Burndown Studio</h1>
         </div>
-        <div class="header-actions">
-          <button class="btn ghost" id="exportBtn">Export</button>
-          <button class="btn ghost" id="importBtn">Import</button>
-          <input type="file" id="importFile" accept=".json" hidden />
-          <button class="btn ghost danger" id="deleteSprintBtn">Delete Sprint</button>
-          <button class="btn" id="newSprintBtn">New Sprint</button>
-        </div>
       </header>
 
-      <main class="layout">
+      <main class="layout" id="mainLayout">
         <aside class="sprint-list" id="sprintList"></aside>
 
         <section class="content">
-          <div class="sprint-title-bar">
-            <p class="sprint-title-text" id="sprintTitleText">Sprint 1</p>
+          <div class="tab-bar">
+            <button class="tab-btn active" id="tabSprint">Sprint</button>
+            <button class="tab-btn" id="tabBacklog">Backlog</button>
           </div>
 
-          <div class="info-row">
-            <div class="card" id="statsCard">
-              <div class="summary-list">
-                <div class="summary-row">
-                  <span class="summary-label">Duration</span>
-                  <span class="summary-value" id="summaryDuration">—</span>
+          <div id="sprintView">
+            <div class="sprint-toolbar">
+              <button class="btn small" id="newSprintBtn">Add Sprint</button>
+              <button class="btn ghost small" id="importBtn">Import Sprint</button>
+              <input type="file" id="importFile" accept=".json" hidden />
+              <button class="btn ghost small" id="exportBtn">Export Sprint</button>
+              <button class="btn ghost small danger" id="deleteSprintBtn">Delete Sprint</button>
+            </div>
+            <div class="sprint-title-bar">
+              <p class="sprint-title-text" id="sprintTitleText">Sprint 1</p>
+            </div>
+
+            <div class="info-row">
+              <div class="card" id="statsCard">
+                <div class="summary-list">
+                  <div class="summary-row">
+                    <span class="summary-label">Duration</span>
+                    <span class="summary-value" id="summaryDuration">—</span>
+                  </div>
+                  <div class="summary-row">
+                    <span class="summary-label">Working Days</span>
+                    <span class="summary-value" id="workingDays">0</span>
+                  </div>
+                  <div class="summary-row">
+                    <span class="summary-label">Total Points</span>
+                    <span class="summary-value" id="totalPoints">0</span>
+                  </div>
+                  <div class="summary-row">
+                    <span class="summary-label">Remaining</span>
+                    <span class="summary-value" id="remainingPoints">0</span>
+                  </div>
+                  <div class="summary-row">
+                    <span class="summary-label">Done Tasks</span>
+                    <span class="summary-value" id="doneTasks">0</span>
+                  </div>
+                  <div class="summary-row" id="availableDays">
+                    <span class="summary-label">Available Days</span>
+                    <span class="summary-value" id="availableDaysValue">0</span>
+                  </div>
                 </div>
-                <div class="summary-row">
-                  <span class="summary-label">Working Days</span>
-                  <span class="summary-value" id="workingDays">0</span>
-                </div>
-                <div class="summary-row">
-                  <span class="summary-label">Total Points</span>
-                  <span class="summary-value" id="totalPoints">0</span>
-                </div>
-                <div class="summary-row">
-                  <span class="summary-label">Remaining</span>
-                  <span class="summary-value" id="remainingPoints">0</span>
-                </div>
-                <div class="summary-row">
-                  <span class="summary-label">Done Tasks</span>
-                  <span class="summary-value" id="doneTasks">0</span>
-                </div>
-                <div class="summary-row" id="availableDays">
-                  <span class="summary-label">Available Days</span>
-                  <span class="summary-value" id="availableDaysValue">0</span>
+                <div class="summary-footer">
+                  <button class="btn ghost small" id="editSprintBtn">Edit Sprint</button>
                 </div>
               </div>
-              <div class="summary-footer">
-                <button class="btn ghost small" id="editSprintBtn">Edit Sprint</button>
+
+              <div class="card">
+                <div class="card-header">
+                  <h2>Burndown</h2>
+                  <div class="toggle">
+                    <input type="checkbox" id="showDayNumbers" checked />
+                    <label for="showDayNumbers">Show day numbers</label>
+                  </div>
+                  <div class="legend">
+                    <span class="legend-item">
+                      <span class="swatch ideal"></span>Ideal
+                    </span>
+                    <span class="legend-item">
+                      <span class="swatch actual"></span>Actual
+                    </span>
+                  </div>
+                </div>
+                <div class="chart-wrap">
+                  <svg id="burndownChart" viewBox="0 0 800 320" role="img"></svg>
+                </div>
               </div>
             </div>
 
             <div class="card">
               <div class="card-header">
-                <h2>Burndown</h2>
-                <div class="toggle">
-                  <input type="checkbox" id="showDayNumbers" checked />
-                  <label for="showDayNumbers">Show day numbers</label>
+                <h2>Tasks</h2>
+                <div class="today-field">
+                  <label for="sprintToday">Today</label>
+                  <input type="date" id="sprintToday" />
                 </div>
-                <div class="legend">
-                  <span class="legend-item">
-                    <span class="swatch ideal"></span>Ideal
-                  </span>
-                  <span class="legend-item">
-                    <span class="swatch actual"></span>Actual
-                  </span>
+                <button class="btn ghost small" id="exportCsvBtn">Export Excel</button>
+                <div class="add-by-id-row">
+                  <input type="text" id="addByIdInput" placeholder="Task ID (e.g. 0.1.1)" class="add-by-id-input" />
+                  <button class="btn ghost small" id="addByIdBtn">Add</button>
                 </div>
               </div>
-              <div class="chart-wrap">
-                <svg id="burndownChart" viewBox="0 0 800 320" role="img"></svg>
+              <div class="task-table-wrap">
+                <table class="task-table">
+                  <thead>
+                    <tr>
+                      <th class="col-taskid">ID</th>
+                      <th class="col-task">Task</th>
+                      <th class="col-estimate">Est.</th>
+                      <th class="col-actual">Actual</th>
+                      <th class="col-status">Status</th>
+                      <th class="col-done">Done Date</th>
+                      <th class="col-actions"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="taskRows"></tbody>
+                </table>
+              </div>
+              <div id="backlogPanel" class="backlog-panel">
+                <button class="backlog-panel-toggle" id="backlogPanelToggle">
+                  Unassigned Backlog Tasks <span class="panel-toggle-chevron">▼</span>
+                </button>
+                <div class="backlog-panel-body" id="backlogPanelRows" hidden></div>
               </div>
             </div>
           </div>
 
-          <div class="card">
-            <div class="card-header">
-              <h2>Tasks</h2>
-              <div class="today-field">
-                <label for="sprintToday">Today</label>
-                <input type="date" id="sprintToday" />
+          <div id="backlogView" hidden>
+            <div class="backlog-header">
+              <div class="backlog-header-actions">
+                <button class="btn small" id="backlogAddStoryBtn">Add Story</button>
+                <button class="btn ghost small" id="backlogExpandAllBtn">Expand All</button>
+                <button class="btn ghost small" id="backlogCollapseAllBtn">Collapse All</button>
+                <button class="btn ghost small" id="backlogImportCsvBtn">Import from Excel</button>
+                <input type="file" id="backlogImportFile" accept=".xlsx,.xls" hidden />
+                <button class="btn ghost small" id="backlogExportCsvBtn">Export to Excel</button>
+                <button class="btn ghost small danger" id="backlogDeleteAllBtn">Delete All</button>
               </div>
-              <button class="btn ghost small" id="exportCsvBtn">Export CSV</button>
-              <button class="btn ghost" id="addTaskBtn">Add Task</button>
             </div>
-            <div class="task-table-wrap">
-              <table class="task-table">
+            <div class="backlog-table-wrap">
+              <table class="backlog-table">
                 <thead>
                   <tr>
-                    <th class="col-task">Task</th>
-                    <th class="col-points">Days</th>
-                    <th class="col-status">Status</th>
-                    <th class="col-done">Done Date</th>
-                    <th class="col-actions"></th>
+                    <th class="bl-col-story-id">Story ID</th>
+                    <th class="bl-col-user-stories">User Stories</th>
+                    <th class="bl-col-priority">Priority</th>
+                    <th class="bl-col-task-id">Task ID</th>
+                    <th class="bl-col-task-desc">Task Description</th>
+                    <th class="bl-col-estimate">Est. Days</th>
+                    <th class="bl-col-assigned">Assigned To</th>
+                    <th class="bl-col-actions"></th>
                   </tr>
                 </thead>
-                <tbody id="taskRows"></tbody>
+                <tbody id="backlogTableBody"></tbody>
               </table>
             </div>
           </div>
-
         </section>
       </main>
     </div>
@@ -168,11 +216,17 @@
 
     <template id="taskRowTemplate">
       <tr class="task-row">
-        <td class="col-task">
-          <input class="task-name" type="text" placeholder="Task name" />
+        <td class="col-taskid">
+          <span class="task-taskid"></span>
         </td>
-        <td class="col-points">
-          <input class="task-points" type="number" min="0" step="0.5" placeholder="0" />
+        <td class="col-task">
+          <span class="task-name"></span>
+        </td>
+        <td class="col-estimate">
+          <span class="task-estimate"></span>
+        </td>
+        <td class="col-actual">
+          <input class="task-actual" type="number" min="0" step="0.5" placeholder="0" />
         </td>
         <td class="col-status">
           <select class="task-status">
@@ -185,12 +239,80 @@
           <input class="task-done" type="date" />
         </td>
         <td class="col-actions">
-          <button class="btn ghost small task-delete">Remove</button>
+          <button class="btn ghost small task-remove">Remove</button>
+        </td>
+      </tr>
+    </template>
+
+    <!-- Sprint backlog panel row template (drag-to-add) -->
+    <template id="backlogPanelRowTemplate">
+      <div class="backlog-panel-row" draggable="true">
+        <span class="drag-handle">⠿</span>
+        <span class="bp-taskid"></span>
+        <span class="bp-description"></span>
+        <span class="bp-estimate"></span>
+        <button class="btn ghost small bp-add-btn">Add</button>
+      </div>
+    </template>
+
+    <!-- Backlog table: story row template -->
+    <template id="backlogStoryRowTemplate">
+      <tr class="bl-story-row">
+        <td class="bl-col-story-id">
+          <button class="story-expand-toggle btn-icon"></button>
+          <span class="story-id-view"></span>
+          <input class="story-id-edit" type="text" placeholder="e.g. 0.1" hidden />
+        </td>
+        <td class="bl-col-user-stories">
+          <span class="story-desc-view"></span>
+          <input class="story-desc-edit" type="text" placeholder="User story description" hidden />
+        </td>
+        <td class="bl-col-priority">
+          <span class="story-priority-view"></span>
+          <input class="story-priority-edit" type="number" min="0" step="10" placeholder="100" hidden />
+        </td>
+        <td></td><td></td><td></td><td></td>
+        <td class="bl-col-actions">
+          <button class="btn ghost small story-edit-btn">Edit</button>
+          <button class="btn ghost small story-add-task-btn" hidden>Add Task</button>
+          <button class="btn ghost small story-save-btn" hidden>Save</button>
+          <button class="btn ghost small story-cancel-btn" hidden>Cancel</button>
+          <button class="btn ghost small danger story-delete-btn" hidden>Delete</button>
+        </td>
+      </tr>
+    </template>
+
+    <!-- Backlog table: task row template -->
+    <template id="backlogTaskRowTemplate">
+      <tr class="bl-task-row">
+        <td></td><td></td><td></td>
+        <td class="bl-col-task-id">
+          <span class="task-id-view"></span>
+          <input class="task-id-edit" type="text" placeholder="e.g. 0.1.1" hidden />
+        </td>
+        <td class="bl-col-task-desc">
+          <span class="task-desc-view"></span>
+          <input class="task-desc-edit" type="text" placeholder="Task description" hidden />
+        </td>
+        <td class="bl-col-estimate">
+          <span class="task-estimate-view"></span>
+          <input class="task-estimate-edit" type="number" min="0" step="0.5" hidden />
+        </td>
+        <td class="bl-col-assigned">
+          <span class="task-assigned-view"></span>
+          <input class="task-assigned-edit" type="text" placeholder="Assigned to" hidden />
+        </td>
+        <td class="bl-col-actions">
+          <button class="btn ghost small task-edit-btn">Edit</button>
+          <button class="btn ghost small task-save-btn" hidden>Save</button>
+          <button class="btn ghost small danger task-cancel-btn" hidden>Cancel</button>
+          <button class="btn ghost small danger task-delete-btn" hidden>Delete</button>
         </td>
       </tr>
     </template>
 
     <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.js"></script>
+    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
     <script src="app.js"></script>
   </body>
 </html>
