@@ -662,9 +662,9 @@ h3 {
   border: none;
   border-bottom: 2px solid transparent;
   margin-bottom: -2px;
-  padding: 8px 20px;
+  padding: 8px 20px 2px 20px;  /* top right botton left*/
   font-family: "Source Sans 3", sans-serif;
-  font-size: 0.9rem;
+  font-size: 1.0rem;
   font-weight: 600;
   color: var(--muted);
   cursor: pointer;
