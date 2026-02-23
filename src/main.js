@@ -216,14 +216,84 @@ dom.backlogAddStoryBtn.addEventListener("click", () => {
 });
 dom.backlogExportCsvBtn.addEventListener("click", exportBacklogExcel);
 dom.backlogDeleteAllBtn.addEventListener("click", () => {
-  if (window.confirm("Delete all backlog data? This cannot be undone.")) {
-    replaceBacklog({ stories: [] });
-  }
+  dom.confirmDeleteBacklogModal.hidden = false;
+});
+dom.confirmDeleteBacklogCancel.addEventListener("click", () => {
+  dom.confirmDeleteBacklogModal.hidden = true;
+});
+dom.confirmDeleteBacklogConfirm.addEventListener("click", () => {
+  dom.confirmDeleteBacklogModal.hidden = true;
+  replaceBacklog({ stories: [] });
 });
 dom.backlogImportCsvBtn.addEventListener("click", () => dom.backlogImportFile.click());
 dom.backlogImportFile.addEventListener("change", (e) => {
   if (e.target.files[0]) importBacklogExcel(e.target.files[0]);
   e.target.value = "";
 });
+
+// --- Backlog column resizing ---
+(function initBacklogResize() {
+  const table = document.querySelector(".backlog-table");
+  const ths   = Array.from(table.querySelectorAll("thead th"));
+  const cols  = Array.from(table.querySelectorAll("col"));
+  let frozen = false;
+
+  // Lock every column AND the table itself to exact pixel widths.
+  // - We set BOTH col.style.width AND th.style.width so there is no
+  //   ambiguity about which the browser uses for fixed-layout column sizing.
+  // - We set table.style.width to an exact px value (NOT 'auto') because
+  //   table-layout:fixed with width:auto silently reverts to content-based
+  //   layout in Chrome/Firefox, making col widths irrelevant.
+  function freezeWidths() {
+    if (frozen) return;
+    frozen = true;
+    ths.forEach((th, i) => {
+      const w = th.offsetWidth + "px";
+      th.style.width = w;
+      if (cols[i]) cols[i].style.width = w;
+    });
+    table.style.width = table.offsetWidth + "px";
+  }
+
+  // All columns except the last (actions) get a resizer
+  ths.slice(0, -1).forEach((th, i) => {
+    const resizer = th.querySelector(".col-resizer");
+    if (!resizer) return;
+    const col = cols[i];
+
+    resizer.addEventListener("mousedown", (e) => {
+      freezeWidths();
+      const startX  = e.clientX;
+      const startW  = th.offsetWidth;        // column width at drag start
+      const tableW  = table.offsetWidth;     // total table width at drag start
+
+      resizer.classList.add("resizing");
+      document.body.style.cursor    = "col-resize";
+      document.body.style.userSelect = "none";
+
+      const onMove = (ev) => {
+        const delta   = ev.clientX - startX;
+        const newColW = Math.max(40, startW + delta);
+        const diff    = newColW - startW;
+        // Update column via both col and th — belt-and-suspenders across browsers
+        th.style.width = newColW + "px";
+        if (col) col.style.width = newColW + "px";
+        // Grow/shrink the table by the same amount so no other column shifts
+        table.style.width = (tableW + diff) + "px";
+      };
+
+      const onUp = () => {
+        resizer.classList.remove("resizing");
+        document.body.style.cursor    = "";
+        document.body.style.userSelect = "";
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+      };
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+      e.preventDefault();
+    });
+  });
+})();
 
 render();

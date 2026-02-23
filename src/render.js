@@ -31,6 +31,7 @@ const expandedStoryIds = new Set();
 
 export const startEditing = (id, focusAfter = false) => {
   if (!id) return;
+  editingIds.clear();
   editingIds.add(id);
   render();
   if (focusAfter) {
@@ -58,19 +59,7 @@ export const collapseAll = () => {
 const renderSprintList = () => {
   dom.sprintList.innerHTML = "";
 
-  if (activeTab === "backlog") {
-    const node = document.createElement("div");
-    node.className = "sprint-item active";
-    node.style.cursor = "default";
-    node.style.whiteSpace = "normal";
-    node.style.wordBreak = "break-word";
-    const label = document.createElement("span");
-    label.className = "sprint-label";
-    label.textContent = "Product Backlog";
-    node.appendChild(label);
-    dom.sprintList.appendChild(node);
-    return;
-  }
+  if (activeTab === "backlog") return;
 
   const state = getState();
   state.sprints.forEach((sprint, index) => {
@@ -251,6 +240,7 @@ const renderBacklog = () => {
     storyPriorityView.textContent = story.priority ?? 100;
 
     if (isEditing) {
+      storyRow.classList.add('row-editing');
       expandToggle.hidden = true;
 
       storyIdView.hidden = true;
@@ -285,6 +275,7 @@ const renderBacklog = () => {
     }
 
     editBtn.addEventListener("click", () => {
+      editingIds.clear();
       editingIds.add(story.id);
       render();
     });
@@ -345,6 +336,7 @@ const renderBacklog = () => {
         if (assignedIds.has(task.id)) taskRow.classList.add("assigned");
 
         if (isTaskEditing) {
+          taskRow.classList.add('row-editing');
           taskIdView.hidden = true;
           taskIdEdit.hidden = false;
           taskIdEdit.value = task.taskId || "";
@@ -368,6 +360,7 @@ const renderBacklog = () => {
         }
 
         taskEditBtn.addEventListener("click", () => {
+          editingIds.clear();
           editingIds.add(task.id);
           render();
         });
@@ -425,6 +418,10 @@ export const render = () => {
   dom.tabBacklog.classList.toggle("active", activeTab === "backlog");
   dom.sprintView.hidden = activeTab !== "sprint";
   dom.backlogView.hidden = activeTab !== "backlog";
+
+  // Hide sprint sub-header (toolbar + sprint tabs) on backlog tab
+  dom.sprintSubHeader.hidden = activeTab === "backlog";
+
   renderSprintList();
 
   if (activeTab === "backlog") {

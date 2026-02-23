@@ -1,4 +1,6 @@
 export const dom = {
+  mainLayout: document.getElementById("mainLayout"),
+  sprintSubHeader: document.getElementById("sprintSubHeader"),
   sprintList: document.getElementById("sprintList"),
   newSprintBtn: document.getElementById("newSprintBtn"),
   deleteSprintBtn: document.getElementById("deleteSprintBtn"),
@@ -57,4 +59,8 @@ export const dom = {
   backlogTableBody: document.getElementById("backlogTableBody"),
   backlogStoryRowTemplate: document.getElementById("backlogStoryRowTemplate"),
   backlogTaskRowTemplate: document.getElementById("backlogTaskRowTemplate"),
+  // Backlog "Clear All" confirm dialog
+  confirmDeleteBacklogModal: document.getElementById("confirmDeleteBacklogModal"),
+  confirmDeleteBacklogCancel: document.getElementById("confirmDeleteBacklogCancel"),
+  confirmDeleteBacklogConfirm: document.getElementById("confirmDeleteBacklogConfirm"),
 };

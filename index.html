@@ -23,23 +23,27 @@
         </div>
       </header>
 
+      <div class="tab-bar">
+        <button class="tab-btn active" id="tabSprint">Sprint</button>
+        <button class="tab-btn" id="tabBacklog">Backlog</button>
+      </div>
+
+      <!-- Sprint sub-header: toolbar + sprint bookmark tabs (visible only on Sprint tab) -->
+      <div id="sprintSubHeader">
+        <div class="sprint-toolbar">
+          <button class="btn small" id="newSprintBtn">Add Sprint</button>
+          <button class="btn ghost small" id="importBtn">Import Sprint</button>
+          <input type="file" id="importFile" accept=".json" hidden />
+          <button class="btn ghost small" id="exportBtn">Export Sprint</button>
+          <button class="btn ghost small danger" id="deleteSprintBtn">Delete Sprint</button>
+        </div>
+        <div class="sprint-tabs-line"></div>
+        <nav class="sprint-list" id="sprintList"></nav>
+      </div>
+
       <main class="layout" id="mainLayout">
-        <aside class="sprint-list" id="sprintList"></aside>
-
         <section class="content">
-          <div class="tab-bar">
-            <button class="tab-btn active" id="tabSprint">Sprint</button>
-            <button class="tab-btn" id="tabBacklog">Backlog</button>
-          </div>
-
           <div id="sprintView">
-            <div class="sprint-toolbar">
-              <button class="btn small" id="newSprintBtn">Add Sprint</button>
-              <button class="btn ghost small" id="importBtn">Import Sprint</button>
-              <input type="file" id="importFile" accept=".json" hidden />
-              <button class="btn ghost small" id="exportBtn">Export Sprint</button>
-              <button class="btn ghost small danger" id="deleteSprintBtn">Delete Sprint</button>
-            </div>
             <div class="sprint-title-bar">
               <p class="sprint-title-text" id="sprintTitleText">Sprint 1</p>
             </div>
@@ -139,27 +143,28 @@
 
           <div id="backlogView" hidden>
             <div class="backlog-header">
-              <div class="backlog-header-actions">
-                <button class="btn small" id="backlogAddStoryBtn">Add Story</button>
-                <button class="btn ghost small" id="backlogExpandAllBtn">Expand All</button>
-                <button class="btn ghost small" id="backlogCollapseAllBtn">Collapse All</button>
-                <button class="btn ghost small" id="backlogImportCsvBtn">Import from Excel</button>
-                <input type="file" id="backlogImportFile" accept=".xlsx,.xls" hidden />
-                <button class="btn ghost small" id="backlogExportCsvBtn">Export to Excel</button>
-                <button class="btn ghost small danger" id="backlogDeleteAllBtn">Delete All</button>
-              </div>
+              <button class="btn small" id="backlogAddStoryBtn">Add Story</button>
+              <button class="btn ghost small" id="backlogExpandAllBtn">Expand All</button>
+              <button class="btn ghost small" id="backlogCollapseAllBtn">Collapse All</button>
+              <button class="btn ghost small" id="backlogImportCsvBtn">Import from Excel</button>
+              <input type="file" id="backlogImportFile" accept=".xlsx,.xls" hidden />
+              <button class="btn ghost small" id="backlogExportCsvBtn">Export to Excel</button>
+              <button class="btn ghost small danger" id="backlogDeleteAllBtn">Delete All</button>
             </div>
             <div class="backlog-table-wrap">
               <table class="backlog-table">
+                <colgroup>
+                  <col><col><col><col><col><col><col><col>
+                </colgroup>
                 <thead>
                   <tr>
-                    <th class="bl-col-story-id">Story ID</th>
-                    <th class="bl-col-user-stories">User Stories</th>
-                    <th class="bl-col-priority">Priority</th>
-                    <th class="bl-col-task-id">Task ID</th>
-                    <th class="bl-col-task-desc">Task Description</th>
-                    <th class="bl-col-estimate">Est. Days</th>
-                    <th class="bl-col-assigned">Assigned To</th>
+                    <th class="bl-col-story-id">Story ID<span class="col-resizer" aria-hidden="true"></span></th>
+                    <th class="bl-col-user-stories">User Stories<span class="col-resizer" aria-hidden="true"></span></th>
+                    <th class="bl-col-priority">Priority<span class="col-resizer" aria-hidden="true"></span></th>
+                    <th class="bl-col-task-id">Task ID<span class="col-resizer" aria-hidden="true"></span></th>
+                    <th class="bl-col-task-desc">Task Description<span class="col-resizer" aria-hidden="true"></span></th>
+                    <th class="bl-col-estimate">Est. Days<span class="col-resizer" aria-hidden="true"></span></th>
+                    <th class="bl-col-assigned">Assigned To<span class="col-resizer" aria-hidden="true"></span></th>
                     <th class="bl-col-actions"></th>
                   </tr>
                 </thead>
@@ -169,6 +174,25 @@
           </div>
         </section>
       </main>
+    </div>
+
+    <!-- Backlog "Clear All" confirm dialog -->
+    <div class="modal-overlay" id="confirmDeleteBacklogModal" hidden>
+      <div class="modal confirm-dialog">
+        <div class="modal-header">
+          <h3 class="confirm-dialog-title">&#9888; Clear All Backlog</h3>
+        </div>
+        <div class="modal-body">
+          <p class="confirm-dialog-warning">
+            Deleting Backlog will make sprint information obsolete until the backlog is restored with the same Task Id.
+          </p>
+          <p class="confirm-dialog-subtext">This action cannot be undone.</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn ghost" id="confirmDeleteBacklogCancel">Cancel</button>
+          <button class="btn danger-solid" id="confirmDeleteBacklogConfirm">Delete All</button>
+        </div>
+      </div>
     </div>
 
     <!-- Sprint edit/create modal -->

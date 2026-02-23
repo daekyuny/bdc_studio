@@ -1,6 +1,8 @@
 (() => {
   // src/dom.js
   var dom = {
+    mainLayout: document.getElementById("mainLayout"),
+    sprintSubHeader: document.getElementById("sprintSubHeader"),
     sprintList: document.getElementById("sprintList"),
     newSprintBtn: document.getElementById("newSprintBtn"),
     deleteSprintBtn: document.getElementById("deleteSprintBtn"),
@@ -58,7 +60,11 @@
     backlogImportFile: document.getElementById("backlogImportFile"),
     backlogTableBody: document.getElementById("backlogTableBody"),
     backlogStoryRowTemplate: document.getElementById("backlogStoryRowTemplate"),
-    backlogTaskRowTemplate: document.getElementById("backlogTaskRowTemplate")
+    backlogTaskRowTemplate: document.getElementById("backlogTaskRowTemplate"),
+    // Backlog "Clear All" confirm dialog
+    confirmDeleteBacklogModal: document.getElementById("confirmDeleteBacklogModal"),
+    confirmDeleteBacklogCancel: document.getElementById("confirmDeleteBacklogCancel"),
+    confirmDeleteBacklogConfirm: document.getElementById("confirmDeleteBacklogConfirm")
   };
 
   // src/utils.js
@@ -515,6 +521,7 @@
   var expandedStoryIds = /* @__PURE__ */ new Set();
   var startEditing = (id, focusAfter = false) => {
     if (!id) return;
+    editingIds.clear();
     editingIds.add(id);
     render();
     if (focusAfter) {
@@ -538,19 +545,7 @@
   };
   var renderSprintList = () => {
     dom.sprintList.innerHTML = "";
-    if (activeTab === "backlog") {
-      const node = document.createElement("div");
-      node.className = "sprint-item active";
-      node.style.cursor = "default";
-      node.style.whiteSpace = "normal";
-      node.style.wordBreak = "break-word";
-      const label = document.createElement("span");
-      label.className = "sprint-label";
-      label.textContent = "Product Backlog";
-      node.appendChild(label);
-      dom.sprintList.appendChild(node);
-      return;
-    }
+    if (activeTab === "backlog") return;
     const state2 = getState();
     state2.sprints.forEach((sprint, index) => {
       const node = dom.sprintItemTemplate.content.firstElementChild.cloneNode(true);
@@ -709,6 +704,7 @@
       storyDescView.textContent = story.description || "";
       storyPriorityView.textContent = story.priority ?? 100;
       if (isEditing) {
+        storyRow.classList.add("row-editing");
         expandToggle.hidden = true;
         storyIdView.hidden = true;
         storyIdEdit.hidden = false;
@@ -738,6 +734,7 @@
         addTaskBtn.hidden = !isExpanded;
       }
       editBtn.addEventListener("click", () => {
+        editingIds.clear();
         editingIds.add(story.id);
         render();
       });
@@ -787,6 +784,7 @@
           taskAssignedView.textContent = task.assignedTo || "";
           if (assignedIds.has(task.id)) taskRow.classList.add("assigned");
           if (isTaskEditing) {
+            taskRow.classList.add("row-editing");
             taskIdView.hidden = true;
             taskIdEdit.hidden = false;
             taskIdEdit.value = task.taskId || "";
@@ -805,6 +803,7 @@
             taskDeleteBtn.hidden = false;
           }
           taskEditBtn.addEventListener("click", () => {
+            editingIds.clear();
             editingIds.add(task.id);
             render();
           });
@@ -854,6 +853,7 @@
     dom.tabBacklog.classList.toggle("active", activeTab === "backlog");
     dom.sprintView.hidden = activeTab !== "sprint";
     dom.backlogView.hidden = activeTab !== "backlog";
+    dom.sprintSubHeader.hidden = activeTab === "backlog";
     renderSprintList();
     if (activeTab === "backlog") {
       renderBacklog();
@@ -1211,14 +1211,67 @@ This cannot be undone. Proceed?` : `Import ${stories.length} story/stories into 
   });
   dom.backlogExportCsvBtn.addEventListener("click", exportBacklogExcel);
   dom.backlogDeleteAllBtn.addEventListener("click", () => {
-    if (window.confirm("Delete all backlog data? This cannot be undone.")) {
-      replaceBacklog({ stories: [] });
-    }
+    dom.confirmDeleteBacklogModal.hidden = false;
+  });
+  dom.confirmDeleteBacklogCancel.addEventListener("click", () => {
+    dom.confirmDeleteBacklogModal.hidden = true;
+  });
+  dom.confirmDeleteBacklogConfirm.addEventListener("click", () => {
+    dom.confirmDeleteBacklogModal.hidden = true;
+    replaceBacklog({ stories: [] });
   });
   dom.backlogImportCsvBtn.addEventListener("click", () => dom.backlogImportFile.click());
   dom.backlogImportFile.addEventListener("change", (e) => {
     if (e.target.files[0]) importBacklogExcel(e.target.files[0]);
     e.target.value = "";
   });
+  (function initBacklogResize() {
+    const table = document.querySelector(".backlog-table");
+    const ths = Array.from(table.querySelectorAll("thead th"));
+    const cols = Array.from(table.querySelectorAll("col"));
+    let frozen = false;
+    function freezeWidths() {
+      if (frozen) return;
+      frozen = true;
+      ths.forEach((th, i) => {
+        const w = th.offsetWidth + "px";
+        th.style.width = w;
+        if (cols[i]) cols[i].style.width = w;
+      });
+      table.style.width = table.offsetWidth + "px";
+    }
+    ths.slice(0, -1).forEach((th, i) => {
+      const resizer = th.querySelector(".col-resizer");
+      if (!resizer) return;
+      const col = cols[i];
+      resizer.addEventListener("mousedown", (e) => {
+        freezeWidths();
+        const startX = e.clientX;
+        const startW = th.offsetWidth;
+        const tableW = table.offsetWidth;
+        resizer.classList.add("resizing");
+        document.body.style.cursor = "col-resize";
+        document.body.style.userSelect = "none";
+        const onMove = (ev) => {
+          const delta = ev.clientX - startX;
+          const newColW = Math.max(40, startW + delta);
+          const diff = newColW - startW;
+          th.style.width = newColW + "px";
+          if (col) col.style.width = newColW + "px";
+          table.style.width = tableW + diff + "px";
+        };
+        const onUp = () => {
+          resizer.classList.remove("resizing");
+          document.body.style.cursor = "";
+          document.body.style.userSelect = "";
+          document.removeEventListener("mousemove", onMove);
+          document.removeEventListener("mouseup", onUp);
+        };
+        document.addEventListener("mousemove", onMove);
+        document.addEventListener("mouseup", onUp);
+        e.preventDefault();
+      });
+    });
+  })();
   render();
 })();
