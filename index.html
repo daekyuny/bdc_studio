@@ -37,13 +37,13 @@
           <button class="btn ghost small" id="exportBtn">Export Sprint</button>
           <button class="btn ghost small danger" id="deleteSprintBtn">Delete Sprint</button>
         </div>
-        <div class="sprint-tabs-line"></div>
-        <nav class="sprint-list" id="sprintList"></nav>
       </div>
 
       <main class="layout" id="mainLayout">
         <section class="content">
           <div id="sprintView">
+            <nav class="sprint-list" id="sprintList"></nav>
+            <div class="sprint-content">
             <div class="sprint-title-bar">
               <p class="sprint-title-text" id="sprintTitleText">Sprint 1</p>
             </div>
@@ -103,14 +103,13 @@
               </div>
             </div>
 
-            <div class="card">
-              <div class="card-header">
+            <div class="card card-tight">
+              <div class="card-header task-card-header">
                 <h2>Tasks</h2>
                 <div class="today-field">
                   <label for="sprintToday">Today</label>
-                  <input type="date" id="sprintToday" />
+                  <input type="text" id="sprintToday" readonly />
                 </div>
-                <button class="btn ghost small" id="exportCsvBtn">Export Excel</button>
                 <div class="add-by-id-row">
                   <input type="text" id="addByIdInput" placeholder="Task ID (e.g. 0.1.1)" class="add-by-id-input" />
                   <button class="btn ghost small" id="addByIdBtn">Add</button>
@@ -132,12 +131,14 @@
                   <tbody id="taskRows"></tbody>
                 </table>
               </div>
-              <div id="backlogPanel" class="backlog-panel">
-                <button class="backlog-panel-toggle" id="backlogPanelToggle">
-                  Unassigned Backlog Tasks <span class="panel-toggle-chevron">▼</span>
-                </button>
-                <div class="backlog-panel-body" id="backlogPanelRows" hidden></div>
-              </div>
+            </div>
+
+            <div class="card card-tight" id="backlogPanel">
+              <button class="backlog-panel-toggle" id="backlogPanelToggle">
+                Unassigned Backlog Tasks <span class="panel-toggle-chevron">▼</span>
+              </button>
+              <div class="backlog-panel-body" id="backlogPanelRows" hidden></div>
+            </div>
             </div>
           </div>
 
@@ -191,6 +192,25 @@
         <div class="modal-footer">
           <button class="btn ghost" id="confirmDeleteBacklogCancel">Cancel</button>
           <button class="btn danger-solid" id="confirmDeleteBacklogConfirm">Delete All</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Task remove confirm dialog -->
+    <div class="modal-overlay" id="confirmRemoveTaskModal" hidden>
+      <div class="modal confirm-dialog">
+        <div class="modal-header">
+          <h3 class="confirm-dialog-title">&#9888; Remove Task</h3>
+        </div>
+        <div class="modal-body">
+          <p class="confirm-dialog-warning">
+            Remove <strong id="confirmRemoveTaskName"></strong> from this sprint?
+          </p>
+          <p class="confirm-dialog-subtext">The task will return to the backlog.</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn ghost" id="confirmRemoveTaskCancel">Cancel</button>
+          <button class="btn danger-solid" id="confirmRemoveTaskConfirm">Remove</button>
         </div>
       </div>
     </div>
@@ -260,7 +280,7 @@
           </select>
         </td>
         <td class="col-done">
-          <input class="task-done" type="date" />
+          <input class="task-done" type="text" readonly />
         </td>
         <td class="col-actions">
           <button class="btn ghost small task-remove">Remove</button>

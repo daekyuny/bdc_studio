@@ -2,7 +2,7 @@ export const statusOptions = ["Todo", "In Progress", "Done"];
 
 // Always format dates using LOCAL calendar date, not UTC.
 // toISOString() returns UTC which causes off-by-one errors in UTC+ timezones.
-const localIso = (date) => {
+export const localIso = (date) => {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
   const d = String(date.getDate()).padStart(2, "0");

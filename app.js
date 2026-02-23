@@ -64,7 +64,12 @@
     // Backlog "Clear All" confirm dialog
     confirmDeleteBacklogModal: document.getElementById("confirmDeleteBacklogModal"),
     confirmDeleteBacklogCancel: document.getElementById("confirmDeleteBacklogCancel"),
-    confirmDeleteBacklogConfirm: document.getElementById("confirmDeleteBacklogConfirm")
+    confirmDeleteBacklogConfirm: document.getElementById("confirmDeleteBacklogConfirm"),
+    // Task remove confirm dialog
+    confirmRemoveTaskModal: document.getElementById("confirmRemoveTaskModal"),
+    confirmRemoveTaskName: document.getElementById("confirmRemoveTaskName"),
+    confirmRemoveTaskCancel: document.getElementById("confirmRemoveTaskCancel"),
+    confirmRemoveTaskConfirm: document.getElementById("confirmRemoveTaskConfirm")
   };
 
   // src/utils.js
@@ -404,11 +409,11 @@
     const todayIndex = dates.reduce((last, date, i) => date <= today ? i : last, -1);
     const actual = dates.map((date, i) => {
       if (todayIndex < 0 || i > todayIndex) return null;
-      return sprint.tasks.reduce((sum, task) => {
-        const est = Number(task.estimate || 0);
-        if (!task.doneDate || task.doneDate > date) return sum + est;
-        return sum;
+      const burned = sprint.tasks.reduce((sum, task) => {
+        if (!task.doneDate || task.doneDate > date) return sum;
+        return sum + Number(task.actual != null ? task.actual : task.estimate || 0);
       }, 0);
+      return totalPoints - burned;
     });
     return { dates, totalPoints, ideal, actual, manDays, effectiveManDays, idealDailyBurn, todayIndex };
   };
@@ -432,11 +437,13 @@
     }
     const nonNullActual = actual.filter((v) => v !== null);
     const maxValue = Math.max(totalPoints, ...nonNullActual, 1);
+    const minValue = Math.min(0, ...nonNullActual);
+    const range = maxValue - minValue;
     const plotWidth = width - padding * 2;
     const plotHeight = height - padding * 2;
     const toPoint = (value, index) => {
       const x = padding + plotWidth * (dates.length === 1 ? 0 : index / (dates.length - 1));
-      const y = padding + plotHeight * (1 - value / maxValue);
+      const y = padding + plotHeight * (1 - (value - minValue) / range);
       return `${x},${y}`;
     };
     const grid = document.createElementNS("http://www.w3.org/2000/svg", "g");
@@ -454,10 +461,22 @@
       label.setAttribute("y", y + 4);
       label.setAttribute("fill", "#6b7080");
       label.setAttribute("font-size", "11");
-      label.textContent = Math.round(maxValue * (1 - i / 4));
+      label.textContent = Math.round(maxValue - range * (i / 4));
       dom.chart.appendChild(label);
     }
     dom.chart.appendChild(grid);
+    if (minValue < 0) {
+      const zeroY = padding + plotHeight * (1 - (0 - minValue) / range);
+      const zeroLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      zeroLine.setAttribute("x1", padding);
+      zeroLine.setAttribute("x2", width - padding);
+      zeroLine.setAttribute("y1", zeroY);
+      zeroLine.setAttribute("y2", zeroY);
+      zeroLine.setAttribute("stroke", "rgba(44, 47, 58, 0.3)");
+      zeroLine.setAttribute("stroke-width", "1.5");
+      zeroLine.setAttribute("stroke-dasharray", "4 3");
+      dom.chart.appendChild(zeroLine);
+    }
     if (todayIndex >= 0) {
       const tx = padding + plotWidth * (dates.length === 1 ? 0 : todayIndex / (dates.length - 1));
       const todayLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
@@ -575,9 +594,23 @@
       actualInput.disabled = task.status !== "Done";
       statusSelect.value = statusOptions.includes(task.status) ? task.status : "Todo";
       doneInput.value = task.doneDate || "";
-      doneInput.min = sprint.startDate || "";
-      doneInput.max = sprint.endDate || "";
       doneInput.disabled = statusSelect.value !== "Done";
+      if (statusSelect.value === "Done") {
+        flatpickr(doneInput, {
+          dateFormat: "Y-m-d",
+          defaultDate: task.doneDate || null,
+          minDate: sprint.startDate || null,
+          maxDate: sprint.endDate || null,
+          disableMobile: true,
+          disable: [WEEKEND],
+          allowInput: false,
+          onChange: ([date]) => {
+            if (date) {
+              updateTask(task.id, { doneDate: localIso(date), status: "Done" });
+            }
+          }
+        });
+      }
       const commitActual = () => {
         const val = actualInput.value;
         updateTask(task.id, { actual: val === "" ? null : Number(val) });
@@ -596,7 +629,7 @@
         let doneDate = task.doneDate;
         let actual = task.actual;
         if (status === "Done" && !doneDate) {
-          const candidate = todayIso();
+          const candidate = sprint.today || todayIso();
           doneDate = candidate >= sprint.startDate && candidate <= sprint.endDate ? candidate : sprint.endDate;
         }
         if (status === "Done" && (actual === null || actual === void 0)) {
@@ -624,17 +657,23 @@
           statusSelect.blur();
         }
       });
-      const commitDoneDate = () => updateTask(task.id, { doneDate: doneInput.value, status: "Done" });
-      doneInput.addEventListener("change", commitDoneDate);
-      doneInput.addEventListener("blur", commitDoneDate);
-      doneInput.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          commitDoneDate();
-          doneInput.blur();
-        }
+      removeBtn.addEventListener("click", () => {
+        const label = task.taskId ? `[${task.taskId}] ${task.name}` : task.name || "this task";
+        dom.confirmRemoveTaskName.textContent = label;
+        dom.confirmRemoveTaskModal.hidden = false;
+        const onConfirm = () => {
+          removeTaskFromSprint(task.id);
+          cleanup();
+        };
+        const onCancel = () => cleanup();
+        const cleanup = () => {
+          dom.confirmRemoveTaskModal.hidden = true;
+          dom.confirmRemoveTaskConfirm.removeEventListener("click", onConfirm);
+          dom.confirmRemoveTaskCancel.removeEventListener("click", onCancel);
+        };
+        dom.confirmRemoveTaskConfirm.addEventListener("click", onConfirm);
+        dom.confirmRemoveTaskCancel.addEventListener("click", onCancel);
       });
-      removeBtn.addEventListener("click", () => removeTaskFromSprint(task.id));
       row.addEventListener("dragover", (e) => {
         e.preventDefault();
         row.classList.add("drag-over");
@@ -878,7 +917,7 @@
       disableMobile: true,
       disable: [WEEKEND],
       onChange: ([date]) => {
-        if (date) updateToday(date.toISOString().slice(0, 10));
+        if (date) updateToday(localIso(date));
       }
     });
     renderTasks(sprint);
@@ -1150,7 +1189,7 @@ This cannot be undone. Proceed?` : `Import ${stories.length} story/stories into 
     if (sprint) openModal("edit", sprint);
   });
   dom.deleteSprintBtn.addEventListener("click", deleteActiveSprint);
-  dom.exportCsvBtn.addEventListener("click", exportSprintExcel);
+  if (dom.exportCsvBtn) dom.exportCsvBtn.addEventListener("click", exportSprintExcel);
   dom.exportBtn.addEventListener("click", exportData);
   dom.importBtn.addEventListener("click", () => dom.importFile.click());
   dom.importFile.addEventListener("change", (e) => {
@@ -1187,10 +1226,10 @@ This cannot be undone. Proceed?` : `Import ${stories.length} story/stories into 
     }
   });
   var backlogPanelOpen = false;
-  dom.backlogPanelToggle.addEventListener("click", () => {
+  document.getElementById("backlogPanelToggle").addEventListener("click", () => {
     backlogPanelOpen = !backlogPanelOpen;
-    dom.backlogPanelRows.hidden = !backlogPanelOpen;
-    dom.backlogPanelToggle.querySelector(".panel-toggle-chevron").textContent = backlogPanelOpen ? "\u25B2" : "\u25BC";
+    document.getElementById("backlogPanelRows").hidden = !backlogPanelOpen;
+    document.getElementById("backlogPanelToggle").querySelector(".panel-toggle-chevron").textContent = backlogPanelOpen ? "\u25B2" : "\u25BC";
   });
   dom.taskRows.addEventListener("dragover", (e) => {
     e.preventDefault();

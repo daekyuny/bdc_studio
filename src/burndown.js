@@ -17,11 +17,11 @@ export const calculateBurndown = (sprint, today) => {
   const todayIndex = dates.reduce((last, date, i) => (date <= today ? i : last), -1);
   const actual = dates.map((date, i) => {
     if (todayIndex < 0 || i > todayIndex) return null;
-    return sprint.tasks.reduce((sum, task) => {
-      const est = Number(task.estimate || 0);
-      if (!task.doneDate || task.doneDate > date) return sum + est;
-      return sum; // done on or before this date: fully burned
+    const burned = sprint.tasks.reduce((sum, task) => {
+      if (!task.doneDate || task.doneDate > date) return sum;
+      return sum + Number(task.actual != null ? task.actual : task.estimate || 0);
     }, 0);
+    return totalPoints - burned;
   });
 
   return { dates, totalPoints, ideal, actual, manDays, effectiveManDays, idealDailyBurn, todayIndex };

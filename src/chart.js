@@ -21,15 +21,18 @@ export const drawChart = ({ dates, totalPoints, ideal, actual, todayIndex }) => 
 
   const nonNullActual = actual.filter((v) => v !== null);
   const maxValue = Math.max(totalPoints, ...nonNullActual, 1);
+  const minValue = Math.min(0, ...nonNullActual);
+  const range = maxValue - minValue;
   const plotWidth = width - padding * 2;
   const plotHeight = height - padding * 2;
 
   const toPoint = (value, index) => {
     const x = padding + plotWidth * (dates.length === 1 ? 0 : index / (dates.length - 1));
-    const y = padding + plotHeight * (1 - value / maxValue);
+    const y = padding + plotHeight * (1 - (value - minValue) / range);
     return `${x},${y}`;
   };
 
+  // Grid lines — 4 evenly spaced divisions from minValue to maxValue
   const grid = document.createElementNS("http://www.w3.org/2000/svg", "g");
   grid.setAttribute("stroke", "rgba(44, 47, 58, 0.1)");
   for (let i = 0; i <= 4; i++) {
@@ -46,10 +49,24 @@ export const drawChart = ({ dates, totalPoints, ideal, actual, todayIndex }) => 
     label.setAttribute("y", y + 4);
     label.setAttribute("fill", "#6b7080");
     label.setAttribute("font-size", "11");
-    label.textContent = Math.round(maxValue * (1 - i / 4));
+    label.textContent = Math.round(maxValue - range * (i / 4));
     dom.chart.appendChild(label);
   }
   dom.chart.appendChild(grid);
+
+  // Zero line (when chart extends below 0)
+  if (minValue < 0) {
+    const zeroY = padding + plotHeight * (1 - (0 - minValue) / range);
+    const zeroLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    zeroLine.setAttribute("x1", padding);
+    zeroLine.setAttribute("x2", width - padding);
+    zeroLine.setAttribute("y1", zeroY);
+    zeroLine.setAttribute("y2", zeroY);
+    zeroLine.setAttribute("stroke", "rgba(44, 47, 58, 0.3)");
+    zeroLine.setAttribute("stroke-width", "1.5");
+    zeroLine.setAttribute("stroke-dasharray", "4 3");
+    dom.chart.appendChild(zeroLine);
+  }
 
   // Today marker
   if (todayIndex >= 0) {

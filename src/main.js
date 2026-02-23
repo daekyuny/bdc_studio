@@ -152,7 +152,7 @@ dom.editSprintBtn.addEventListener("click", () => {
 
 // --- Other controls ---
 dom.deleteSprintBtn.addEventListener("click", deleteActiveSprint);
-dom.exportCsvBtn.addEventListener("click", exportSprintExcel);
+if (dom.exportCsvBtn) dom.exportCsvBtn.addEventListener("click", exportSprintExcel);
 dom.exportBtn.addEventListener("click", exportData);
 dom.importBtn.addEventListener("click", () => dom.importFile.click());
 dom.importFile.addEventListener("change", (e) => {
@@ -187,10 +187,10 @@ dom.addByIdInput.addEventListener("keydown", (e) => {
 
 // --- Backlog panel toggle (open state persists across re-renders) ---
 let backlogPanelOpen = false;
-dom.backlogPanelToggle.addEventListener("click", () => {
+document.getElementById("backlogPanelToggle").addEventListener("click", () => {
   backlogPanelOpen = !backlogPanelOpen;
-  dom.backlogPanelRows.hidden = !backlogPanelOpen;
-  dom.backlogPanelToggle.querySelector(".panel-toggle-chevron").textContent =
+  document.getElementById("backlogPanelRows").hidden = !backlogPanelOpen;
+  document.getElementById("backlogPanelToggle").querySelector(".panel-toggle-chevron").textContent =
     backlogPanelOpen ? "▲" : "▼";
 });
 

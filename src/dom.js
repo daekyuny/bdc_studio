@@ -63,4 +63,9 @@ export const dom = {
   confirmDeleteBacklogModal: document.getElementById("confirmDeleteBacklogModal"),
   confirmDeleteBacklogCancel: document.getElementById("confirmDeleteBacklogCancel"),
   confirmDeleteBacklogConfirm: document.getElementById("confirmDeleteBacklogConfirm"),
+  // Task remove confirm dialog
+  confirmRemoveTaskModal: document.getElementById("confirmRemoveTaskModal"),
+  confirmRemoveTaskName: document.getElementById("confirmRemoveTaskName"),
+  confirmRemoveTaskCancel: document.getElementById("confirmRemoveTaskCancel"),
+  confirmRemoveTaskConfirm: document.getElementById("confirmRemoveTaskConfirm"),
 };
