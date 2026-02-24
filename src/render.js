@@ -154,15 +154,21 @@ const renderTasks = (sprint, holidaySet, workWeekendSet) => {
     taskIdSpan.textContent = task.taskId || "";
     nameSpan.textContent = task.name;
 
-    // Look up current assignedTo from backlog (may have been updated after sprint add)
+    // Look up current assignedTo and parent story from backlog
     let currentAssigned = task.assignedTo || "";
+    let parentStoryDesc = "";
     if (task.backlogTaskId) {
       const backlog = getBacklog();
       for (const story of backlog.stories) {
         const bt = story.tasks.find((t) => t.id === task.backlogTaskId);
-        if (bt) { currentAssigned = bt.assignedTo || ""; break; }
+        if (bt) {
+          currentAssigned = bt.assignedTo || "";
+          parentStoryDesc = story.description || "";
+          break;
+        }
       }
     }
+    if (parentStoryDesc) taskIdSpan.title = parentStoryDesc;
     nameSpan.title = currentAssigned;
     estimateSpan.textContent = task.estimate ?? "";
 
@@ -291,11 +297,15 @@ const renderBacklogPanel = (sprint) => {
 
   dom.backlogPanelRows.innerHTML = "";
 
-  // Collect unassigned tasks
+  // Collect unassigned tasks (with parent story reference)
   let unassigned = [];
+  const taskStoryMap = new Map();
   for (const story of backlog.stories) {
     for (const task of story.tasks) {
-      if (!assignedIds.has(task.id)) unassigned.push(task);
+      if (!assignedIds.has(task.id)) {
+        unassigned.push(task);
+        taskStoryMap.set(task.id, story);
+      }
     }
   }
 
@@ -316,8 +326,13 @@ const renderBacklogPanel = (sprint) => {
 
   unassigned.forEach((task, idx) => {
     const row = dom.backlogPanelRowTemplate.content.firstElementChild.cloneNode(true);
-    row.querySelector(".bp-taskid").textContent = task.taskId || "";
-    row.querySelector(".bp-description").textContent = task.description;
+    const bpTaskId = row.querySelector(".bp-taskid");
+    bpTaskId.textContent = task.taskId || "";
+    const parentStory = taskStoryMap.get(task.id);
+    if (parentStory?.description) bpTaskId.title = parentStory.description;
+    const bpDesc = row.querySelector(".bp-description");
+    bpDesc.textContent = task.description;
+    if (task.assignedTo) bpDesc.title = task.assignedTo;
     row.querySelector(".bp-estimate").textContent = task.estimate ?? "";
 
     row.addEventListener("dragstart", (e) => {

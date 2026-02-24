@@ -785,16 +785,19 @@
       taskIdSpan.textContent = task.taskId || "";
       nameSpan.textContent = task.name;
       let currentAssigned = task.assignedTo || "";
+      let parentStoryDesc = "";
       if (task.backlogTaskId) {
         const backlog = getBacklog();
         for (const story of backlog.stories) {
           const bt = story.tasks.find((t) => t.id === task.backlogTaskId);
           if (bt) {
             currentAssigned = bt.assignedTo || "";
+            parentStoryDesc = story.description || "";
             break;
           }
         }
       }
+      if (parentStoryDesc) taskIdSpan.title = parentStoryDesc;
       nameSpan.title = currentAssigned;
       estimateSpan.textContent = task.estimate ?? "";
       actualInput.value = task.actual ?? "";
@@ -915,9 +918,13 @@
     );
     dom.backlogPanelRows.innerHTML = "";
     let unassigned = [];
+    const taskStoryMap = /* @__PURE__ */ new Map();
     for (const story of backlog.stories) {
       for (const task of story.tasks) {
-        if (!assignedIds.has(task.id)) unassigned.push(task);
+        if (!assignedIds.has(task.id)) {
+          unassigned.push(task);
+          taskStoryMap.set(task.id, story);
+        }
       }
     }
     unassigned = sortItems(unassigned, backlogPanelSort.key, backlogPanelSort.asc);
@@ -933,8 +940,13 @@
     dom.backlogPanelRows.appendChild(header);
     unassigned.forEach((task, idx) => {
       const row = dom.backlogPanelRowTemplate.content.firstElementChild.cloneNode(true);
-      row.querySelector(".bp-taskid").textContent = task.taskId || "";
-      row.querySelector(".bp-description").textContent = task.description;
+      const bpTaskId = row.querySelector(".bp-taskid");
+      bpTaskId.textContent = task.taskId || "";
+      const parentStory = taskStoryMap.get(task.id);
+      if (parentStory?.description) bpTaskId.title = parentStory.description;
+      const bpDesc = row.querySelector(".bp-description");
+      bpDesc.textContent = task.description;
+      if (task.assignedTo) bpDesc.title = task.assignedTo;
       row.querySelector(".bp-estimate").textContent = task.estimate ?? "";
       row.addEventListener("dragstart", (e) => {
         e.dataTransfer.setData("backlogTaskId", task.id);
