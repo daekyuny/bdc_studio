@@ -1,9 +1,11 @@
-import { getWorkingDates } from "./utils.js";
+import { getWorkingDates, getNextWorkingDay } from "./utils.js";
 
 export const calculateBurndown = (sprint, today) => {
-  const dates = getWorkingDates(sprint.startDate, sprint.endDate);
+  const sprintDates = getWorkingDates(sprint.startDate, sprint.endDate);
+  const extraDay = sprint.endDate ? getNextWorkingDay(sprint.endDate) : null;
+  const dates = extraDay ? [...sprintDates, extraDay] : sprintDates;
   const totalPoints = sprint.tasks.reduce((sum, task) => sum + Number(task.estimate || 0), 0);
-  const workingDays = dates.length || 0;
+  const workingDays = sprintDates.length || 0;
   const developers = Math.max(0, Number(sprint.developers || 0));
   const efficiency = Math.min(1, Math.max(0, Number(sprint.efficiency || 0)));
   const manDays = developers * workingDays;

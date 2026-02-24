@@ -121,7 +121,7 @@ export const drawChart = ({ dates, totalPoints, ideal, actual, todayIndex }) => 
     label.setAttribute("x", x);
     label.setAttribute("y", height - 18);
     label.setAttribute("text-anchor", "middle");
-    label.textContent = showDays ? `D${index + 1}` : toShortDate(date);
+    label.textContent = showDays ? `D${index}` : toShortDate(date);
     labels.appendChild(label);
   });
   dom.chart.appendChild(labels);

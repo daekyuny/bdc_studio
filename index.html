@@ -106,9 +106,16 @@
             <div class="card card-tight">
               <div class="card-header task-card-header">
                 <h2>Tasks</h2>
-                <div class="today-field">
-                  <label for="sprintToday">Today</label>
-                  <input type="text" id="sprintToday" readonly />
+                <div class="today-efficiency-group">
+                  <div class="today-field">
+                    <label for="sprintToday">Today</label>
+                    <input type="text" id="sprintToday" readonly />
+                  </div>
+                  <span class="group-separator"></span>
+                  <div class="efficiency-field">
+                    <span class="efficiency-label">Efficiency (Actual:Ideal)</span>
+                    <span class="efficiency-value" id="efficiencyDisplay">—</span>
+                  </div>
                 </div>
                 <div class="add-by-id-row">
                   <input type="text" id="addByIdInput" placeholder="Task ID (e.g. 0.1.1)" class="add-by-id-input" />

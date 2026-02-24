@@ -179,9 +179,10 @@ export const addTaskFromBacklog = (backlogTaskId) => {
 export const updateToday = (date) => {
   const sprint = getActiveSprint();
   if (!sprint || !date) return;
+  const maxDate = sprint.endDate ? getNextWorkingDay(sprint.endDate) : sprint.endDate;
   const clamped =
     date < sprint.startDate ? sprint.startDate :
-    date > sprint.endDate ? sprint.endDate : date;
+    date > maxDate ? maxDate : date;
   sprint.today = clamped;
   save();
   onChange();

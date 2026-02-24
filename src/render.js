@@ -1,5 +1,5 @@
 import { dom } from "./dom.js";
-import { statusOptions, todayIso, localIso, formatSprintRange } from "./utils.js";
+import { statusOptions, todayIso, localIso, formatSprintRange, getNextWorkingDay } from "./utils.js";
 import {
   getState,
   getActiveSprint,
@@ -434,6 +434,18 @@ const renderStats = (sprint, burndown) => {
   } else if (availableDays >= -1 && availableDays <= 1) {
     dom.availableDays.classList.add("ok");
   }
+
+  // Efficiency (Actual : Ideal)
+  const developers = Math.max(0, Number(sprint.developers || 0));
+  const idealEff = Math.min(1, Math.max(0, Number(sprint.efficiency || 0)));
+  const daysElapsed = burndown.todayIndex;
+  const pointsBurned = burndown.totalPoints - lastActual;
+  let actualEff = 0;
+  if (developers > 0 && daysElapsed > 0) {
+    actualEff = pointsBurned / (developers * daysElapsed);
+  }
+  const fmt = (v) => v.toFixed(2).replace(/0$/, "");
+  dom.efficiencyDisplay.textContent = `${fmt(actualEff)} : ${fmt(idealEff)}`;
 };
 
 export const render = () => {
@@ -457,15 +469,16 @@ export const render = () => {
 
   patchActiveSprint({ developers: 0, efficiency: 1 });
 
+  const maxToday = sprint.endDate ? getNextWorkingDay(sprint.endDate) : sprint.endDate;
   const real = todayIso();
   const defaultToday =
-    real >= sprint.startDate && real <= sprint.endDate ? real :
-    real < sprint.startDate ? sprint.startDate : sprint.endDate;
+    real >= sprint.startDate && real <= maxToday ? real :
+    real < sprint.startDate ? sprint.startDate : maxToday;
   patchActiveSprint({ today: defaultToday });
 
   const effectiveToday =
     sprint.today < sprint.startDate ? sprint.startDate :
-    sprint.today > sprint.endDate ? sprint.endDate :
+    sprint.today > maxToday ? maxToday :
     sprint.today;
 
   const state = getState();
@@ -477,7 +490,7 @@ export const render = () => {
     dateFormat: "Y-m-d",
     defaultDate: effectiveToday,
     minDate: sprint.startDate || null,
-    maxDate: sprint.endDate || null,
+    maxDate: maxToday || null,
     disableMobile: true,
     disable: [WEEKEND],
     onChange: ([date]) => {

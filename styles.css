@@ -301,7 +301,7 @@ select:focus {
 }
 
 .btn.small {
-  padding: 4px 10px;
+  padding: 3px 7px;
   font-size: 0.8rem;
   font-weight: 500;
 }
@@ -352,7 +352,7 @@ select:focus {
 .task-table th,
 .task-table td {
   text-align: left;
-  padding: 3px 6px;
+  padding: 2px 2px;
   vertical-align: middle;
   font-size: 0.85rem;
 }
@@ -439,6 +439,37 @@ svg {
   border-radius: 8px;
   width: 100px;
   text-align: center;
+}
+
+.today-efficiency-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.group-separator {
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+}
+
+.efficiency-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.efficiency-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.efficiency-value {
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 
 h3 {
@@ -718,15 +749,15 @@ h3 {
 
 /* --- Updated task table column widths (7-col) --- */
 .task-table .col-taskid {
-  width: 80px;
+  width: 60px;
 }
 
 .task-table .col-task {
-  width: 35%;
+  width: 60%;
 }
 
 .task-table .col-estimate {
-  width: 70px;
+  width: 40px;
 }
 
 .task-table .col-actual {
@@ -747,7 +778,7 @@ h3 {
 }
 
 .task-table .task-actual {
-  width: 70px;
+  width: 50px;
   text-align: right;
   padding: 1px 4px;
   font-size: 0.85rem;

@@ -10,6 +10,7 @@
     editSprintBtn: document.getElementById("editSprintBtn"),
     summaryDuration: document.getElementById("summaryDuration"),
     sprintToday: document.getElementById("sprintToday"),
+    efficiencyDisplay: document.getElementById("efficiencyDisplay"),
     taskRows: document.getElementById("taskRows"),
     totalPoints: document.getElementById("totalPoints"),
     remainingPoints: document.getElementById("remainingPoints"),
@@ -303,7 +304,8 @@
   var updateToday = (date) => {
     const sprint = getActiveSprint();
     if (!sprint || !date) return;
-    const clamped = date < sprint.startDate ? sprint.startDate : date > sprint.endDate ? sprint.endDate : date;
+    const maxDate = sprint.endDate ? getNextWorkingDay(sprint.endDate) : sprint.endDate;
+    const clamped = date < sprint.startDate ? sprint.startDate : date > maxDate ? maxDate : date;
     sprint.today = clamped;
     save();
     onChange();
@@ -393,9 +395,11 @@
 
   // src/burndown.js
   var calculateBurndown = (sprint, today) => {
-    const dates = getWorkingDates(sprint.startDate, sprint.endDate);
+    const sprintDates = getWorkingDates(sprint.startDate, sprint.endDate);
+    const extraDay = sprint.endDate ? getNextWorkingDay(sprint.endDate) : null;
+    const dates = extraDay ? [...sprintDates, extraDay] : sprintDates;
     const totalPoints = sprint.tasks.reduce((sum, task) => sum + Number(task.estimate || 0), 0);
-    const workingDays = dates.length || 0;
+    const workingDays = sprintDates.length || 0;
     const developers = Math.max(0, Number(sprint.developers || 0));
     const efficiency = Math.min(1, Math.max(0, Number(sprint.efficiency || 0)));
     const manDays = developers * workingDays;
@@ -522,7 +526,7 @@
       label.setAttribute("x", x);
       label.setAttribute("y", height - 18);
       label.setAttribute("text-anchor", "middle");
-      label.textContent = showDays ? `D${index + 1}` : toShortDate(date);
+      label.textContent = showDays ? `D${index}` : toShortDate(date);
       labels.appendChild(label);
     });
     dom.chart.appendChild(labels);
@@ -886,6 +890,16 @@
     } else if (availableDays >= -1 && availableDays <= 1) {
       dom.availableDays.classList.add("ok");
     }
+    const developers = Math.max(0, Number(sprint.developers || 0));
+    const idealEff = Math.min(1, Math.max(0, Number(sprint.efficiency || 0)));
+    const daysElapsed = burndown.todayIndex;
+    const pointsBurned = burndown.totalPoints - lastActual;
+    let actualEff = 0;
+    if (developers > 0 && daysElapsed > 0) {
+      actualEff = pointsBurned / (developers * daysElapsed);
+    }
+    const fmt = (v) => v.toFixed(2).replace(/0$/, "");
+    dom.efficiencyDisplay.textContent = `${fmt(actualEff)} : ${fmt(idealEff)}`;
   };
   var render = () => {
     dom.tabSprint.classList.toggle("active", activeTab === "sprint");
@@ -901,10 +915,11 @@
     const sprint = getActiveSprint();
     if (!sprint) return;
     patchActiveSprint({ developers: 0, efficiency: 1 });
+    const maxToday = sprint.endDate ? getNextWorkingDay(sprint.endDate) : sprint.endDate;
     const real = todayIso();
-    const defaultToday = real >= sprint.startDate && real <= sprint.endDate ? real : real < sprint.startDate ? sprint.startDate : sprint.endDate;
+    const defaultToday = real >= sprint.startDate && real <= maxToday ? real : real < sprint.startDate ? sprint.startDate : maxToday;
     patchActiveSprint({ today: defaultToday });
-    const effectiveToday = sprint.today < sprint.startDate ? sprint.startDate : sprint.today > sprint.endDate ? sprint.endDate : sprint.today;
+    const effectiveToday = sprint.today < sprint.startDate ? sprint.startDate : sprint.today > maxToday ? maxToday : sprint.today;
     const state2 = getState();
     const sprintNumber = state2.sprints.findIndex((s) => s.id === sprint.id) + 1;
     dom.sprintTitleText.textContent = sprint.description || `Sprint ${sprintNumber}`;
@@ -913,7 +928,7 @@
       dateFormat: "Y-m-d",
       defaultDate: effectiveToday,
       minDate: sprint.startDate || null,
-      maxDate: sprint.endDate || null,
+      maxDate: maxToday || null,
       disableMobile: true,
       disable: [WEEKEND],
       onChange: ([date]) => {

@@ -8,6 +8,7 @@ export const dom = {
   editSprintBtn: document.getElementById("editSprintBtn"),
   summaryDuration: document.getElementById("summaryDuration"),
   sprintToday: document.getElementById("sprintToday"),
+  efficiencyDisplay: document.getElementById("efficiencyDisplay"),
   taskRows: document.getElementById("taskRows"),
   totalPoints: document.getElementById("totalPoints"),
   remainingPoints: document.getElementById("remainingPoints"),
