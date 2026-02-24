@@ -93,7 +93,7 @@ export const drawChart = ({ dates, totalPoints, ideal, actual, todayIndex }) => 
   const idealLine = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
   idealLine.setAttribute("fill", "none");
   idealLine.setAttribute("stroke", "#3b82f6");
-  idealLine.setAttribute("stroke-width", "3");
+  idealLine.setAttribute("stroke-width", "1.5");
   idealLine.setAttribute("points", ideal.map(toPoint).join(" "));
   dom.chart.appendChild(idealLine);
 
@@ -103,7 +103,7 @@ export const drawChart = ({ dates, totalPoints, ideal, actual, todayIndex }) => 
   const actualLine = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
   actualLine.setAttribute("fill", "none");
   actualLine.setAttribute("stroke", "#ef4444");
-  actualLine.setAttribute("stroke-width", "3");
+  actualLine.setAttribute("stroke-width", "1.5");
   actualLine.setAttribute("points", actualPoints.join(" "));
   actualLine.style.strokeDasharray = "1000";
   actualLine.style.strokeDashoffset = "1000";
