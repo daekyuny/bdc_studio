@@ -13,6 +13,7 @@ const sortSprints = () => {
 
 const migrateState = (parsed) => {
   if (!parsed.backlog) parsed.backlog = { stories: [] };
+  if (!parsed.preferences) parsed.preferences = { holidays: [], workWeekends: [], members: [] };
   for (const sprint of parsed.sprints) {
     for (const task of sprint.tasks) {
       if (task.points !== undefined && task.estimate === undefined) {
@@ -32,6 +33,7 @@ const defaultState = () => {
   return {
     activeSprintId: sprintId,
     backlog: { stories: [] },
+    preferences: { holidays: [], workWeekends: [], members: [] },
     sprints: [
       {
         id: sprintId,
@@ -273,4 +275,104 @@ export const deleteBacklogTask = (storyId, taskId) => {
 export const replaceBacklog = (newBacklog) => {
   state.backlog = newBacklog;
   save(); onChange();
+};
+
+export const findOrphanedSprintTasks = (newStories) => {
+  const incomingIds = new Set();
+  for (const story of newStories)
+    for (const task of story.tasks)
+      if (task.taskId) incomingIds.add(task.taskId);
+
+  const orphans = [];
+  for (const sprint of state.sprints) {
+    const idx = state.sprints.indexOf(sprint) + 1;
+    for (const task of sprint.tasks) {
+      if (task.taskId && !incomingIds.has(task.taskId))
+        orphans.push({ sprintIndex: idx, taskId: task.taskId, name: task.name });
+    }
+  }
+  return orphans;
+};
+
+export const relinkSprintTasks = () => {
+  const taskIdMap = new Map();
+  for (const story of state.backlog.stories)
+    for (const task of story.tasks)
+      if (task.taskId) taskIdMap.set(task.taskId, task);
+
+  for (const sprint of state.sprints) {
+    sprint.tasks = sprint.tasks.filter((t) => {
+      const bt = taskIdMap.get(t.taskId);
+      if (!bt) return false;
+      t.backlogTaskId = bt.id;
+      t.name = bt.description;
+      t.estimate = Number(bt.estimate) || 0;
+      t.assignedTo = bt.assignedTo || "";
+      return true;
+    });
+  }
+  save();
+};
+
+// --- Preferences CRUD ---
+
+export const getPreferences = () => state.preferences;
+
+export const addHoliday = (date, name) => {
+  if (state.preferences.holidays.some((h) => h.date === date)) return;
+  state.preferences.holidays.push({ date, name });
+  state.preferences.holidays.sort((a, b) => a.date.localeCompare(b.date));
+  save(); onChange();
+};
+
+export const removeHoliday = (date) => {
+  state.preferences.holidays = state.preferences.holidays.filter((h) => h.date !== date);
+  save(); onChange();
+};
+
+export const addWorkWeekend = (date) => {
+  if (state.preferences.workWeekends.includes(date)) return;
+  state.preferences.workWeekends.push(date);
+  state.preferences.workWeekends.sort();
+  save(); onChange();
+};
+
+export const removeWorkWeekend = (date) => {
+  state.preferences.workWeekends = state.preferences.workWeekends.filter((d) => d !== date);
+  save(); onChange();
+};
+
+// --- Members CRUD ---
+
+export const getMembers = () => state.preferences.members;
+
+export const addMember = (name) => {
+  const trimmed = name.trim();
+  if (!trimmed) return;
+  if (state.preferences.members.includes(trimmed)) return;
+  state.preferences.members.push(trimmed);
+  state.preferences.members.sort((a, b) => a.localeCompare(b));
+  save(); onChange();
+};
+
+export const removeMember = (name) => {
+  state.preferences.members = state.preferences.members.filter((m) => m !== name);
+  save(); onChange();
+};
+
+export const addMembersFromImport = (names) => {
+  const existing = new Set(state.preferences.members);
+  let added = false;
+  for (const name of names) {
+    const trimmed = name.trim();
+    if (trimmed && !existing.has(trimmed)) {
+      state.preferences.members.push(trimmed);
+      existing.add(trimmed);
+      added = true;
+    }
+  }
+  if (added) {
+    state.preferences.members.sort((a, b) => a.localeCompare(b));
+    save(); onChange();
+  }
 };

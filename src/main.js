@@ -10,10 +10,18 @@ import {
   getActiveSprint,
   getState,
   replaceBacklog,
+  getPreferences,
+  addHoliday,
+  removeHoliday,
+  addWorkWeekend,
+  removeWorkWeekend,
+  getMembers,
+  addMember,
+  removeMember,
 } from "./state.js";
-import { render, setActiveTab, startEditing, expandAll, collapseAll } from "./render.js";
+import { render, setActiveTab, startEditing, expandAll, collapseAll, toggleTaskSort, toggleBacklogSort, setHighlightBacklogTaskId } from "./render.js";
 import { exportData, exportSprintExcel, importData, exportBacklogExcel, importBacklogExcel } from "./io.js";
-import { getNextWorkingDay, addWorkingDays, findGaps, sprintsOverlap, todayIso, getWorkingDates } from "./utils.js";
+import { getNextWorkingDay, addWorkingDays, findGaps, sprintsOverlap, todayIso, getWorkingDates, localIso } from "./utils.js";
 
 setOnStateChange(render);
 
@@ -23,9 +31,18 @@ let fpEnd = null;
 
 const getDisabledRanges = (excludeId) => {
   const others = getState().sprints.filter((s) => s.id !== excludeId);
+  const prefs = getPreferences();
+  const holidaySet = new Set(prefs.holidays.map((h) => h.date));
+  const workWeekendSet = new Set(prefs.workWeekends);
   return [
-    (date) => date.getDay() === 0 || date.getDay() === 6, // weekends
-    ...others.map((s) => ({ from: s.startDate, to: s.endDate })), // occupied ranges
+    (date) => {
+      const iso = localIso(date);
+      if (holidaySet.has(iso)) return true;
+      const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+      if (isWeekend && workWeekendSet.has(iso)) return false;
+      return isWeekend;
+    },
+    ...others.map((s) => ({ from: s.startDate, to: s.endDate })),
   ];
 };
 
@@ -44,9 +61,12 @@ const updateWorkingDaysChip = () => {
   const start = fpStart?.selectedDates[0];
   const end = fpEnd?.selectedDates[0];
   if (start && end) {
-    const startIso = `${start.getFullYear()}-${String(start.getMonth()+1).padStart(2,"0")}-${String(start.getDate()).padStart(2,"0")}`;
-    const endIso = `${end.getFullYear()}-${String(end.getMonth()+1).padStart(2,"0")}-${String(end.getDate()).padStart(2,"0")}`;
-    const count = getWorkingDates(startIso, endIso).length;
+    const startIso = localIso(start);
+    const endIso = localIso(end);
+    const prefs = getPreferences();
+    const holidaySet = new Set(prefs.holidays.map((h) => h.date));
+    const workWeekendSet = new Set(prefs.workWeekends);
+    const count = getWorkingDates(startIso, endIso, holidaySet, workWeekendSet).length;
     dom.modalWorkingDays.textContent = `${count} working days`;
   } else {
     dom.modalWorkingDays.textContent = "";
@@ -177,6 +197,7 @@ const commitAddById = () => {
     if (found) { uuid = found.id; break; }
   }
   if (!uuid) { alert(`Task "${input}" not found in backlog.`); return; }
+  setHighlightBacklogTaskId(uuid);
   addTaskFromBacklog(uuid);
   dom.addByIdInput.value = "";
 };
@@ -204,7 +225,10 @@ dom.taskRows.addEventListener("drop", (e) => {
   e.preventDefault();
   dom.taskRows.classList.remove("drag-over");
   const backlogTaskId = e.dataTransfer.getData("backlogTaskId");
-  if (backlogTaskId) addTaskFromBacklog(backlogTaskId);
+  if (backlogTaskId) {
+    setHighlightBacklogTaskId(backlogTaskId);
+    addTaskFromBacklog(backlogTaskId);
+  }
 });
 
 // --- Backlog CRUD + CSV ---
@@ -229,6 +253,18 @@ dom.backlogImportCsvBtn.addEventListener("click", () => dom.backlogImportFile.cl
 dom.backlogImportFile.addEventListener("change", (e) => {
   if (e.target.files[0]) importBacklogExcel(e.target.files[0]);
   e.target.value = "";
+});
+
+// --- Sortable column headers ---
+document.querySelectorAll(".task-table thead th.sortable").forEach((th) => {
+  th.addEventListener("click", () => toggleTaskSort(th.dataset.sortKey));
+});
+document.querySelectorAll(".backlog-table thead th.sortable").forEach((th) => {
+  th.addEventListener("click", (e) => {
+    // Don't sort when clicking the column resizer
+    if (e.target.classList.contains("col-resizer")) return;
+    toggleBacklogSort(th.dataset.sortKey);
+  });
 });
 
 // --- Backlog column resizing ---
@@ -295,5 +331,132 @@ dom.backlogImportFile.addEventListener("change", (e) => {
     });
   });
 })();
+
+// --- Preferences modal ---
+let fpPrefHoliday = null;
+let fpPrefWeekend = null;
+
+const renderPrefLists = () => {
+  const prefs = getPreferences();
+
+  // Holiday list
+  dom.prefHolidayList.innerHTML = "";
+  for (const h of prefs.holidays) {
+    const row = document.createElement("div");
+    row.className = "pref-list-row";
+    row.innerHTML = `<span class="pref-list-date">${h.date}</span><span class="pref-list-name">${h.name || ""}</span><button class="btn ghost small pref-list-delete">&times;</button>`;
+    row.querySelector(".pref-list-delete").addEventListener("click", () => {
+      removeHoliday(h.date);
+      renderPrefLists();
+    });
+    dom.prefHolidayList.appendChild(row);
+  }
+
+  // Work weekend list
+  dom.prefWeekendList.innerHTML = "";
+  for (const d of prefs.workWeekends) {
+    const row = document.createElement("div");
+    row.className = "pref-list-row";
+    row.innerHTML = `<span class="pref-list-date">${d}</span><button class="btn ghost small pref-list-delete">&times;</button>`;
+    row.querySelector(".pref-list-delete").addEventListener("click", () => {
+      removeWorkWeekend(d);
+      renderPrefLists();
+    });
+    dom.prefWeekendList.appendChild(row);
+  }
+
+  // Member list
+  dom.prefMemberList.innerHTML = "";
+  const members = getMembers();
+  for (const name of members) {
+    const row = document.createElement("div");
+    row.className = "pref-list-row";
+    row.innerHTML = `<span class="pref-list-name">${name}</span><button class="btn ghost small pref-list-delete">&times;</button>`;
+    row.querySelector(".pref-list-delete").addEventListener("click", () => {
+      removeMember(name);
+      renderPrefLists();
+    });
+    dom.prefMemberList.appendChild(row);
+  }
+};
+
+const openPreferences = () => {
+  dom.preferencesModal.hidden = false;
+  dom.prefHolidayDate.value = "";
+  dom.prefHolidayName.value = "";
+  dom.prefWeekendDate.value = "";
+
+  if (fpPrefHoliday) fpPrefHoliday.destroy();
+  fpPrefHoliday = flatpickr(dom.prefHolidayDate, {
+    dateFormat: "Y-m-d",
+    disableMobile: true,
+    onOpen: (_, __, instance) => fixCalendarPosition(instance),
+  });
+
+  if (fpPrefWeekend) fpPrefWeekend.destroy();
+  fpPrefWeekend = flatpickr(dom.prefWeekendDate, {
+    dateFormat: "Y-m-d",
+    disableMobile: true,
+    disable: [(date) => date.getDay() !== 0 && date.getDay() !== 6],
+    onOpen: (_, __, instance) => fixCalendarPosition(instance),
+  });
+
+  renderPrefLists();
+};
+
+const closePreferences = () => {
+  dom.preferencesModal.hidden = true;
+  if (fpPrefHoliday) { fpPrefHoliday.destroy(); fpPrefHoliday = null; }
+  if (fpPrefWeekend) { fpPrefWeekend.destroy(); fpPrefWeekend = null; }
+  render();
+};
+
+dom.settingsBtn.addEventListener("click", openPreferences);
+dom.prefClose.addEventListener("click", closePreferences);
+dom.prefDone.addEventListener("click", closePreferences);
+dom.preferencesModal.addEventListener("click", (e) => {
+  if (e.target === dom.preferencesModal) closePreferences();
+});
+
+dom.prefHolidayAddBtn.addEventListener("click", () => {
+  const date = dom.prefHolidayDate.value;
+  const name = dom.prefHolidayName.value.trim();
+  if (!date) return;
+  addHoliday(date, name);
+  dom.prefHolidayDate.value = "";
+  dom.prefHolidayName.value = "";
+  if (fpPrefHoliday) fpPrefHoliday.clear();
+  renderPrefLists();
+});
+
+dom.prefWeekendAddBtn.addEventListener("click", () => {
+  const date = dom.prefWeekendDate.value;
+  if (!date) return;
+  addWorkWeekend(date);
+  dom.prefWeekendDate.value = "";
+  if (fpPrefWeekend) fpPrefWeekend.clear();
+  renderPrefLists();
+});
+
+const commitAddMember = () => {
+  const name = dom.prefMemberName.value.trim();
+  if (!name) return;
+  addMember(name);
+  dom.prefMemberName.value = "";
+  renderPrefLists();
+};
+dom.prefMemberAddBtn.addEventListener("click", commitAddMember);
+dom.prefMemberName.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); commitAddMember(); }
+});
+
+// --- Clear task highlight on any click ---
+document.addEventListener("click", (e) => {
+  // Don't clear if clicking an Add button in the backlog panel (those set their own highlight)
+  if (e.target.closest(".bp-add-btn") || e.target.closest(".add-by-id-row")) return;
+  const highlighted = document.querySelector(".task-row-highlight");
+  if (highlighted) highlighted.classList.remove("task-row-highlight");
+  setHighlightBacklogTaskId(null);
+}, true);
 
 render();

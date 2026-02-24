@@ -26,15 +26,16 @@
       <div class="tab-bar">
         <button class="tab-btn active" id="tabSprint">Sprint</button>
         <button class="tab-btn" id="tabBacklog">Backlog</button>
+        <button class="tab-bar-settings" id="settingsBtn">Preferences</button>
       </div>
 
       <!-- Sprint sub-header: toolbar + sprint bookmark tabs (visible only on Sprint tab) -->
       <div id="sprintSubHeader">
         <div class="sprint-toolbar">
           <button class="btn small" id="newSprintBtn">Add Sprint</button>
-          <button class="btn ghost small" id="importBtn">Import Sprint</button>
+          <button class="btn ghost small" id="importBtn">Import Sprints</button>
           <input type="file" id="importFile" accept=".json" hidden />
-          <button class="btn ghost small" id="exportBtn">Export Sprint</button>
+          <button class="btn ghost small" id="exportBtn">Export Sprints</button>
           <button class="btn ghost small danger" id="deleteSprintBtn">Delete Sprint</button>
         </div>
       </div>
@@ -126,12 +127,12 @@
                 <table class="task-table">
                   <thead>
                     <tr>
-                      <th class="col-taskid">ID</th>
-                      <th class="col-task">Task</th>
-                      <th class="col-estimate">Est.</th>
-                      <th class="col-actual">Actual</th>
-                      <th class="col-status">Status</th>
-                      <th class="col-done">Done Date</th>
+                      <th class="col-taskid sortable" data-sort-key="taskId">ID</th>
+                      <th class="col-task sortable" data-sort-key="name">Task</th>
+                      <th class="col-estimate sortable" data-sort-key="estimate">Est.</th>
+                      <th class="col-actual sortable" data-sort-key="actual">Actual</th>
+                      <th class="col-status sortable" data-sort-key="status">Status</th>
+                      <th class="col-done sortable" data-sort-key="doneDate">Done Date</th>
                       <th class="col-actions"></th>
                     </tr>
                   </thead>
@@ -166,13 +167,13 @@
                 </colgroup>
                 <thead>
                   <tr>
-                    <th class="bl-col-story-id">Story ID<span class="col-resizer" aria-hidden="true"></span></th>
-                    <th class="bl-col-user-stories">User Stories<span class="col-resizer" aria-hidden="true"></span></th>
-                    <th class="bl-col-priority">Priority<span class="col-resizer" aria-hidden="true"></span></th>
-                    <th class="bl-col-task-id">Task ID<span class="col-resizer" aria-hidden="true"></span></th>
-                    <th class="bl-col-task-desc">Task Description<span class="col-resizer" aria-hidden="true"></span></th>
-                    <th class="bl-col-estimate">Est. Days<span class="col-resizer" aria-hidden="true"></span></th>
-                    <th class="bl-col-assigned">Assigned To<span class="col-resizer" aria-hidden="true"></span></th>
+                    <th class="bl-col-story-id sortable" data-sort-key="storyId">Story ID<span class="col-resizer" aria-hidden="true"></span></th>
+                    <th class="bl-col-user-stories sortable" data-sort-key="description">User Stories<span class="col-resizer" aria-hidden="true"></span></th>
+                    <th class="bl-col-priority sortable" data-sort-key="priority">Priority<span class="col-resizer" aria-hidden="true"></span></th>
+                    <th class="bl-col-task-id sortable" data-sort-key="taskId">Task ID<span class="col-resizer" aria-hidden="true"></span></th>
+                    <th class="bl-col-task-desc sortable" data-sort-key="taskDesc">Task Description<span class="col-resizer" aria-hidden="true"></span></th>
+                    <th class="bl-col-estimate sortable" data-sort-key="estimate">Est. Days<span class="col-resizer" aria-hidden="true"></span></th>
+                    <th class="bl-col-assigned sortable" data-sort-key="assignedTo">Assigned To<span class="col-resizer" aria-hidden="true"></span></th>
                     <th class="bl-col-actions"></th>
                   </tr>
                 </thead>
@@ -218,6 +219,64 @@
         <div class="modal-footer">
           <button class="btn ghost" id="confirmRemoveTaskCancel">Cancel</button>
           <button class="btn danger-solid" id="confirmRemoveTaskConfirm">Remove</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reusable import confirm dialog -->
+    <div class="modal-overlay" id="importConfirmModal" hidden>
+      <div class="modal confirm-dialog">
+        <div class="modal-header">
+          <h3 class="confirm-dialog-title" id="importConfirmTitle"></h3>
+        </div>
+        <div class="modal-body">
+          <p class="confirm-dialog-warning" id="importConfirmMessage"></p>
+          <p class="confirm-dialog-subtext" id="importConfirmSubtext"></p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn ghost" id="importConfirmCancel">Cancel</button>
+          <button class="btn danger-solid" id="importConfirmOk">Proceed</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Preferences modal -->
+    <div class="modal-overlay" id="preferencesModal" hidden>
+      <div class="modal preferences-modal">
+        <div class="modal-header">
+          <h3>Preferences</h3>
+          <button class="modal-close" id="prefClose">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="pref-section">
+            <h4>Custom Holidays</h4>
+            <div class="pref-add-row">
+              <input type="text" id="prefHolidayDate" placeholder="Date" readonly />
+              <input type="text" id="prefHolidayName" placeholder="Holiday name" />
+              <button class="btn small" id="prefHolidayAddBtn">Add</button>
+            </div>
+            <div class="pref-list" id="prefHolidayList"></div>
+          </div>
+          <div class="pref-section">
+            <h4>Weekend Workdays</h4>
+            <p class="pref-hint">Select weekend dates that should count as working days.</p>
+            <div class="pref-add-row">
+              <input type="text" id="prefWeekendDate" placeholder="Date" readonly />
+              <button class="btn small" id="prefWeekendAddBtn">Add</button>
+            </div>
+            <div class="pref-list" id="prefWeekendList"></div>
+          </div>
+          <div class="pref-section">
+            <h4>Members</h4>
+            <div class="pref-add-row">
+              <input type="text" id="prefMemberName" placeholder="Member name" />
+              <button class="btn small" id="prefMemberAddBtn">Add</button>
+            </div>
+            <div class="pref-list" id="prefMemberList"></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" id="prefDone">Done</button>
         </div>
       </div>
     </div>
@@ -351,7 +410,7 @@
         </td>
         <td class="bl-col-assigned">
           <span class="task-assigned-view"></span>
-          <input class="task-assigned-edit" type="text" placeholder="Assigned to" hidden />
+          <select class="task-assigned-edit" hidden></select>
         </td>
         <td class="bl-col-actions">
           <button class="btn ghost small task-edit-btn">Edit</button>

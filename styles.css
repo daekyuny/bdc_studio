@@ -110,6 +110,7 @@ p {
   border-left: none;
   border-radius: 0 8px 8px 0;
   padding: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .sprint-list {
@@ -135,12 +136,14 @@ p {
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   white-space: nowrap;
   color: var(--muted);
+  opacity: 0.55;
 }
 
 .sprint-item:hover {
   background: var(--panel);
   border-color: rgba(92, 103, 242, 0.4);
   color: var(--ink);
+  opacity: 0.85;
 }
 
 .sprint-item.active {
@@ -148,8 +151,11 @@ p {
   border-color: var(--stroke);
   border-right-color: var(--panel);
   color: var(--ink);
-  font-weight: 600;
+  font-size: 0.925rem;
+  font-weight: 700;
+  opacity: 1;
   z-index: 1;
+  box-shadow: -4px 4px 20px rgba(0, 0, 0, 0.14), -2px 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .sprint-title {
@@ -747,6 +753,25 @@ h3 {
   color: var(--ink);
 }
 
+.tab-bar-settings {
+  margin-left: auto;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  padding: 8px 20px 2px 20px;
+  font-family: "Source Sans 3", sans-serif;
+  font-size: 1.0rem;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.tab-bar-settings:hover {
+  color: var(--ink);
+}
+
 /* --- Updated task table column widths (7-col) --- */
 .task-table .col-taskid {
   width: 60px;
@@ -765,11 +790,11 @@ h3 {
 }
 
 .task-table .col-status {
-  width: 130px;
+  width: 100px;
 }
 
 .task-table .col-done {
-  width: 130px;
+  width: 85px;
 }
 
 .task-table .col-actions {
@@ -787,6 +812,7 @@ h3 {
 .task-table .task-status,
 .task-table .task-done {
   width: 100%;
+  text-align: center;
   padding: 1px 4px;
   font-size: 0.85rem;
   cursor: pointer;
@@ -798,6 +824,16 @@ h3 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Highlight for newly added task row */
+.task-row-highlight {
+  outline: 2px solid rgba(92, 103, 242, 0.35);
+  outline-offset: -1px;
+}
+
+.task-row-highlight td {
+  background: rgba(92, 103, 242, 0.10);
 }
 
 .task-table tbody tr.drag-over td {
@@ -865,12 +901,12 @@ h3 {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 5px 8px;
+  padding: 2.5px 8px;
   border-radius: 8px;
   border: 1px solid var(--stroke);
   background: white;
   cursor: grab;
-  font-size: 0.88rem;
+  font-size: 0.85rem;
 }
 
 .backlog-panel-row:hover {
@@ -995,7 +1031,7 @@ h3 {
 .bl-col-priority .story-priority-edit { width: 65px; }
 .bl-col-task-id     { width: 78px; }
 .bl-col-task-desc   { width: 34%; }
-.bl-col-estimate    { width: 68px; }
+.bl-col-estimate    { width: 80px; }
 .bl-col-assigned    { width: 88px; }
 .bl-col-actions     { width: 165px; text-align: right; white-space: nowrap; }
 
@@ -1015,10 +1051,11 @@ h3 {
 /* Task rows */
 .bl-task-row td {
   border-top: 1px solid rgba(44, 47, 58, 0.06);
+  color: var(--ink);
 }
 
-.bl-task-row.assigned {
-  opacity: 0.5;
+.bl-task-row.assigned td {
+  color: var(--muted);
 }
 
 /* Clip cell content at column boundary so resize works freely.
@@ -1064,14 +1101,205 @@ h3 {
 .backlog-table input[type="number"],
 .backlog-table select {
   width: 100%;
-  padding: 3px 6px;
-  font-size: 0.88rem;
+  text-align:left;
+  padding: 2px 4px;
+  font-size: 0.8rem;
   border-radius: 6px;
 }
 
 .bl-col-actions .btn,
 .backlog-table .btn {
   margin-left: 3px;
+}
+
+/* --- Sortable column headers --- */
+th.sortable {
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+}
+
+th.sortable:hover {
+  color: var(--ink);
+}
+
+th.sortable::after {
+  content: "";
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 0.65em;
+  vertical-align: middle;
+  opacity: 0;
+}
+
+th.sortable:hover::after {
+  content: "▲";
+  opacity: 0.3;
+}
+
+th.sortable.sort-asc::after {
+  content: "▲";
+  opacity: 1;
+  color: var(--accent);
+}
+
+th.sortable.sort-desc::after {
+  content: "▼";
+  opacity: 1;
+  color: var(--accent);
+}
+
+/* Backlog panel header row */
+.backlog-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+  border-bottom: 1px solid var(--stroke);
+  margin-bottom: 4px;
+}
+
+.backlog-panel-header .bp-drag-col {
+  width: 20px;
+  flex-shrink: 0;
+}
+
+.backlog-panel-header .sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.backlog-panel-header .sortable:hover {
+  color: var(--ink);
+}
+
+.backlog-panel-header .sortable::after {
+  content: "";
+  display: inline-block;
+  margin-left: 3px;
+  font-size: 0.65em;
+  vertical-align: middle;
+  opacity: 0;
+}
+
+.backlog-panel-header .sortable:hover::after {
+  content: "▲";
+  opacity: 0.3;
+}
+
+.backlog-panel-header .sortable.sort-asc::after {
+  content: "▲";
+  opacity: 1;
+  color: var(--accent);
+}
+
+.backlog-panel-header .sortable.sort-desc::after {
+  content: "▼";
+  opacity: 1;
+  color: var(--accent);
+}
+
+.backlog-panel-header .bp-taskid {
+  min-width: 60px;
+  flex-shrink: 0;
+}
+
+.backlog-panel-header .bp-description {
+  flex: 1;
+}
+
+.backlog-panel-header .bp-estimate {
+  min-width: 30px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.backlog-panel-header .bp-actions-col {
+  width: 48px;
+  flex-shrink: 0;
+}
+
+/* --- Preferences modal --- */
+.preferences-modal {
+  max-width: 520px;
+}
+
+.pref-section {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--stroke);
+}
+
+.pref-section:last-child {
+  border-bottom: none;
+}
+
+.pref-section h4 {
+  font-family: "Fraunces", "Georgia", serif;
+  font-size: 0.95rem;
+  margin: 0 0 8px;
+}
+
+.pref-hint {
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.pref-add-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.pref-add-row input[type="text"] {
+  padding: 4px 8px;
+  font-size: 0.85rem;
+  border-radius: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.pref-list {
+  max-height: 180px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.pref-list-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(92, 103, 242, 0.04);
+  font-size: 0.85rem;
+}
+
+.pref-list-date {
+  font-weight: 600;
+  min-width: 90px;
+  flex-shrink: 0;
+}
+
+.pref-list-name {
+  flex: 1;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pref-list-delete {
+  padding: 1px 6px !important;
+  font-size: 0.9rem !important;
+  line-height: 1;
+  flex-shrink: 0;
 }
 
 @media (max-width: 900px) {

@@ -70,7 +70,30 @@
     confirmRemoveTaskModal: document.getElementById("confirmRemoveTaskModal"),
     confirmRemoveTaskName: document.getElementById("confirmRemoveTaskName"),
     confirmRemoveTaskCancel: document.getElementById("confirmRemoveTaskCancel"),
-    confirmRemoveTaskConfirm: document.getElementById("confirmRemoveTaskConfirm")
+    confirmRemoveTaskConfirm: document.getElementById("confirmRemoveTaskConfirm"),
+    // Import confirm dialog (reusable)
+    importConfirmModal: document.getElementById("importConfirmModal"),
+    importConfirmTitle: document.getElementById("importConfirmTitle"),
+    importConfirmMessage: document.getElementById("importConfirmMessage"),
+    importConfirmSubtext: document.getElementById("importConfirmSubtext"),
+    importConfirmCancel: document.getElementById("importConfirmCancel"),
+    importConfirmOk: document.getElementById("importConfirmOk"),
+    // Preferences modal
+    settingsBtn: document.getElementById("settingsBtn"),
+    preferencesModal: document.getElementById("preferencesModal"),
+    prefClose: document.getElementById("prefClose"),
+    prefDone: document.getElementById("prefDone"),
+    prefHolidayDate: document.getElementById("prefHolidayDate"),
+    prefHolidayName: document.getElementById("prefHolidayName"),
+    prefHolidayAddBtn: document.getElementById("prefHolidayAddBtn"),
+    prefHolidayList: document.getElementById("prefHolidayList"),
+    prefWeekendDate: document.getElementById("prefWeekendDate"),
+    prefWeekendAddBtn: document.getElementById("prefWeekendAddBtn"),
+    prefWeekendList: document.getElementById("prefWeekendList"),
+    // Members
+    prefMemberName: document.getElementById("prefMemberName"),
+    prefMemberAddBtn: document.getElementById("prefMemberAddBtn"),
+    prefMemberList: document.getElementById("prefMemberList")
   };
 
   // src/utils.js
@@ -89,15 +112,19 @@
     const d = String(date.getDate()).padStart(2, "0");
     return `${m}/${d}`;
   };
-  var getWorkingDates = (startIso, endIso) => {
+  var getWorkingDates = (startIso, endIso, holidays, workWeekends) => {
     if (!startIso || !endIso) return [];
     const dates = [];
     let cursor = /* @__PURE__ */ new Date(startIso + "T00:00:00");
     const end = /* @__PURE__ */ new Date(endIso + "T00:00:00");
     while (cursor <= end) {
       const day = cursor.getDay();
-      if (day !== 0 && day !== 6) {
-        dates.push(localIso(cursor));
+      const iso = localIso(cursor);
+      const isWeekend = day === 0 || day === 6;
+      if (isWeekend) {
+        if (workWeekends && workWeekends.has(iso)) dates.push(iso);
+      } else {
+        if (!holidays || !holidays.has(iso)) dates.push(iso);
       }
       cursor.setDate(cursor.getDate() + 1);
     }
@@ -105,20 +132,34 @@
   };
   var formatSprintRange = (sprint) => `${toShortDate(sprint.startDate)} \u2013 ${toShortDate(sprint.endDate)}`;
   var createId = () => crypto.randomUUID();
-  var getNextWorkingDay = (isoDate) => {
+  var getNextWorkingDay = (isoDate, holidays, workWeekends) => {
     const d = /* @__PURE__ */ new Date(isoDate + "T00:00:00");
     d.setDate(d.getDate() + 1);
-    while (d.getDay() === 0 || d.getDay() === 6) {
+    while (true) {
+      const day = d.getDay();
+      const iso = localIso(d);
+      const isWeekend = day === 0 || day === 6;
+      if (isWeekend) {
+        if (workWeekends && workWeekends.has(iso)) return iso;
+      } else {
+        if (!holidays || !holidays.has(iso)) return iso;
+      }
       d.setDate(d.getDate() + 1);
     }
-    return localIso(d);
   };
-  var addWorkingDays = (isoDate, n) => {
+  var addWorkingDays = (isoDate, n, holidays, workWeekends) => {
     const d = /* @__PURE__ */ new Date(isoDate + "T00:00:00");
     let count = 0;
     while (count < n) {
       d.setDate(d.getDate() + 1);
-      if (d.getDay() !== 0 && d.getDay() !== 6) count++;
+      const day = d.getDay();
+      const iso = localIso(d);
+      const isWeekend = day === 0 || day === 6;
+      if (isWeekend) {
+        if (workWeekends && workWeekends.has(iso)) count++;
+      } else {
+        if (!holidays || !holidays.has(iso)) count++;
+      }
     }
     return localIso(d);
   };
@@ -146,6 +187,7 @@
   };
   var migrateState = (parsed) => {
     if (!parsed.backlog) parsed.backlog = { stories: [] };
+    if (!parsed.preferences) parsed.preferences = { holidays: [], workWeekends: [], members: [] };
     for (const sprint of parsed.sprints) {
       for (const task of sprint.tasks) {
         if (task.points !== void 0 && task.estimate === void 0) {
@@ -164,6 +206,7 @@
     return {
       activeSprintId: sprintId,
       backlog: { stories: [] },
+      preferences: { holidays: [], workWeekends: [], members: [] },
       sprints: [
         {
           id: sprintId,
@@ -392,11 +435,101 @@
     save();
     onChange();
   };
+  var findOrphanedSprintTasks = (newStories) => {
+    const incomingIds = /* @__PURE__ */ new Set();
+    for (const story of newStories)
+      for (const task of story.tasks)
+        if (task.taskId) incomingIds.add(task.taskId);
+    const orphans = [];
+    for (const sprint of state.sprints) {
+      const idx = state.sprints.indexOf(sprint) + 1;
+      for (const task of sprint.tasks) {
+        if (task.taskId && !incomingIds.has(task.taskId))
+          orphans.push({ sprintIndex: idx, taskId: task.taskId, name: task.name });
+      }
+    }
+    return orphans;
+  };
+  var relinkSprintTasks = () => {
+    const taskIdMap = /* @__PURE__ */ new Map();
+    for (const story of state.backlog.stories)
+      for (const task of story.tasks)
+        if (task.taskId) taskIdMap.set(task.taskId, task);
+    for (const sprint of state.sprints) {
+      sprint.tasks = sprint.tasks.filter((t) => {
+        const bt = taskIdMap.get(t.taskId);
+        if (!bt) return false;
+        t.backlogTaskId = bt.id;
+        t.name = bt.description;
+        t.estimate = Number(bt.estimate) || 0;
+        t.assignedTo = bt.assignedTo || "";
+        return true;
+      });
+    }
+    save();
+  };
+  var getPreferences = () => state.preferences;
+  var addHoliday = (date, name) => {
+    if (state.preferences.holidays.some((h) => h.date === date)) return;
+    state.preferences.holidays.push({ date, name });
+    state.preferences.holidays.sort((a, b) => a.date.localeCompare(b.date));
+    save();
+    onChange();
+  };
+  var removeHoliday = (date) => {
+    state.preferences.holidays = state.preferences.holidays.filter((h) => h.date !== date);
+    save();
+    onChange();
+  };
+  var addWorkWeekend = (date) => {
+    if (state.preferences.workWeekends.includes(date)) return;
+    state.preferences.workWeekends.push(date);
+    state.preferences.workWeekends.sort();
+    save();
+    onChange();
+  };
+  var removeWorkWeekend = (date) => {
+    state.preferences.workWeekends = state.preferences.workWeekends.filter((d) => d !== date);
+    save();
+    onChange();
+  };
+  var getMembers = () => state.preferences.members;
+  var addMember = (name) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    if (state.preferences.members.includes(trimmed)) return;
+    state.preferences.members.push(trimmed);
+    state.preferences.members.sort((a, b) => a.localeCompare(b));
+    save();
+    onChange();
+  };
+  var removeMember = (name) => {
+    state.preferences.members = state.preferences.members.filter((m) => m !== name);
+    save();
+    onChange();
+  };
+  var addMembersFromImport = (names) => {
+    const existing = new Set(state.preferences.members);
+    let added = false;
+    for (const name of names) {
+      const trimmed = name.trim();
+      if (trimmed && !existing.has(trimmed)) {
+        state.preferences.members.push(trimmed);
+        existing.add(trimmed);
+        added = true;
+      }
+    }
+    if (added) {
+      state.preferences.members.sort((a, b) => a.localeCompare(b));
+      save();
+      onChange();
+    }
+  };
 
   // src/burndown.js
-  var calculateBurndown = (sprint, today) => {
-    const sprintDates = getWorkingDates(sprint.startDate, sprint.endDate);
-    const extraDay = sprint.endDate ? getNextWorkingDay(sprint.endDate) : null;
+  var calculateBurndown = (sprint, today, holidays, workWeekends) => {
+    const sprintDates = getWorkingDates(sprint.startDate, sprint.endDate, holidays, workWeekends);
+    const extraDay = sprint.endDate ? getNextWorkingDay(sprint.endDate, holidays, workWeekends) : null;
     const dates = extraDay ? [...sprintDates, extraDay] : sprintDates;
     const totalPoints = sprint.tasks.reduce((sum, task) => sum + Number(task.estimate || 0), 0);
     const workingDays = sprintDates.length || 0;
@@ -534,7 +667,6 @@
 
   // src/render.js
   var fpToday = null;
-  var WEEKEND = (date) => date.getDay() === 0 || date.getDay() === 6;
   var activeTab = "sprint";
   var setActiveTab = (tab) => {
     activeTab = tab;
@@ -542,6 +674,52 @@
   };
   var editingIds = /* @__PURE__ */ new Set();
   var expandedStoryIds = /* @__PURE__ */ new Set();
+  var highlightBacklogTaskId = null;
+  var taskSort = { key: null, asc: true };
+  var backlogPanelSort = { key: null, asc: true };
+  var backlogSort = { key: null, asc: true };
+  var setHighlightBacklogTaskId = (id) => {
+    highlightBacklogTaskId = id;
+  };
+  var toggleTaskSort = (key) => {
+    if (taskSort.key === key) taskSort.asc = !taskSort.asc;
+    else {
+      taskSort.key = key;
+      taskSort.asc = true;
+    }
+    render();
+  };
+  var toggleBacklogPanelSort = (key) => {
+    if (backlogPanelSort.key === key) backlogPanelSort.asc = !backlogPanelSort.asc;
+    else {
+      backlogPanelSort.key = key;
+      backlogPanelSort.asc = true;
+    }
+    render();
+  };
+  var toggleBacklogSort = (key) => {
+    if (backlogSort.key === key) backlogSort.asc = !backlogSort.asc;
+    else {
+      backlogSort.key = key;
+      backlogSort.asc = true;
+    }
+    render();
+  };
+  var NUMERIC_KEYS = /* @__PURE__ */ new Set(["estimate", "actual", "priority"]);
+  var sortItems = (items, key, asc) => {
+    if (!key) return items;
+    const sorted = [...items].sort((a, b) => {
+      let va = a[key] ?? "";
+      let vb = b[key] ?? "";
+      if (NUMERIC_KEYS.has(key)) {
+        va = Number(va) || 0;
+        vb = Number(vb) || 0;
+        return va - vb;
+      }
+      return String(va).localeCompare(String(vb));
+    });
+    return asc ? sorted : sorted.reverse();
+  };
   var startEditing = (id, focusAfter = false) => {
     if (!id) return;
     editingIds.clear();
@@ -578,11 +756,25 @@
       dom.sprintList.appendChild(node);
     });
   };
-  var renderTasks = (sprint) => {
+  var applySortClasses = (container, sortState) => {
+    container.querySelectorAll("th.sortable").forEach((th) => {
+      th.classList.remove("sort-asc", "sort-desc");
+      if (th.dataset.sortKey === sortState.key) {
+        th.classList.add(sortState.asc ? "sort-asc" : "sort-desc");
+      }
+    });
+  };
+  var renderTasks = (sprint, holidaySet, workWeekendSet) => {
     dom.taskRows.innerHTML = "";
-    sprint.tasks.forEach((task) => {
+    const taskTable = dom.taskRows.closest("table");
+    if (taskTable) applySortClasses(taskTable, taskSort);
+    const tasks = sortItems([...sprint.tasks], taskSort.key, taskSort.asc);
+    tasks.forEach((task) => {
       const row = dom.taskRowTemplate.content.firstElementChild.cloneNode(true);
       row.dataset.taskId = task.id;
+      if (highlightBacklogTaskId && task.backlogTaskId === highlightBacklogTaskId) {
+        row.classList.add("task-row-highlight");
+      }
       const taskIdSpan = row.querySelector(".task-taskid");
       const nameSpan = row.querySelector(".task-name");
       const estimateSpan = row.querySelector(".task-estimate");
@@ -592,7 +784,18 @@
       const removeBtn = row.querySelector(".task-remove");
       taskIdSpan.textContent = task.taskId || "";
       nameSpan.textContent = task.name;
-      nameSpan.title = task.assignedTo || "";
+      let currentAssigned = task.assignedTo || "";
+      if (task.backlogTaskId) {
+        const backlog = getBacklog();
+        for (const story of backlog.stories) {
+          const bt = story.tasks.find((t) => t.id === task.backlogTaskId);
+          if (bt) {
+            currentAssigned = bt.assignedTo || "";
+            break;
+          }
+        }
+      }
+      nameSpan.title = currentAssigned;
       estimateSpan.textContent = task.estimate ?? "";
       actualInput.value = task.actual ?? "";
       actualInput.disabled = task.status !== "Done";
@@ -606,7 +809,15 @@
           minDate: sprint.startDate || null,
           maxDate: sprint.endDate || null,
           disableMobile: true,
-          disable: [WEEKEND],
+          disable: [
+            (date) => {
+              const iso = localIso(date);
+              if (holidaySet && holidaySet.has(iso)) return true;
+              const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+              if (isWeekend && workWeekendSet && workWeekendSet.has(iso)) return false;
+              return isWeekend;
+            }
+          ],
           allowInput: false,
           onChange: ([date]) => {
             if (date) {
@@ -687,7 +898,10 @@
         e.preventDefault();
         row.classList.remove("drag-over");
         const backlogTaskId = e.dataTransfer.getData("backlogTaskId");
-        if (backlogTaskId) addTaskFromBacklog(backlogTaskId);
+        if (backlogTaskId) {
+          highlightBacklogTaskId = backlogTaskId;
+          addTaskFromBacklog(backlogTaskId);
+        }
       });
       dom.taskRows.appendChild(row);
     });
@@ -695,32 +909,65 @@
   var renderBacklogPanel = (sprint) => {
     const backlog = getBacklog();
     if (!backlog || !dom.backlogPanelRows) return;
-    const assignedIds = new Set(sprint.tasks.map((t) => t.backlogTaskId).filter(Boolean));
+    const allSprints = getState().sprints;
+    const assignedIds = new Set(
+      allSprints.flatMap((s) => s.tasks.map((t) => t.backlogTaskId)).filter(Boolean)
+    );
     dom.backlogPanelRows.innerHTML = "";
+    let unassigned = [];
     for (const story of backlog.stories) {
       for (const task of story.tasks) {
-        if (assignedIds.has(task.id)) continue;
-        const row = dom.backlogPanelRowTemplate.content.firstElementChild.cloneNode(true);
-        row.querySelector(".bp-taskid").textContent = task.taskId || "";
-        row.querySelector(".bp-description").textContent = task.description;
-        row.querySelector(".bp-estimate").textContent = task.estimate ?? "";
-        row.addEventListener("dragstart", (e) => {
-          e.dataTransfer.setData("backlogTaskId", task.id);
-        });
-        row.querySelector(".bp-add-btn").addEventListener("click", () => {
-          addTaskFromBacklog(task.id);
-        });
-        dom.backlogPanelRows.appendChild(row);
+        if (!assignedIds.has(task.id)) unassigned.push(task);
       }
     }
+    unassigned = sortItems(unassigned, backlogPanelSort.key, backlogPanelSort.asc);
+    const header = document.createElement("div");
+    header.className = "backlog-panel-header";
+    header.innerHTML = `<span class="bp-drag-col"></span><span class="bp-taskid sortable" data-sort-key="taskId">Task ID</span><span class="bp-description sortable" data-sort-key="description">Description</span><span class="bp-estimate sortable" data-sort-key="estimate">Est.</span><span class="bp-actions-col"></span>`;
+    header.querySelectorAll(".sortable").forEach((el) => {
+      if (el.dataset.sortKey === backlogPanelSort.key) {
+        el.classList.add(backlogPanelSort.asc ? "sort-asc" : "sort-desc");
+      }
+      el.addEventListener("click", () => toggleBacklogPanelSort(el.dataset.sortKey));
+    });
+    dom.backlogPanelRows.appendChild(header);
+    unassigned.forEach((task, idx) => {
+      const row = dom.backlogPanelRowTemplate.content.firstElementChild.cloneNode(true);
+      row.querySelector(".bp-taskid").textContent = task.taskId || "";
+      row.querySelector(".bp-description").textContent = task.description;
+      row.querySelector(".bp-estimate").textContent = task.estimate ?? "";
+      row.addEventListener("dragstart", (e) => {
+        e.dataTransfer.setData("backlogTaskId", task.id);
+      });
+      row.querySelector(".bp-add-btn").addEventListener("click", () => {
+        highlightBacklogTaskId = task.id;
+        const focusIdx = idx;
+        addTaskFromBacklog(task.id);
+        setTimeout(() => {
+          const btns = dom.backlogPanelRows.querySelectorAll(".bp-add-btn");
+          const target = btns[focusIdx] || btns[btns.length - 1];
+          if (target) target.focus();
+        }, 0);
+      });
+      dom.backlogPanelRows.appendChild(row);
+    });
   };
+  var STORY_SORT_KEYS = /* @__PURE__ */ new Set(["storyId", "description", "priority"]);
   var renderBacklog = () => {
     const backlog = getBacklog();
     if (!backlog) return;
     const sprint = getActiveSprint();
     const assignedIds = new Set(sprint?.tasks.map((t) => t.backlogTaskId).filter(Boolean) || []);
     dom.backlogTableBody.innerHTML = "";
-    for (const story of backlog.stories) {
+    const blTable = dom.backlogTableBody.closest("table");
+    if (blTable) applySortClasses(blTable, backlogSort);
+    let stories = backlog.stories;
+    if (backlogSort.key) {
+      if (STORY_SORT_KEYS.has(backlogSort.key)) {
+        stories = sortItems([...stories], backlogSort.key, backlogSort.asc);
+      }
+    }
+    for (const story of stories) {
       const isExpanded = expandedStoryIds.has(story.id);
       const isEditing = editingIds.has(story.id);
       const storyRow = dom.backlogStoryRowTemplate.content.firstElementChild.cloneNode(true);
@@ -806,7 +1053,13 @@
       });
       dom.backlogTableBody.appendChild(storyRow);
       if (isExpanded) {
-        for (const task of story.tasks) {
+        let storyTasks = story.tasks;
+        if (backlogSort.key && !STORY_SORT_KEYS.has(backlogSort.key)) {
+          const taskKeyMap = { taskId: "taskId", taskDesc: "description", estimate: "estimate", assignedTo: "assignedTo" };
+          const mappedKey = taskKeyMap[backlogSort.key] || backlogSort.key;
+          storyTasks = sortItems([...storyTasks], mappedKey, backlogSort.asc);
+        }
+        for (const task of storyTasks) {
           const isTaskEditing = editingIds.has(task.id);
           const taskRow = dom.backlogTaskRowTemplate.content.firstElementChild.cloneNode(true);
           const taskIdView = taskRow.querySelector(".task-id-view");
@@ -839,6 +1092,24 @@
             taskEstEdit.value = task.estimate ?? "";
             taskAssignedView.hidden = true;
             taskAssignedEdit.hidden = false;
+            taskAssignedEdit.innerHTML = "";
+            const members = getMembers();
+            const emptyOpt = document.createElement("option");
+            emptyOpt.value = "";
+            emptyOpt.textContent = "\u2014";
+            taskAssignedEdit.appendChild(emptyOpt);
+            for (const m of members) {
+              const opt = document.createElement("option");
+              opt.value = m;
+              opt.textContent = m;
+              taskAssignedEdit.appendChild(opt);
+            }
+            if (task.assignedTo && !members.includes(task.assignedTo)) {
+              const legacyOpt = document.createElement("option");
+              legacyOpt.value = task.assignedTo;
+              legacyOpt.textContent = task.assignedTo;
+              taskAssignedEdit.appendChild(legacyOpt);
+            }
             taskAssignedEdit.value = task.assignedTo || "";
             taskEditBtn.hidden = true;
             taskSaveBtn.hidden = false;
@@ -915,7 +1186,10 @@
     const sprint = getActiveSprint();
     if (!sprint) return;
     patchActiveSprint({ developers: 0, efficiency: 1 });
-    const maxToday = sprint.endDate ? getNextWorkingDay(sprint.endDate) : sprint.endDate;
+    const prefs = getPreferences();
+    const holidaySet = new Set(prefs.holidays.map((h) => h.date));
+    const workWeekendSet = new Set(prefs.workWeekends);
+    const maxToday = sprint.endDate ? getNextWorkingDay(sprint.endDate, holidaySet, workWeekendSet) : sprint.endDate;
     const real = todayIso();
     const defaultToday = real >= sprint.startDate && real <= maxToday ? real : real < sprint.startDate ? sprint.startDate : maxToday;
     patchActiveSprint({ today: defaultToday });
@@ -923,6 +1197,7 @@
     const state2 = getState();
     const sprintNumber = state2.sprints.findIndex((s) => s.id === sprint.id) + 1;
     dom.sprintTitleText.textContent = sprint.description || `Sprint ${sprintNumber}`;
+    dom.deleteSprintBtn.textContent = `Delete Sprint ${sprintNumber}`;
     if (fpToday) fpToday.destroy();
     fpToday = flatpickr(dom.sprintToday, {
       dateFormat: "Y-m-d",
@@ -930,19 +1205,50 @@
       minDate: sprint.startDate || null,
       maxDate: maxToday || null,
       disableMobile: true,
-      disable: [WEEKEND],
+      disable: [
+        (date) => {
+          const iso = localIso(date);
+          if (holidaySet.has(iso)) return true;
+          const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+          if (isWeekend && workWeekendSet.has(iso)) return false;
+          return isWeekend;
+        }
+      ],
       onChange: ([date]) => {
         if (date) updateToday(localIso(date));
       }
     });
-    renderTasks(sprint);
+    renderTasks(sprint, holidaySet, workWeekendSet);
     renderBacklogPanel(sprint);
-    const burndown = calculateBurndown(sprint, effectiveToday);
+    const burndown = calculateBurndown(sprint, effectiveToday, holidaySet, workWeekendSet);
     renderStats(sprint, burndown);
     drawChart(burndown);
   };
 
   // src/io.js
+  var showImportConfirm = ({ title, message, subtext = "", okLabel = "Proceed" }) => new Promise((resolve) => {
+    dom.importConfirmTitle.textContent = title;
+    dom.importConfirmMessage.innerHTML = message;
+    dom.importConfirmSubtext.textContent = subtext;
+    dom.importConfirmSubtext.hidden = !subtext;
+    dom.importConfirmOk.textContent = okLabel;
+    dom.importConfirmModal.hidden = false;
+    const cleanup = () => {
+      dom.importConfirmModal.hidden = true;
+      dom.importConfirmOk.removeEventListener("click", onOk);
+      dom.importConfirmCancel.removeEventListener("click", onCancel);
+    };
+    const onOk = () => {
+      cleanup();
+      resolve(true);
+    };
+    const onCancel = () => {
+      cleanup();
+      resolve(false);
+    };
+    dom.importConfirmOk.addEventListener("click", onOk);
+    dom.importConfirmCancel.addEventListener("click", onCancel);
+  });
   var exportData = () => {
     const state2 = getState();
     const blob = new Blob([JSON.stringify(state2, null, 2)], { type: "application/json" });
@@ -982,17 +1288,20 @@
   };
   var importData = (file) => {
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const imported = JSON.parse(e.target.result);
         if (!imported || !Array.isArray(imported.sprints)) {
           alert("Invalid file: expected a Burndown Studio JSON export.");
           return;
         }
-        const confirmImport = window.confirm(
-          `Import ${imported.sprints.length} sprint(s)? This will replace all current data.`
-        );
-        if (!confirmImport) return;
+        const ok = await showImportConfirm({
+          title: "\u26A0 Import Sprint Data",
+          message: `Import <strong>${imported.sprints.length}</strong> sprint(s)? This will replace all current data.`,
+          subtext: "This action cannot be undone.",
+          okLabel: "Import"
+        });
+        if (!ok) return;
         if (!imported.activeSprintId && imported.sprints.length > 0) {
           imported.activeSprintId = imported.sprints[0].id;
         }
@@ -1028,7 +1337,7 @@
   };
   var importBacklogExcel = (file) => {
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const data = new Uint8Array(e.target.result);
       let workbook;
       try {
@@ -1072,11 +1381,32 @@
       }
       const existing = getBacklog();
       const hasExisting = existing?.stories?.length > 0;
-      const warning = hasExisting ? `Warning: This will permanently replace all ${existing.stories.length} existing story/stories with ${stories.length} imported story/stories.
-
-This cannot be undone. Proceed?` : `Import ${stories.length} story/stories into the backlog?`;
-      if (!window.confirm(warning)) return;
+      const message = hasExisting ? `Import <strong>${stories.length}</strong> story/stories into backlog? This will replace all <strong>${existing.stories.length}</strong> existing story/stories.` : `Import <strong>${stories.length}</strong> story/stories into the backlog?`;
+      const ok = await showImportConfirm({
+        title: "\u26A0 Import Backlog",
+        message,
+        subtext: hasExisting ? "This action cannot be undone." : "",
+        okLabel: "Import"
+      });
+      if (!ok) return;
+      const orphans = findOrphanedSprintTasks(stories);
+      if (orphans.length > 0) {
+        const lines = orphans.map(
+          (o) => `<strong>Sprint ${o.sprintIndex}:</strong> [${o.taskId}] ${o.name}`
+        ).join("<br>");
+        const ok2 = await showImportConfirm({
+          title: "\u26A0 Sprint Tasks Will Be Removed",
+          message: `${orphans.length} task(s) will be removed from sprints because their Task ID is not in the imported backlog:<br><br>${lines}`,
+          okLabel: "Proceed"
+        });
+        if (!ok2) return;
+      }
       replaceBacklog({ stories });
+      relinkSprintTasks();
+      const uniqueNames = [...new Set(
+        stories.flatMap((s) => s.tasks.map((t) => t.assignedTo)).filter(Boolean)
+      )];
+      if (uniqueNames.length > 0) addMembersFromImport(uniqueNames);
     };
     reader.readAsArrayBuffer(file);
   };
@@ -1087,11 +1417,18 @@ This cannot be undone. Proceed?` : `Import ${stories.length} story/stories into 
   var fpEnd = null;
   var getDisabledRanges = (excludeId) => {
     const others = getState().sprints.filter((s) => s.id !== excludeId);
+    const prefs = getPreferences();
+    const holidaySet = new Set(prefs.holidays.map((h) => h.date));
+    const workWeekendSet = new Set(prefs.workWeekends);
     return [
-      (date) => date.getDay() === 0 || date.getDay() === 6,
-      // weekends
+      (date) => {
+        const iso = localIso(date);
+        if (holidaySet.has(iso)) return true;
+        const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+        if (isWeekend && workWeekendSet.has(iso)) return false;
+        return isWeekend;
+      },
       ...others.map((s) => ({ from: s.startDate, to: s.endDate }))
-      // occupied ranges
     ];
   };
   var fixCalendarPosition = (instance) => {
@@ -1108,9 +1445,12 @@ This cannot be undone. Proceed?` : `Import ${stories.length} story/stories into 
     const start = fpStart?.selectedDates[0];
     const end = fpEnd?.selectedDates[0];
     if (start && end) {
-      const startIso = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}`;
-      const endIso = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`;
-      const count = getWorkingDates(startIso, endIso).length;
+      const startIso = localIso(start);
+      const endIso = localIso(end);
+      const prefs = getPreferences();
+      const holidaySet = new Set(prefs.holidays.map((h) => h.date));
+      const workWeekendSet = new Set(prefs.workWeekends);
+      const count = getWorkingDates(startIso, endIso, holidaySet, workWeekendSet).length;
       dom.modalWorkingDays.textContent = `${count} working days`;
     } else {
       dom.modalWorkingDays.textContent = "";
@@ -1230,6 +1570,7 @@ This cannot be undone. Proceed?` : `Import ${stories.length} story/stories into 
       alert(`Task "${input}" not found in backlog.`);
       return;
     }
+    setHighlightBacklogTaskId(uuid);
     addTaskFromBacklog(uuid);
     dom.addByIdInput.value = "";
   };
@@ -1255,7 +1596,10 @@ This cannot be undone. Proceed?` : `Import ${stories.length} story/stories into 
     e.preventDefault();
     dom.taskRows.classList.remove("drag-over");
     const backlogTaskId = e.dataTransfer.getData("backlogTaskId");
-    if (backlogTaskId) addTaskFromBacklog(backlogTaskId);
+    if (backlogTaskId) {
+      setHighlightBacklogTaskId(backlogTaskId);
+      addTaskFromBacklog(backlogTaskId);
+    }
   });
   dom.backlogExpandAllBtn.addEventListener("click", expandAll);
   dom.backlogCollapseAllBtn.addEventListener("click", collapseAll);
@@ -1278,6 +1622,15 @@ This cannot be undone. Proceed?` : `Import ${stories.length} story/stories into 
   dom.backlogImportFile.addEventListener("change", (e) => {
     if (e.target.files[0]) importBacklogExcel(e.target.files[0]);
     e.target.value = "";
+  });
+  document.querySelectorAll(".task-table thead th.sortable").forEach((th) => {
+    th.addEventListener("click", () => toggleTaskSort(th.dataset.sortKey));
+  });
+  document.querySelectorAll(".backlog-table thead th.sortable").forEach((th) => {
+    th.addEventListener("click", (e) => {
+      if (e.target.classList.contains("col-resizer")) return;
+      toggleBacklogSort(th.dataset.sortKey);
+    });
   });
   (function initBacklogResize() {
     const table = document.querySelector(".backlog-table");
@@ -1327,5 +1680,120 @@ This cannot be undone. Proceed?` : `Import ${stories.length} story/stories into 
       });
     });
   })();
+  var fpPrefHoliday = null;
+  var fpPrefWeekend = null;
+  var renderPrefLists = () => {
+    const prefs = getPreferences();
+    dom.prefHolidayList.innerHTML = "";
+    for (const h of prefs.holidays) {
+      const row = document.createElement("div");
+      row.className = "pref-list-row";
+      row.innerHTML = `<span class="pref-list-date">${h.date}</span><span class="pref-list-name">${h.name || ""}</span><button class="btn ghost small pref-list-delete">&times;</button>`;
+      row.querySelector(".pref-list-delete").addEventListener("click", () => {
+        removeHoliday(h.date);
+        renderPrefLists();
+      });
+      dom.prefHolidayList.appendChild(row);
+    }
+    dom.prefWeekendList.innerHTML = "";
+    for (const d of prefs.workWeekends) {
+      const row = document.createElement("div");
+      row.className = "pref-list-row";
+      row.innerHTML = `<span class="pref-list-date">${d}</span><button class="btn ghost small pref-list-delete">&times;</button>`;
+      row.querySelector(".pref-list-delete").addEventListener("click", () => {
+        removeWorkWeekend(d);
+        renderPrefLists();
+      });
+      dom.prefWeekendList.appendChild(row);
+    }
+    dom.prefMemberList.innerHTML = "";
+    const members = getMembers();
+    for (const name of members) {
+      const row = document.createElement("div");
+      row.className = "pref-list-row";
+      row.innerHTML = `<span class="pref-list-name">${name}</span><button class="btn ghost small pref-list-delete">&times;</button>`;
+      row.querySelector(".pref-list-delete").addEventListener("click", () => {
+        removeMember(name);
+        renderPrefLists();
+      });
+      dom.prefMemberList.appendChild(row);
+    }
+  };
+  var openPreferences = () => {
+    dom.preferencesModal.hidden = false;
+    dom.prefHolidayDate.value = "";
+    dom.prefHolidayName.value = "";
+    dom.prefWeekendDate.value = "";
+    if (fpPrefHoliday) fpPrefHoliday.destroy();
+    fpPrefHoliday = flatpickr(dom.prefHolidayDate, {
+      dateFormat: "Y-m-d",
+      disableMobile: true,
+      onOpen: (_, __, instance) => fixCalendarPosition(instance)
+    });
+    if (fpPrefWeekend) fpPrefWeekend.destroy();
+    fpPrefWeekend = flatpickr(dom.prefWeekendDate, {
+      dateFormat: "Y-m-d",
+      disableMobile: true,
+      disable: [(date) => date.getDay() !== 0 && date.getDay() !== 6],
+      onOpen: (_, __, instance) => fixCalendarPosition(instance)
+    });
+    renderPrefLists();
+  };
+  var closePreferences = () => {
+    dom.preferencesModal.hidden = true;
+    if (fpPrefHoliday) {
+      fpPrefHoliday.destroy();
+      fpPrefHoliday = null;
+    }
+    if (fpPrefWeekend) {
+      fpPrefWeekend.destroy();
+      fpPrefWeekend = null;
+    }
+    render();
+  };
+  dom.settingsBtn.addEventListener("click", openPreferences);
+  dom.prefClose.addEventListener("click", closePreferences);
+  dom.prefDone.addEventListener("click", closePreferences);
+  dom.preferencesModal.addEventListener("click", (e) => {
+    if (e.target === dom.preferencesModal) closePreferences();
+  });
+  dom.prefHolidayAddBtn.addEventListener("click", () => {
+    const date = dom.prefHolidayDate.value;
+    const name = dom.prefHolidayName.value.trim();
+    if (!date) return;
+    addHoliday(date, name);
+    dom.prefHolidayDate.value = "";
+    dom.prefHolidayName.value = "";
+    if (fpPrefHoliday) fpPrefHoliday.clear();
+    renderPrefLists();
+  });
+  dom.prefWeekendAddBtn.addEventListener("click", () => {
+    const date = dom.prefWeekendDate.value;
+    if (!date) return;
+    addWorkWeekend(date);
+    dom.prefWeekendDate.value = "";
+    if (fpPrefWeekend) fpPrefWeekend.clear();
+    renderPrefLists();
+  });
+  var commitAddMember = () => {
+    const name = dom.prefMemberName.value.trim();
+    if (!name) return;
+    addMember(name);
+    dom.prefMemberName.value = "";
+    renderPrefLists();
+  };
+  dom.prefMemberAddBtn.addEventListener("click", commitAddMember);
+  dom.prefMemberName.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commitAddMember();
+    }
+  });
+  document.addEventListener("click", (e) => {
+    if (e.target.closest(".bp-add-btn") || e.target.closest(".add-by-id-row")) return;
+    const highlighted = document.querySelector(".task-row-highlight");
+    if (highlighted) highlighted.classList.remove("task-row-highlight");
+    setHighlightBacklogTaskId(null);
+  }, true);
   render();
 })();

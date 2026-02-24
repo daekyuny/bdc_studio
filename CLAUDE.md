@@ -53,7 +53,7 @@ main.js
 │   ├── burndown.js ← utils.js
 │   ├── chart.js ← dom.js, utils.js
 │   └── utils.js
-└── io.js ← state.js, utils.js
+└── io.js ← state.js, utils.js, dom.js
 ```
 
 No circular dependencies. All date values are stored as `YYYY-MM-DD` strings. Task status is one of `"Todo" | "In Progress" | "Done"`.

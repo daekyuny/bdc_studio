@@ -15,12 +15,13 @@ import {
   deleteStory,
   updateBacklogTask,
   deleteBacklogTask,
+  getPreferences,
+  getMembers,
 } from "./state.js";
 import { calculateBurndown } from "./burndown.js";
 import { drawChart } from "./chart.js";
 
 let fpToday = null;
-const WEEKEND = (date) => date.getDay() === 0 || date.getDay() === 6;
 
 let activeTab = "sprint";
 export const setActiveTab = (tab) => { activeTab = tab; render(); };
@@ -28,6 +29,51 @@ export const setActiveTab = (tab) => { activeTab = tab; render(); };
 // Backlog state — persists across renders
 const editingIds = new Set();
 const expandedStoryIds = new Set();
+
+// Highlight state — tracks the backlogTaskId of a just-added task
+let highlightBacklogTaskId = null;
+
+// Sort state — UI-only, not persisted
+let taskSort = { key: null, asc: true };
+let backlogPanelSort = { key: null, asc: true };
+let backlogSort = { key: null, asc: true };
+
+export const setHighlightBacklogTaskId = (id) => { highlightBacklogTaskId = id; };
+
+export const toggleTaskSort = (key) => {
+  if (taskSort.key === key) taskSort.asc = !taskSort.asc;
+  else { taskSort.key = key; taskSort.asc = true; }
+  render();
+};
+
+export const toggleBacklogPanelSort = (key) => {
+  if (backlogPanelSort.key === key) backlogPanelSort.asc = !backlogPanelSort.asc;
+  else { backlogPanelSort.key = key; backlogPanelSort.asc = true; }
+  render();
+};
+
+export const toggleBacklogSort = (key) => {
+  if (backlogSort.key === key) backlogSort.asc = !backlogSort.asc;
+  else { backlogSort.key = key; backlogSort.asc = true; }
+  render();
+};
+
+const NUMERIC_KEYS = new Set(["estimate", "actual", "priority"]);
+
+const sortItems = (items, key, asc) => {
+  if (!key) return items;
+  const sorted = [...items].sort((a, b) => {
+    let va = a[key] ?? "";
+    let vb = b[key] ?? "";
+    if (NUMERIC_KEYS.has(key)) {
+      va = Number(va) || 0;
+      vb = Number(vb) || 0;
+      return va - vb;
+    }
+    return String(va).localeCompare(String(vb));
+  });
+  return asc ? sorted : sorted.reverse();
+};
 
 export const startEditing = (id, focusAfter = false) => {
   if (!id) return;
@@ -71,11 +117,31 @@ const renderSprintList = () => {
   });
 };
 
-const renderTasks = (sprint) => {
+const applySortClasses = (container, sortState) => {
+  container.querySelectorAll("th.sortable").forEach((th) => {
+    th.classList.remove("sort-asc", "sort-desc");
+    if (th.dataset.sortKey === sortState.key) {
+      th.classList.add(sortState.asc ? "sort-asc" : "sort-desc");
+    }
+  });
+};
+
+const renderTasks = (sprint, holidaySet, workWeekendSet) => {
   dom.taskRows.innerHTML = "";
-  sprint.tasks.forEach((task) => {
+
+  // Apply sort indicator to task table headers
+  const taskTable = dom.taskRows.closest("table");
+  if (taskTable) applySortClasses(taskTable, taskSort);
+
+  const tasks = sortItems([...sprint.tasks], taskSort.key, taskSort.asc);
+  tasks.forEach((task) => {
     const row = dom.taskRowTemplate.content.firstElementChild.cloneNode(true);
     row.dataset.taskId = task.id;
+
+    // Highlight newly added task
+    if (highlightBacklogTaskId && task.backlogTaskId === highlightBacklogTaskId) {
+      row.classList.add("task-row-highlight");
+    }
 
     const taskIdSpan = row.querySelector(".task-taskid");
     const nameSpan = row.querySelector(".task-name");
@@ -87,7 +153,17 @@ const renderTasks = (sprint) => {
 
     taskIdSpan.textContent = task.taskId || "";
     nameSpan.textContent = task.name;
-    nameSpan.title = task.assignedTo || "";
+
+    // Look up current assignedTo from backlog (may have been updated after sprint add)
+    let currentAssigned = task.assignedTo || "";
+    if (task.backlogTaskId) {
+      const backlog = getBacklog();
+      for (const story of backlog.stories) {
+        const bt = story.tasks.find((t) => t.id === task.backlogTaskId);
+        if (bt) { currentAssigned = bt.assignedTo || ""; break; }
+      }
+    }
+    nameSpan.title = currentAssigned;
     estimateSpan.textContent = task.estimate ?? "";
 
     actualInput.value = task.actual ?? "";
@@ -104,7 +180,15 @@ const renderTasks = (sprint) => {
         minDate: sprint.startDate || null,
         maxDate: sprint.endDate || null,
         disableMobile: true,
-        disable: [WEEKEND],
+        disable: [
+          (date) => {
+            const iso = localIso(date);
+            if (holidaySet && holidaySet.has(iso)) return true;
+            const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+            if (isWeekend && workWeekendSet && workWeekendSet.has(iso)) return false;
+            return isWeekend;
+          },
+        ],
         allowInput: false,
         onChange: ([date]) => {
           if (date) {
@@ -186,7 +270,10 @@ const renderTasks = (sprint) => {
       e.preventDefault();
       row.classList.remove("drag-over");
       const backlogTaskId = e.dataTransfer.getData("backlogTaskId");
-      if (backlogTaskId) addTaskFromBacklog(backlogTaskId);
+      if (backlogTaskId) {
+        highlightBacklogTaskId = backlogTaskId;
+        addTaskFromBacklog(backlogTaskId);
+      }
     });
 
     dom.taskRows.appendChild(row);
@@ -197,31 +284,63 @@ const renderBacklogPanel = (sprint) => {
   const backlog = getBacklog();
   if (!backlog || !dom.backlogPanelRows) return;
 
-  const assignedIds = new Set(sprint.tasks.map(t => t.backlogTaskId).filter(Boolean));
+  const allSprints = getState().sprints;
+  const assignedIds = new Set(
+    allSprints.flatMap(s => s.tasks.map(t => t.backlogTaskId)).filter(Boolean)
+  );
 
   dom.backlogPanelRows.innerHTML = "";
 
+  // Collect unassigned tasks
+  let unassigned = [];
   for (const story of backlog.stories) {
     for (const task of story.tasks) {
-      if (assignedIds.has(task.id)) continue;
-
-      const row = dom.backlogPanelRowTemplate.content.firstElementChild.cloneNode(true);
-      row.querySelector(".bp-taskid").textContent = task.taskId || "";
-      row.querySelector(".bp-description").textContent = task.description;
-      row.querySelector(".bp-estimate").textContent = task.estimate ?? "";
-
-      row.addEventListener("dragstart", (e) => {
-        e.dataTransfer.setData("backlogTaskId", task.id);
-      });
-
-      row.querySelector(".bp-add-btn").addEventListener("click", () => {
-        addTaskFromBacklog(task.id);
-      });
-
-      dom.backlogPanelRows.appendChild(row);
+      if (!assignedIds.has(task.id)) unassigned.push(task);
     }
   }
+
+  // Sort if active
+  unassigned = sortItems(unassigned, backlogPanelSort.key, backlogPanelSort.asc);
+
+  // Header row
+  const header = document.createElement("div");
+  header.className = "backlog-panel-header";
+  header.innerHTML = `<span class="bp-drag-col"></span><span class="bp-taskid sortable" data-sort-key="taskId">Task ID</span><span class="bp-description sortable" data-sort-key="description">Description</span><span class="bp-estimate sortable" data-sort-key="estimate">Est.</span><span class="bp-actions-col"></span>`;
+  header.querySelectorAll(".sortable").forEach((el) => {
+    if (el.dataset.sortKey === backlogPanelSort.key) {
+      el.classList.add(backlogPanelSort.asc ? "sort-asc" : "sort-desc");
+    }
+    el.addEventListener("click", () => toggleBacklogPanelSort(el.dataset.sortKey));
+  });
+  dom.backlogPanelRows.appendChild(header);
+
+  unassigned.forEach((task, idx) => {
+    const row = dom.backlogPanelRowTemplate.content.firstElementChild.cloneNode(true);
+    row.querySelector(".bp-taskid").textContent = task.taskId || "";
+    row.querySelector(".bp-description").textContent = task.description;
+    row.querySelector(".bp-estimate").textContent = task.estimate ?? "";
+
+    row.addEventListener("dragstart", (e) => {
+      e.dataTransfer.setData("backlogTaskId", task.id);
+    });
+
+    row.querySelector(".bp-add-btn").addEventListener("click", () => {
+      highlightBacklogTaskId = task.id;
+      const focusIdx = idx; // after removal, the next task slides into this index
+      addTaskFromBacklog(task.id);
+      // After re-render, focus the Add button at the same index position
+      setTimeout(() => {
+        const btns = dom.backlogPanelRows.querySelectorAll(".bp-add-btn");
+        const target = btns[focusIdx] || btns[btns.length - 1];
+        if (target) target.focus();
+      }, 0);
+    });
+
+    dom.backlogPanelRows.appendChild(row);
+  });
 };
+
+const STORY_SORT_KEYS = new Set(["storyId", "description", "priority"]);
 
 const renderBacklog = () => {
   const backlog = getBacklog();
@@ -232,7 +351,19 @@ const renderBacklog = () => {
 
   dom.backlogTableBody.innerHTML = "";
 
-  for (const story of backlog.stories) {
+  // Apply sort indicator to backlog table headers
+  const blTable = dom.backlogTableBody.closest("table");
+  if (blTable) applySortClasses(blTable, backlogSort);
+
+  // Sort stories or tasks within stories
+  let stories = backlog.stories;
+  if (backlogSort.key) {
+    if (STORY_SORT_KEYS.has(backlogSort.key)) {
+      stories = sortItems([...stories], backlogSort.key, backlogSort.asc);
+    }
+  }
+
+  for (const story of stories) {
     const isExpanded = expandedStoryIds.has(story.id);
     const isEditing = editingIds.has(story.id);
 
@@ -334,7 +465,14 @@ const renderBacklog = () => {
 
     // Task rows (only when expanded)
     if (isExpanded) {
-      for (const task of story.tasks) {
+      // Sort tasks within story if a task-level sort key is active
+      let storyTasks = story.tasks;
+      if (backlogSort.key && !STORY_SORT_KEYS.has(backlogSort.key)) {
+        const taskKeyMap = { taskId: "taskId", taskDesc: "description", estimate: "estimate", assignedTo: "assignedTo" };
+        const mappedKey = taskKeyMap[backlogSort.key] || backlogSort.key;
+        storyTasks = sortItems([...storyTasks], mappedKey, backlogSort.asc);
+      }
+      for (const task of storyTasks) {
         const isTaskEditing = editingIds.has(task.id);
 
         const taskRow = dom.backlogTaskRowTemplate.content.firstElementChild.cloneNode(true);
@@ -374,6 +512,25 @@ const renderBacklog = () => {
 
           taskAssignedView.hidden = true;
           taskAssignedEdit.hidden = false;
+          taskAssignedEdit.innerHTML = "";
+          const members = getMembers();
+          const emptyOpt = document.createElement("option");
+          emptyOpt.value = "";
+          emptyOpt.textContent = "—";
+          taskAssignedEdit.appendChild(emptyOpt);
+          for (const m of members) {
+            const opt = document.createElement("option");
+            opt.value = m;
+            opt.textContent = m;
+            taskAssignedEdit.appendChild(opt);
+          }
+          // If current assignedTo is not in members (deleted member), still show it
+          if (task.assignedTo && !members.includes(task.assignedTo)) {
+            const legacyOpt = document.createElement("option");
+            legacyOpt.value = task.assignedTo;
+            legacyOpt.textContent = task.assignedTo;
+            taskAssignedEdit.appendChild(legacyOpt);
+          }
           taskAssignedEdit.value = task.assignedTo || "";
 
           taskEditBtn.hidden = true;
@@ -469,7 +626,12 @@ export const render = () => {
 
   patchActiveSprint({ developers: 0, efficiency: 1 });
 
-  const maxToday = sprint.endDate ? getNextWorkingDay(sprint.endDate) : sprint.endDate;
+  // Build holiday / work-weekend sets from preferences
+  const prefs = getPreferences();
+  const holidaySet = new Set(prefs.holidays.map((h) => h.date));
+  const workWeekendSet = new Set(prefs.workWeekends);
+
+  const maxToday = sprint.endDate ? getNextWorkingDay(sprint.endDate, holidaySet, workWeekendSet) : sprint.endDate;
   const real = todayIso();
   const defaultToday =
     real >= sprint.startDate && real <= maxToday ? real :
@@ -484,6 +646,7 @@ export const render = () => {
   const state = getState();
   const sprintNumber = state.sprints.findIndex((s) => s.id === sprint.id) + 1;
   dom.sprintTitleText.textContent = sprint.description || `Sprint ${sprintNumber}`;
+  dom.deleteSprintBtn.textContent = `Delete Sprint ${sprintNumber}`;
 
   if (fpToday) fpToday.destroy();
   fpToday = flatpickr(dom.sprintToday, {
@@ -492,15 +655,23 @@ export const render = () => {
     minDate: sprint.startDate || null,
     maxDate: maxToday || null,
     disableMobile: true,
-    disable: [WEEKEND],
+    disable: [
+      (date) => {
+        const iso = localIso(date);
+        if (holidaySet.has(iso)) return true;
+        const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+        if (isWeekend && workWeekendSet.has(iso)) return false;
+        return isWeekend;
+      },
+    ],
     onChange: ([date]) => {
       if (date) updateToday(localIso(date));
     },
   });
 
-  renderTasks(sprint);
+  renderTasks(sprint, holidaySet, workWeekendSet);
   renderBacklogPanel(sprint);
-  const burndown = calculateBurndown(sprint, effectiveToday);
+  const burndown = calculateBurndown(sprint, effectiveToday, holidaySet, workWeekendSet);
   renderStats(sprint, burndown);
   drawChart(burndown);
 };

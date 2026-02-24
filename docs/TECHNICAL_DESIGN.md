@@ -1,7 +1,7 @@
 # Burndown Studio — Technical Design Document
 
-**Version:** 0.5
-**Last updated:** 2026-02-23
+**Version:** 0.6
+**Last updated:** 2026-02-24
 **Status:** Draft — open for review
 
 ---
@@ -119,7 +119,9 @@ burndown-studio (localStorage key)
 
 **Estimate vs Actual:** `estimate` is copied from the backlog task when a task is added to a sprint and is read-only thereafter. `actual` is entered by the user when the task is marked Done (pre-filled with `estimate`). Only `estimate` is used in burndown chart math; `actual` is for retrospective reporting only.
 
-**Denormalization:** Sprint tasks copy `taskId`, `name`, and `assignedTo` from the backlog at the time of assignment. These copies are not kept in sync if the backlog is edited after assignment.
+**Denormalization:** Sprint tasks copy `taskId`, `name`, and `assignedTo` from the backlog at the time of assignment. These copies are not kept in sync if the backlog is edited after assignment, but are refreshed when backlog is re-imported via Excel (see Re-linking below).
+
+**Re-linking on backlog import:** When a backlog is imported from Excel, all backlog tasks receive fresh UUIDs. `relinkSprintTasks()` in `state.js` rebuilds the `backlogTaskId` link by matching on the human-readable `taskId` (e.g. "1.2.3") which survives the Excel round-trip. Matched sprint tasks have their `name`, `estimate`, and `assignedTo` refreshed from the new backlog; `status`, `actual`, and `doneDate` are preserved. Sprint tasks whose `taskId` is not found in the imported backlog are removed. A two-step custom confirmation dialog warns users before orphaned tasks are deleted.
 
 ### Data Migration
 
@@ -247,7 +249,7 @@ main.js
 │   ├── burndown.js ← utils.js
 │   ├── chart.js ← dom.js, utils.js
 │   └── utils.js
-└── io.js ← state.js, utils.js
+└── io.js ← state.js, utils.js, dom.js
 ```
 
 No circular dependencies. `state.js` communicates with `render.js` via a callback
@@ -263,7 +265,7 @@ No circular dependencies. `state.js` communicates with `render.js` via a callbac
 | `burndown.js` | Pure burndown calculation (ideal/actual lines, today clipping, capacity) |
 | `chart.js` | SVG chart rendering (grid, lines, today marker, labels) |
 | `render.js` | Full DOM rebuild: tab switching, sprint list, task table, backlog table (stories + tasks), stats card, Flatpickr Today picker |
-| `io.js` | JSON export/import; sprint Excel export; backlog Excel export and import (SheetJS) |
+| `io.js` | JSON export/import; sprint Excel export; backlog Excel export and import (SheetJS); sprint↔backlog re-linking on backlog import; custom confirm dialogs |
 | `main.js` | Entry point: tab/toolbar event wiring, modal logic, Flatpickr date pickers, Add-by-ID, drag-to-sprint, Delete All |
 
 ## 8. Technical Debt & Risks
@@ -278,7 +280,7 @@ No circular dependencies. `state.js` communicates with `render.js` via a callbac
 | TD-06 | No input validation | Low | Open | Invalid dates, negative estimates, or efficiency > 1 are not explicitly prevented in JS. |
 | TD-07 | No error handling | Low | **Resolved** | `loadState` now has try/catch with graceful fallback. |
 | TD-08 | Date handling uses string comparison | Low | **Partially resolved** | `task.doneDate > date` works for ISO strings. Timezone off-by-one bug fixed via `localIso()` helper; string comparison retained where safe. |
-| TD-09 | Backlog denormalization | Low | Open | Sprint tasks copy name/taskId/assignedTo from backlog at assignment time; edits to backlog tasks after assignment are not reflected in sprint tasks. |
+| TD-09 | Backlog denormalization | Low | **Partially resolved** | Sprint tasks copy name/taskId/assignedTo from backlog at assignment time; edits after assignment are not auto-synced, but backlog Excel re-import triggers `relinkSprintTasks()` which refreshes denormalized fields and removes orphans. |
 
 ## 9. Future Architecture Considerations
 
@@ -305,3 +307,4 @@ No circular dependencies. `state.js` communicates with `render.js` via a callbac
 | 2026-02-20 | 0.3 | Comprehensive update: added build pipeline section, module responsibilities table, data safety notes, updated architecture overview for esbuild bundling, updated tech stack, updated future architecture considerations |
 | 2026-02-21 | 0.4 | Updated data model (description, today fields; sprint numbering computed not stored); added Flatpickr to tech stack; added algorithms for timezone-safe dates, overlap/gap detection, today clipping; updated Flatpickr instance management in rendering strategy; updated module line counts; partially resolved TD-08 |
 | 2026-02-23 | 0.5 | Major update for Product Backlog feature: added backlog data model (Story, BacklogTask, denormalized SprintTask); updated data migration section; added SheetJS to tech stack; updated io.js responsibilities (Excel import/export); rewrote burndown algorithm (estimate not points); added tab state and backlog UI state sections to rendering strategy; added priority snapping algorithm; added TD-09 (denormalization); updated module responsibilities table |
+| 2026-02-24 | 0.6 | Added sprint↔backlog re-linking on backlog import (relinkSprintTasks, findOrphanedSprintTasks); custom confirm dialogs replacing window.confirm for imports; updated io.js dependency (now imports dom.js); partially resolved TD-09 |

@@ -1,7 +1,7 @@
 # Burndown Studio — Product Requirements Document
 
-**Version:** 0.4
-**Last updated:** 2026-02-23
+**Version:** 0.5
+**Last updated:** 2026-02-24
 **Author:** [Your Name]
 **Status:** Draft — open for review
 
@@ -38,7 +38,7 @@ Key pain points:
 - Needs cross-sprint velocity trends and team-level dashboards.
 - Requires multi-user access and shared data.
 
-## 4. Current Features (v0.4)
+## 4. Current Features (v0.5)
 
 ### Sprint Management
 
@@ -79,7 +79,7 @@ Key pain points:
 | Priority field | Integer priority per story (default 100, min 0); arrow keys snap to nearest 10 | Done |
 | Assigned To | Each backlog task carries an assignee field (denormalized to sprint tasks) | Done |
 | Delete All | Wipe entire backlog with a warning confirmation | Done |
-| Excel import | Import backlog from `.xlsx`/`.xls` file (SheetJS); warns before overwriting existing data | Done |
+| Excel import | Import backlog from `.xlsx`/`.xls` file (SheetJS); re-links sprint tasks by Task ID; two-step custom confirmation with orphan warning | Done |
 | Excel export | Export backlog to `.xlsx` file with 7-column format | Done |
 
 ### Visualization & Export
@@ -93,7 +93,7 @@ Key pain points:
 | Date format | Dates displayed as mm/dd throughout (summary, chart x-axis) | Done |
 | Show day numbers toggle | Switch between D1/D2 labels and mm/dd dates on the chart X-axis | Done |
 | Sprint Excel export | Export active sprint task list to `.xlsx` | Done |
-| JSON export/import | Download full state as `.json` file; import to restore | Done |
+| JSON export/import | Download full state as `.json` file; import to restore; custom confirm dialog | Done |
 
 ### General
 
@@ -175,3 +175,4 @@ Key pain points:
 | 2026-02-20 | 0.2 | Updated feature table with completed items (JSON export/import, day toggle, error recovery, modular codebase). Added status column to planned features. Updated Available Days formula. |
 | 2026-02-21 | 0.3 | Rewrote current features table to reflect UI redesign: modal sprint edit, Flatpickr pickers, overlap/gap validation, sprint title, Today override, side-by-side layout, working days chip, mm/dd date format. |
 | 2026-02-23 | 0.4 | Major update: added Product Backlog feature (F-104) as Done; split current features into Sprint Management, Task Tracking, Product Backlog, Visualization & Export, General sections; updated task model (estimate/actual replacing points); added Sprint/Backlog tab navigation; marked F-103 Done (now Excel export); updated planned features table. |
+| 2026-02-24 | 0.5 | Backlog Excel import now re-links sprint tasks by Task ID (refreshes name/estimate/assignedTo, preserves status/actual/doneDate); orphaned sprint tasks warned and removed; all import confirmations use custom styled dialogs instead of browser confirm(). |

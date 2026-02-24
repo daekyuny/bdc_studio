@@ -1,7 +1,7 @@
 # Burndown Studio — Project Roadmap
 
-**Version:** 0.4
-**Last updated:** 2026-02-23
+**Version:** 0.5
+**Last updated:** 2026-02-24
 **Status:** Draft — open for review
 
 ---
@@ -63,7 +63,7 @@ MVP baseline       Data Safety        Daily Usability    Insights           Mult
 | F-101 | JSON export/import | P0 | Small | **Done** | Download/upload full state as `.json` file |
 | F-102 | Holiday/PTO exclusions | P0 | Medium | Open | Per-sprint list of excluded dates; reflected in working days & ideal line |
 | F-103 | Sprint task export | P1 | Small | **Done** | Export active sprint's task list as `.xlsx` (Excel) |
-| F-104 | Product Backlog | P0 | Large | **Done** | Story→Task hierarchy; tasks assigned to sprint from backlog; estimate/actual split; Excel import/export |
+| F-104 | Product Backlog | P0 | Large | **Done** | Story→Task hierarchy; tasks assigned to sprint from backlog; estimate/actual split; Excel import/export; re-links sprint tasks on backlog re-import |
 
 ### Technical Foundation
 
@@ -178,3 +178,4 @@ MVP baseline       Data Safety        Daily Usability    Insights           Mult
 | 2026-02-20 | 0.2 | Merged Phase 0 with completed tech items. Marked F-101, T-101, T-103, T-104 as Done. Removed completed T-201/T-202 (module split and build tool) from Phase 2. Added remaining work summary to Phase 1. |
 | 2026-02-21 | 0.3 | Updated Phase 0 completed list to reflect UI redesign: modal sprint edit, Flatpickr, overlap/gap, Today override, side-by-side layout, mm/dd dates, working days chip, timezone fix. Phase 1 remaining work unchanged (F-102, F-103, T-102). |
 | 2026-02-23 | 0.4 | Marked F-103 Done (Excel export); added F-104 (Product Backlog) as Done; updated Phase 1 goal and exit criteria to reflect backlog feature; removed F-103/F-104 from remaining work; updated Phase 1 remaining to F-102 + T-102 only. |
+| 2026-02-24 | 0.5 | Updated F-104 description: backlog re-import now re-links sprint tasks by Task ID with two-step custom confirm dialog and orphan warning. |

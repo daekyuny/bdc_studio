@@ -1,5 +1,26 @@
-import { getState, getActiveSprint, replaceState, getBacklog, replaceBacklog } from "./state.js";
+import { getState, getActiveSprint, replaceState, getBacklog, replaceBacklog, addMembersFromImport, findOrphanedSprintTasks, relinkSprintTasks } from "./state.js";
 import { todayIso, createId } from "./utils.js";
+import { dom } from "./dom.js";
+
+const showImportConfirm = ({ title, message, subtext = "", okLabel = "Proceed" }) =>
+  new Promise((resolve) => {
+    dom.importConfirmTitle.textContent = title;
+    dom.importConfirmMessage.innerHTML = message;
+    dom.importConfirmSubtext.textContent = subtext;
+    dom.importConfirmSubtext.hidden = !subtext;
+    dom.importConfirmOk.textContent = okLabel;
+    dom.importConfirmModal.hidden = false;
+
+    const cleanup = () => {
+      dom.importConfirmModal.hidden = true;
+      dom.importConfirmOk.removeEventListener("click", onOk);
+      dom.importConfirmCancel.removeEventListener("click", onCancel);
+    };
+    const onOk = () => { cleanup(); resolve(true); };
+    const onCancel = () => { cleanup(); resolve(false); };
+    dom.importConfirmOk.addEventListener("click", onOk);
+    dom.importConfirmCancel.addEventListener("click", onCancel);
+  });
 
 export const exportData = () => {
   const state = getState();
@@ -45,17 +66,20 @@ const migrateImported = (imported) => {
 
 export const importData = (file) => {
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
     try {
       const imported = JSON.parse(e.target.result);
       if (!imported || !Array.isArray(imported.sprints)) {
         alert("Invalid file: expected a Burndown Studio JSON export.");
         return;
       }
-      const confirmImport = window.confirm(
-        `Import ${imported.sprints.length} sprint(s)? This will replace all current data.`
-      );
-      if (!confirmImport) return;
+      const ok = await showImportConfirm({
+        title: "\u26A0 Import Sprint Data",
+        message: `Import <strong>${imported.sprints.length}</strong> sprint(s)? This will replace all current data.`,
+        subtext: "This action cannot be undone.",
+        okLabel: "Import",
+      });
+      if (!ok) return;
       if (!imported.activeSprintId && imported.sprints.length > 0) {
         imported.activeSprintId = imported.sprints[0].id;
       }
@@ -94,7 +118,7 @@ export const exportBacklogExcel = () => {
 // XLSX is loaded globally from CDN (xlsx.full.min.js)
 export const importBacklogExcel = (file) => {
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
     const data = new Uint8Array(e.target.result);
     let workbook;
     try {
@@ -142,13 +166,42 @@ export const importBacklogExcel = (file) => {
       return;
     }
 
+    // Step 1: General import confirmation
     const existing = getBacklog();
     const hasExisting = existing?.stories?.length > 0;
-    const warning = hasExisting
-      ? `Warning: This will permanently replace all ${existing.stories.length} existing story/stories with ${stories.length} imported story/stories.\n\nThis cannot be undone. Proceed?`
-      : `Import ${stories.length} story/stories into the backlog?`;
-    if (!window.confirm(warning)) return;
+    const message = hasExisting
+      ? `Import <strong>${stories.length}</strong> story/stories into backlog? This will replace all <strong>${existing.stories.length}</strong> existing story/stories.`
+      : `Import <strong>${stories.length}</strong> story/stories into the backlog?`;
+    const ok = await showImportConfirm({
+      title: "\u26A0 Import Backlog",
+      message,
+      subtext: hasExisting ? "This action cannot be undone." : "",
+      okLabel: "Import",
+    });
+    if (!ok) return;
+
+    // Step 2: Orphan warning if any sprint tasks will be removed
+    const orphans = findOrphanedSprintTasks(stories);
+    if (orphans.length > 0) {
+      const lines = orphans.map(o =>
+        `<strong>Sprint ${o.sprintIndex}:</strong> [${o.taskId}] ${o.name}`
+      ).join("<br>");
+      const ok2 = await showImportConfirm({
+        title: "\u26A0 Sprint Tasks Will Be Removed",
+        message: `${orphans.length} task(s) will be removed from sprints because their Task ID is not in the imported backlog:<br><br>${lines}`,
+        okLabel: "Proceed",
+      });
+      if (!ok2) return;
+    }
+
     replaceBacklog({ stories });
+    relinkSprintTasks();
+
+    // Auto-add unique assignedTo values to members list
+    const uniqueNames = [...new Set(
+      stories.flatMap(s => s.tasks.map(t => t.assignedTo)).filter(Boolean)
+    )];
+    if (uniqueNames.length > 0) addMembersFromImport(uniqueNames);
   };
   reader.readAsArrayBuffer(file);
 };

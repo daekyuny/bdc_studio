@@ -25,15 +25,19 @@ export const toShortDate = (isoDate) => {
   return `${m}/${d}`;
 };
 
-export const getWorkingDates = (startIso, endIso) => {
+export const getWorkingDates = (startIso, endIso, holidays, workWeekends) => {
   if (!startIso || !endIso) return [];
   const dates = [];
   let cursor = new Date(startIso + "T00:00:00");
   const end = new Date(endIso + "T00:00:00");
   while (cursor <= end) {
     const day = cursor.getDay();
-    if (day !== 0 && day !== 6) {
-      dates.push(localIso(cursor));
+    const iso = localIso(cursor);
+    const isWeekend = day === 0 || day === 6;
+    if (isWeekend) {
+      if (workWeekends && workWeekends.has(iso)) dates.push(iso);
+    } else {
+      if (!holidays || !holidays.has(iso)) dates.push(iso);
     }
     cursor.setDate(cursor.getDate() + 1);
   }
@@ -45,21 +49,35 @@ export const formatSprintRange = (sprint) =>
 
 export const createId = () => crypto.randomUUID();
 
-export const getNextWorkingDay = (isoDate) => {
+export const getNextWorkingDay = (isoDate, holidays, workWeekends) => {
   const d = new Date(isoDate + "T00:00:00");
   d.setDate(d.getDate() + 1);
-  while (d.getDay() === 0 || d.getDay() === 6) {
+  while (true) {
+    const day = d.getDay();
+    const iso = localIso(d);
+    const isWeekend = day === 0 || day === 6;
+    if (isWeekend) {
+      if (workWeekends && workWeekends.has(iso)) return iso;
+    } else {
+      if (!holidays || !holidays.has(iso)) return iso;
+    }
     d.setDate(d.getDate() + 1);
   }
-  return localIso(d);
 };
 
-export const addWorkingDays = (isoDate, n) => {
+export const addWorkingDays = (isoDate, n, holidays, workWeekends) => {
   const d = new Date(isoDate + "T00:00:00");
   let count = 0;
   while (count < n) {
     d.setDate(d.getDate() + 1);
-    if (d.getDay() !== 0 && d.getDay() !== 6) count++;
+    const day = d.getDay();
+    const iso = localIso(d);
+    const isWeekend = day === 0 || day === 6;
+    if (isWeekend) {
+      if (workWeekends && workWeekends.has(iso)) count++;
+    } else {
+      if (!holidays || !holidays.has(iso)) count++;
+    }
   }
   return localIso(d);
 };

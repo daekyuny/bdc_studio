@@ -69,4 +69,27 @@ export const dom = {
   confirmRemoveTaskName: document.getElementById("confirmRemoveTaskName"),
   confirmRemoveTaskCancel: document.getElementById("confirmRemoveTaskCancel"),
   confirmRemoveTaskConfirm: document.getElementById("confirmRemoveTaskConfirm"),
+  // Import confirm dialog (reusable)
+  importConfirmModal: document.getElementById("importConfirmModal"),
+  importConfirmTitle: document.getElementById("importConfirmTitle"),
+  importConfirmMessage: document.getElementById("importConfirmMessage"),
+  importConfirmSubtext: document.getElementById("importConfirmSubtext"),
+  importConfirmCancel: document.getElementById("importConfirmCancel"),
+  importConfirmOk: document.getElementById("importConfirmOk"),
+  // Preferences modal
+  settingsBtn: document.getElementById("settingsBtn"),
+  preferencesModal: document.getElementById("preferencesModal"),
+  prefClose: document.getElementById("prefClose"),
+  prefDone: document.getElementById("prefDone"),
+  prefHolidayDate: document.getElementById("prefHolidayDate"),
+  prefHolidayName: document.getElementById("prefHolidayName"),
+  prefHolidayAddBtn: document.getElementById("prefHolidayAddBtn"),
+  prefHolidayList: document.getElementById("prefHolidayList"),
+  prefWeekendDate: document.getElementById("prefWeekendDate"),
+  prefWeekendAddBtn: document.getElementById("prefWeekendAddBtn"),
+  prefWeekendList: document.getElementById("prefWeekendList"),
+  // Members
+  prefMemberName: document.getElementById("prefMemberName"),
+  prefMemberAddBtn: document.getElementById("prefMemberAddBtn"),
+  prefMemberList: document.getElementById("prefMemberList"),
 };
