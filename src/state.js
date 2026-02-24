@@ -1,5 +1,19 @@
 import { todayIso, addWorkingDays, createId, getNextWorkingDay } from "./utils.js";
 
+// --- Render hint bitmask constants ---
+export const H_SIDEBAR = 1;
+export const H_HEADER  = 2;
+export const H_TASKS   = 4;
+export const H_PANEL   = 8;
+export const H_STATS   = 16;
+export const H_CHART   = 32;
+export const H_BACKLOG = 64;
+export const H_ALL     = 0x7F;
+
+// Convenience groups
+export const H_SPRINT_TASKS = H_TASKS | H_PANEL | H_STATS | H_CHART;
+export const H_BACKLOG_DATA = H_BACKLOG | H_PANEL;
+
 const STORAGE_KEY = "burndown-studio";
 
 let onChange = () => {};
@@ -77,7 +91,7 @@ export const getActiveSprint = () =>
 export const setActiveSprint = (id) => {
   state.activeSprintId = id;
   save();
-  onChange();
+  onChange(H_ALL);
 };
 
 export const createSprint = ({ description, startDate, endDate, developers, efficiency }) => {
@@ -95,7 +109,7 @@ export const createSprint = ({ description, startDate, endDate, developers, effi
   sortSprints();
   state.activeSprintId = newSprint.id;
   save();
-  onChange();
+  onChange(H_ALL);
 };
 
 export const updateSprintById = (id, updates) => {
@@ -104,7 +118,7 @@ export const updateSprintById = (id, updates) => {
   Object.assign(sprint, updates);
   sortSprints();
   save();
-  onChange();
+  onChange(H_SIDEBAR | H_HEADER | H_STATS | H_CHART);
 };
 
 export const deleteActiveSprint = () => {
@@ -134,7 +148,7 @@ export const deleteActiveSprint = () => {
     state.activeSprintId = state.sprints[0].id;
   }
   save();
-  onChange();
+  onChange(H_ALL);
 };
 
 export const updateTask = (taskId, updates) => {
@@ -144,7 +158,7 @@ export const updateTask = (taskId, updates) => {
   if (!task) return;
   Object.assign(task, updates);
   save();
-  onChange();
+  onChange(H_SPRINT_TASKS);
 };
 
 export const removeTaskFromSprint = (taskId) => {
@@ -152,7 +166,7 @@ export const removeTaskFromSprint = (taskId) => {
   if (!sprint) return;
   sprint.tasks = sprint.tasks.filter((task) => task.id !== taskId);
   save();
-  onChange();
+  onChange(H_SPRINT_TASKS);
 };
 
 export const addTaskFromBacklog = (backlogTaskId) => {
@@ -175,7 +189,7 @@ export const addTaskFromBacklog = (backlogTaskId) => {
     estimate: Number(foundTask.estimate) || 0,
     actual: null, status: "Todo", doneDate: "",
   });
-  save(); onChange();
+  save(); onChange(H_SPRINT_TASKS);
 };
 
 export const updateToday = (date) => {
@@ -187,13 +201,13 @@ export const updateToday = (date) => {
     date > maxDate ? maxDate : date;
   sprint.today = clamped;
   save();
-  onChange();
+  onChange(H_STATS | H_CHART);
 };
 
 export const replaceState = (newState) => {
   state = newState;
   save();
-  onChange();
+  onChange(H_ALL);
 };
 
 export const patchActiveSprint = (fields) => {
@@ -224,7 +238,7 @@ export const addStory = () => {
     priority: 100,
     tasks: [],
   });
-  save(); onChange();
+  save(); onChange(H_BACKLOG_DATA);
   return id;
 };
 
@@ -232,12 +246,12 @@ export const updateStory = (id, updates) => {
   const story = state.backlog.stories.find((s) => s.id === id);
   if (!story) return;
   Object.assign(story, updates);
-  save(); onChange();
+  save(); onChange(H_BACKLOG_DATA);
 };
 
 export const deleteStory = (id) => {
   state.backlog.stories = state.backlog.stories.filter((s) => s.id !== id);
-  save(); onChange();
+  save(); onChange(H_BACKLOG_DATA);
 };
 
 export const addBacklogTask = (storyId) => {
@@ -252,7 +266,7 @@ export const addBacklogTask = (storyId) => {
     estimate: 0,
     assignedTo: "",
   });
-  save(); onChange();
+  save(); onChange(H_BACKLOG_DATA);
   return id;
 };
 
@@ -262,19 +276,19 @@ export const updateBacklogTask = (storyId, taskId, updates) => {
   const task = story.tasks.find((t) => t.id === taskId);
   if (!task) return;
   Object.assign(task, updates);
-  save(); onChange();
+  save(); onChange(H_BACKLOG_DATA);
 };
 
 export const deleteBacklogTask = (storyId, taskId) => {
   const story = state.backlog.stories.find((s) => s.id === storyId);
   if (!story) return;
   story.tasks = story.tasks.filter((t) => t.id !== taskId);
-  save(); onChange();
+  save(); onChange(H_BACKLOG_DATA);
 };
 
 export const replaceBacklog = (newBacklog) => {
   state.backlog = newBacklog;
-  save(); onChange();
+  save(); onChange(H_ALL);
 };
 
 export const findOrphanedSprintTasks = (newStories) => {
@@ -322,24 +336,24 @@ export const addHoliday = (date, name) => {
   if (state.preferences.holidays.some((h) => h.date === date)) return;
   state.preferences.holidays.push({ date, name });
   state.preferences.holidays.sort((a, b) => a.date.localeCompare(b.date));
-  save(); onChange();
+  save(); onChange(H_ALL);
 };
 
 export const removeHoliday = (date) => {
   state.preferences.holidays = state.preferences.holidays.filter((h) => h.date !== date);
-  save(); onChange();
+  save(); onChange(H_ALL);
 };
 
 export const addWorkWeekend = (date) => {
   if (state.preferences.workWeekends.includes(date)) return;
   state.preferences.workWeekends.push(date);
   state.preferences.workWeekends.sort();
-  save(); onChange();
+  save(); onChange(H_ALL);
 };
 
 export const removeWorkWeekend = (date) => {
   state.preferences.workWeekends = state.preferences.workWeekends.filter((d) => d !== date);
-  save(); onChange();
+  save(); onChange(H_ALL);
 };
 
 // --- Members CRUD ---
@@ -352,12 +366,12 @@ export const addMember = (name) => {
   if (state.preferences.members.includes(trimmed)) return;
   state.preferences.members.push(trimmed);
   state.preferences.members.sort((a, b) => a.localeCompare(b));
-  save(); onChange();
+  save(); onChange(H_ALL);
 };
 
 export const removeMember = (name) => {
   state.preferences.members = state.preferences.members.filter((m) => m !== name);
-  save(); onChange();
+  save(); onChange(H_ALL);
 };
 
 export const addMembersFromImport = (names) => {
@@ -373,6 +387,6 @@ export const addMembersFromImport = (names) => {
   }
   if (added) {
     state.preferences.members.sort((a, b) => a.localeCompare(b));
-    save(); onChange();
+    save(); onChange(H_ALL);
   }
 };

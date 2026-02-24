@@ -20,6 +20,7 @@ import {
   removeMember,
 } from "./state.js";
 import { render, setActiveTab, startEditing, expandAll, collapseAll, toggleTaskSort, toggleBacklogSort, setHighlightBacklogTaskId } from "./render.js";
+import { H_CHART } from "./state.js";
 import { exportData, exportSprintExcel, importData, exportBacklogExcel, importBacklogExcel } from "./io.js";
 import { getNextWorkingDay, addWorkingDays, findGaps, sprintsOverlap, todayIso, getWorkingDates, localIso } from "./utils.js";
 
@@ -180,7 +181,7 @@ dom.importFile.addEventListener("change", (e) => {
   e.target.value = "";
 });
 
-dom.showDayNumbers.addEventListener("change", render);
+dom.showDayNumbers.addEventListener("change", () => render(H_CHART));
 
 // --- Tabs ---
 dom.tabSprint.addEventListener("click", () => setActiveTab("sprint"));

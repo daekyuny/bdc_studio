@@ -1,6 +1,6 @@
 # Burndown Studio — Technical Design Document
 
-**Version:** 0.6
+**Version:** 0.7
 **Last updated:** 2026-02-24
 **Status:** Draft — open for review
 
@@ -36,7 +36,7 @@ Development
 - **Single build step** — `npm run build` bundles `src/` → `app.js` via esbuild.
 - **Minimal dependencies** — only dev dependency is esbuild. Runtime CDN dependencies: Google Fonts, Flatpickr, SheetJS.
 - **Single global state** — one JS object, one localStorage key.
-- **Full re-render** — every state change triggers a complete DOM rebuild via `render()`.
+- **Selective re-render** — state changes carry bitmask hints; `render(hints)` only rebuilds affected UI regions.
 
 ## 2. Tech Stack
 
@@ -183,12 +183,29 @@ burndown-studio (localStorage key)
 
 ## 6. Rendering Strategy
 
-The app uses a **full re-render** approach:
-1. State mutations in `state.js` call `save()` then fire the `onStateChange` callback.
+The app uses a **selective re-render** approach with bitmask render hints:
+1. State mutations in `state.js` call `save()` then fire `onStateChange(hints)`, where `hints` is a bitmask indicating which UI regions changed.
 2. `main.js` registers `render()` as the callback via `setOnStateChange(render)`.
-3. `render()` rebuilds: sprint sidebar, task table, stats, SVG chart — or the backlog table, depending on the active tab.
+3. `render(hints)` checks the bitmask and only rebuilds the affected regions: sprint sidebar, header, task table, backlog panel, stats, SVG chart, or backlog table. If no hints are provided, all regions are rebuilt (backward-compatible).
 4. Templates (`<template>` elements) are cloned for sprint items, sprint task rows, backlog panel rows, backlog story rows, and backlog task rows.
-5. Event listeners are re-attached on every render.
+5. Event listeners are re-attached on each region rebuild.
+
+### Render Hint Bitmask (`state.js`)
+
+| Constant | Bit | Region |
+|---|---|---|
+| `H_SIDEBAR` | 1 | Sprint list in sidebar |
+| `H_HEADER` | 2 | Sprint title, delete button text, fpToday picker |
+| `H_TASKS` | 4 | Task table rows + Flatpickr done-date pickers |
+| `H_PANEL` | 8 | Backlog panel (unassigned tasks list) |
+| `H_STATS` | 16 | Stats card |
+| `H_CHART` | 32 | SVG burndown chart |
+| `H_BACKLOG` | 64 | Backlog tab table |
+| `H_ALL` | 127 | All regions |
+
+Convenience groups: `H_SPRINT_TASKS` (tasks + panel + stats + chart) and `H_BACKLOG_DATA` (backlog + panel).
+
+Examples: `updateTask()` passes `H_SPRINT_TASKS` — only the task table, backlog panel, stats, and chart are rebuilt; the sidebar and header are untouched. `updateToday()` passes `H_STATS | H_CHART` — only the stats card and SVG chart are rebuilt.
 
 ### Tab State
 - `activeTab` (`"sprint"` | `"backlog"`) is a module-level variable in `render.js`.
@@ -208,9 +225,10 @@ Two module-level Sets in `render.js` persist across renders:
 - **Calendar popup positioning**: Flatpickr appends its calendar to `<body>` with `position: absolute`, which scrolls with the page while the modal is `position: fixed`. Fixed via an `onOpen` callback that overrides position to `fixed` using `getBoundingClientRect()` after a `setTimeout(0)`.
 
 ### Performance Characteristics
-- Fine for small task lists (< 30 tasks per sprint, < 50 backlog tasks).
-- Will degrade with 50+ sprint tasks or 100+ backlog tasks due to full DOM teardown/rebuild.
-- SVG chart is rebuilt from scratch each time.
+- Selective rendering significantly reduces unnecessary DOM work: most state changes only rebuild 2-4 of 7 regions.
+- Fine for moderate task lists (< 50 tasks per sprint, < 100 backlog tasks).
+- Each region still uses full teardown/rebuild internally (no element-level diffing).
+- SVG chart is rebuilt from scratch when chart hints are active.
 
 ## 7. File Structure
 
@@ -253,7 +271,7 @@ main.js
 ```
 
 No circular dependencies. `state.js` communicates with `render.js` via a callback
-(`setOnStateChange`) registered by `main.js`, avoiding a direct import cycle.
+(`setOnStateChange`) registered by `main.js`, avoiding a direct import cycle. `render.js` imports render hint constants from `state.js` (data-only, no circular call chain).
 
 ### Module Responsibilities
 
@@ -273,7 +291,7 @@ No circular dependencies. `state.js` communicates with `render.js` via a callbac
 | ID | Issue | Severity | Status | Notes |
 |---|---|---|---|---|
 | TD-01 | No git repository | High | **Resolved** | Git initialized, connected to GitHub remote. |
-| TD-02 | Full re-render on every change | Medium | Open | Works now but won't scale to large task lists. |
+| TD-02 | Full re-render on every change | Medium | **Resolved** | Selective rendering via bitmask hints; each state mutation declares which UI regions need rebuilding. Individual regions still use full teardown/rebuild internally. |
 | TD-03 | No tests | Medium | Open | `calculateBurndown`, `getWorkingDates` are pure functions and easy to unit test. |
 | TD-04 | Single JS file (~500 lines) | Low | **Resolved** | Split into 8 ES modules under `src/`. |
 | TD-05 | localStorage only | Medium | **Mitigated** | JSON export/import added. localStorage is still the primary store. |
@@ -308,3 +326,4 @@ No circular dependencies. `state.js` communicates with `render.js` via a callbac
 | 2026-02-21 | 0.4 | Updated data model (description, today fields; sprint numbering computed not stored); added Flatpickr to tech stack; added algorithms for timezone-safe dates, overlap/gap detection, today clipping; updated Flatpickr instance management in rendering strategy; updated module line counts; partially resolved TD-08 |
 | 2026-02-23 | 0.5 | Major update for Product Backlog feature: added backlog data model (Story, BacklogTask, denormalized SprintTask); updated data migration section; added SheetJS to tech stack; updated io.js responsibilities (Excel import/export); rewrote burndown algorithm (estimate not points); added tab state and backlog UI state sections to rendering strategy; added priority snapping algorithm; added TD-09 (denormalization); updated module responsibilities table |
 | 2026-02-24 | 0.6 | Added sprint↔backlog re-linking on backlog import (relinkSprintTasks, findOrphanedSprintTasks); custom confirm dialogs replacing window.confirm for imports; updated io.js dependency (now imports dom.js); partially resolved TD-09 |
+| 2026-02-24 | 0.7 | Resolved TD-02: selective rendering via bitmask render hints. Updated rendering strategy section (hint table, examples). Updated design principles and performance characteristics. render.js now imports hint constants from state.js. |

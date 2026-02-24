@@ -17,6 +17,7 @@ import {
   deleteBacklogTask,
   getPreferences,
   getMembers,
+  H_SIDEBAR, H_HEADER, H_TASKS, H_PANEL, H_STATS, H_CHART, H_BACKLOG, H_ALL,
 } from "./state.js";
 import { calculateBurndown } from "./burndown.js";
 import { drawChart } from "./chart.js";
@@ -43,19 +44,19 @@ export const setHighlightBacklogTaskId = (id) => { highlightBacklogTaskId = id; 
 export const toggleTaskSort = (key) => {
   if (taskSort.key === key) taskSort.asc = !taskSort.asc;
   else { taskSort.key = key; taskSort.asc = true; }
-  render();
+  render(H_TASKS);
 };
 
 export const toggleBacklogPanelSort = (key) => {
   if (backlogPanelSort.key === key) backlogPanelSort.asc = !backlogPanelSort.asc;
   else { backlogPanelSort.key = key; backlogPanelSort.asc = true; }
-  render();
+  render(H_PANEL);
 };
 
 export const toggleBacklogSort = (key) => {
   if (backlogSort.key === key) backlogSort.asc = !backlogSort.asc;
   else { backlogSort.key = key; backlogSort.asc = true; }
-  render();
+  render(H_BACKLOG);
 };
 
 const NUMERIC_KEYS = new Set(["estimate", "actual", "priority"]);
@@ -79,7 +80,7 @@ export const startEditing = (id, focusAfter = false) => {
   if (!id) return;
   editingIds.clear();
   editingIds.add(id);
-  render();
+  render(H_BACKLOG);
   if (focusAfter) {
     setTimeout(() => {
       const row = dom.backlogTableBody.querySelector(`[data-id="${id}"]`);
@@ -94,12 +95,12 @@ export const startEditing = (id, focusAfter = false) => {
 export const expandAll = () => {
   const backlog = getBacklog();
   for (const story of backlog.stories) expandedStoryIds.add(story.id);
-  render();
+  render(H_BACKLOG);
 };
 
 export const collapseAll = () => {
   expandedStoryIds.clear();
-  render();
+  render(H_BACKLOG);
 };
 
 const renderSprintList = () => {
@@ -401,7 +402,7 @@ const renderBacklog = () => {
     expandToggle.addEventListener("click", () => {
       if (expandedStoryIds.has(story.id)) expandedStoryIds.delete(story.id);
       else expandedStoryIds.add(story.id);
-      render();
+      render(H_BACKLOG);
     });
 
     storyIdView.textContent = story.storyId || "";
@@ -446,7 +447,7 @@ const renderBacklog = () => {
     editBtn.addEventListener("click", () => {
       editingIds.clear();
       editingIds.add(story.id);
-      render();
+      render(H_BACKLOG);
     });
 
     saveBtn.addEventListener("click", () => {
@@ -460,7 +461,7 @@ const renderBacklog = () => {
 
     cancelBtn.addEventListener("click", () => {
       editingIds.delete(story.id);
-      render();
+      render(H_BACKLOG);
     });
 
     deleteBtn.addEventListener("click", () => {
@@ -557,7 +558,7 @@ const renderBacklog = () => {
         taskEditBtn.addEventListener("click", () => {
           editingIds.clear();
           editingIds.add(task.id);
-          render();
+          render(H_BACKLOG);
         });
 
         taskSaveBtn.addEventListener("click", () => {
@@ -572,7 +573,7 @@ const renderBacklog = () => {
 
         taskCancelBtn.addEventListener("click", () => {
           editingIds.delete(task.id);
-          render();
+          render(H_BACKLOG);
         });
 
         taskDeleteBtn.addEventListener("click", () => {
@@ -620,7 +621,11 @@ const renderStats = (sprint, burndown) => {
   dom.efficiencyDisplay.textContent = `${fmt(actualEff)} : ${fmt(idealEff)}`;
 };
 
-export const render = () => {
+export const render = (hints) => {
+  if (hints === undefined) hints = H_ALL;
+  const has = (h) => (hints & h) !== 0;
+
+  // Tab switching — always cheap, always do it
   dom.tabSprint.classList.toggle("active", activeTab === "sprint");
   dom.tabBacklog.classList.toggle("active", activeTab === "backlog");
   dom.sprintView.hidden = activeTab !== "sprint";
@@ -629,10 +634,10 @@ export const render = () => {
   // Hide sprint sub-header (toolbar + sprint tabs) on backlog tab
   dom.sprintSubHeader.hidden = activeTab === "backlog";
 
-  renderSprintList();
+  if (has(H_SIDEBAR)) renderSprintList();
 
   if (activeTab === "backlog") {
-    renderBacklog();
+    if (has(H_BACKLOG)) renderBacklog();
     return;
   }
 
@@ -658,35 +663,40 @@ export const render = () => {
     sprint.today > maxToday ? maxToday :
     sprint.today;
 
-  const state = getState();
-  const sprintNumber = state.sprints.findIndex((s) => s.id === sprint.id) + 1;
-  dom.sprintTitleText.textContent = sprint.description || `Sprint ${sprintNumber}`;
-  dom.deleteSprintBtn.textContent = `Delete Sprint ${sprintNumber}`;
+  if (has(H_HEADER)) {
+    const state = getState();
+    const sprintNumber = state.sprints.findIndex((s) => s.id === sprint.id) + 1;
+    dom.sprintTitleText.textContent = sprint.description || `Sprint ${sprintNumber}`;
+    dom.deleteSprintBtn.textContent = `Delete Sprint ${sprintNumber}`;
 
-  if (fpToday) fpToday.destroy();
-  fpToday = flatpickr(dom.sprintToday, {
-    dateFormat: "Y-m-d",
-    defaultDate: effectiveToday,
-    minDate: sprint.startDate || null,
-    maxDate: maxToday || null,
-    disableMobile: true,
-    disable: [
-      (date) => {
-        const iso = localIso(date);
-        if (holidaySet.has(iso)) return true;
-        const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-        if (isWeekend && workWeekendSet.has(iso)) return false;
-        return isWeekend;
+    if (fpToday) fpToday.destroy();
+    fpToday = flatpickr(dom.sprintToday, {
+      dateFormat: "Y-m-d",
+      defaultDate: effectiveToday,
+      minDate: sprint.startDate || null,
+      maxDate: maxToday || null,
+      disableMobile: true,
+      disable: [
+        (date) => {
+          const iso = localIso(date);
+          if (holidaySet.has(iso)) return true;
+          const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+          if (isWeekend && workWeekendSet.has(iso)) return false;
+          return isWeekend;
+        },
+      ],
+      onChange: ([date]) => {
+        if (date) updateToday(localIso(date));
       },
-    ],
-    onChange: ([date]) => {
-      if (date) updateToday(localIso(date));
-    },
-  });
+    });
+  }
 
-  renderTasks(sprint, holidaySet, workWeekendSet);
-  renderBacklogPanel(sprint);
-  const burndown = calculateBurndown(sprint, effectiveToday, holidaySet, workWeekendSet);
-  renderStats(sprint, burndown);
-  drawChart(burndown);
+  if (has(H_TASKS)) renderTasks(sprint, holidaySet, workWeekendSet);
+  if (has(H_PANEL)) renderBacklogPanel(sprint);
+
+  if (has(H_STATS) || has(H_CHART)) {
+    const burndown = calculateBurndown(sprint, effectiveToday, holidaySet, workWeekendSet);
+    if (has(H_STATS)) renderStats(sprint, burndown);
+    if (has(H_CHART)) drawChart(burndown);
+  }
 };

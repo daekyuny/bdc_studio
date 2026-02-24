@@ -176,6 +176,16 @@
   };
 
   // src/state.js
+  var H_SIDEBAR = 1;
+  var H_HEADER = 2;
+  var H_TASKS = 4;
+  var H_PANEL = 8;
+  var H_STATS = 16;
+  var H_CHART = 32;
+  var H_BACKLOG = 64;
+  var H_ALL = 127;
+  var H_SPRINT_TASKS = H_TASKS | H_PANEL | H_STATS | H_CHART;
+  var H_BACKLOG_DATA = H_BACKLOG | H_PANEL;
   var STORAGE_KEY = "burndown-studio";
   var onChange = () => {
   };
@@ -243,7 +253,7 @@
   var setActiveSprint = (id) => {
     state.activeSprintId = id;
     save();
-    onChange();
+    onChange(H_ALL);
   };
   var createSprint = ({ description, startDate, endDate, developers, efficiency }) => {
     const newSprint = {
@@ -260,7 +270,7 @@
     sortSprints();
     state.activeSprintId = newSprint.id;
     save();
-    onChange();
+    onChange(H_ALL);
   };
   var updateSprintById = (id, updates) => {
     const sprint = state.sprints.find((s) => s.id === id);
@@ -268,7 +278,7 @@
     Object.assign(sprint, updates);
     sortSprints();
     save();
-    onChange();
+    onChange(H_SIDEBAR | H_HEADER | H_STATS | H_CHART);
   };
   var deleteActiveSprint = () => {
     const sprint = getActiveSprint();
@@ -296,7 +306,7 @@
       state.activeSprintId = state.sprints[0].id;
     }
     save();
-    onChange();
+    onChange(H_ALL);
   };
   var updateTask = (taskId, updates) => {
     const sprint = getActiveSprint();
@@ -305,14 +315,14 @@
     if (!task) return;
     Object.assign(task, updates);
     save();
-    onChange();
+    onChange(H_SPRINT_TASKS);
   };
   var removeTaskFromSprint = (taskId) => {
     const sprint = getActiveSprint();
     if (!sprint) return;
     sprint.tasks = sprint.tasks.filter((task) => task.id !== taskId);
     save();
-    onChange();
+    onChange(H_SPRINT_TASKS);
   };
   var addTaskFromBacklog = (backlogTaskId) => {
     const sprint = getActiveSprint();
@@ -342,7 +352,7 @@
       doneDate: ""
     });
     save();
-    onChange();
+    onChange(H_SPRINT_TASKS);
   };
   var updateToday = (date) => {
     const sprint = getActiveSprint();
@@ -351,12 +361,12 @@
     const clamped = date < sprint.startDate ? sprint.startDate : date > maxDate ? maxDate : date;
     sprint.today = clamped;
     save();
-    onChange();
+    onChange(H_STATS | H_CHART);
   };
   var replaceState = (newState) => {
     state = newState;
     save();
-    onChange();
+    onChange(H_ALL);
   };
   var patchActiveSprint = (fields) => {
     const sprint = getActiveSprint();
@@ -383,7 +393,7 @@
       tasks: []
     });
     save();
-    onChange();
+    onChange(H_BACKLOG_DATA);
     return id;
   };
   var updateStory = (id, updates) => {
@@ -391,12 +401,12 @@
     if (!story) return;
     Object.assign(story, updates);
     save();
-    onChange();
+    onChange(H_BACKLOG_DATA);
   };
   var deleteStory = (id) => {
     state.backlog.stories = state.backlog.stories.filter((s) => s.id !== id);
     save();
-    onChange();
+    onChange(H_BACKLOG_DATA);
   };
   var addBacklogTask = (storyId) => {
     const story = state.backlog.stories.find((s) => s.id === storyId);
@@ -411,7 +421,7 @@
       assignedTo: ""
     });
     save();
-    onChange();
+    onChange(H_BACKLOG_DATA);
     return id;
   };
   var updateBacklogTask = (storyId, taskId, updates) => {
@@ -421,19 +431,19 @@
     if (!task) return;
     Object.assign(task, updates);
     save();
-    onChange();
+    onChange(H_BACKLOG_DATA);
   };
   var deleteBacklogTask = (storyId, taskId) => {
     const story = state.backlog.stories.find((s) => s.id === storyId);
     if (!story) return;
     story.tasks = story.tasks.filter((t) => t.id !== taskId);
     save();
-    onChange();
+    onChange(H_BACKLOG_DATA);
   };
   var replaceBacklog = (newBacklog) => {
     state.backlog = newBacklog;
     save();
-    onChange();
+    onChange(H_ALL);
   };
   var findOrphanedSprintTasks = (newStories) => {
     const incomingIds = /* @__PURE__ */ new Set();
@@ -474,24 +484,24 @@
     state.preferences.holidays.push({ date, name });
     state.preferences.holidays.sort((a, b) => a.date.localeCompare(b.date));
     save();
-    onChange();
+    onChange(H_ALL);
   };
   var removeHoliday = (date) => {
     state.preferences.holidays = state.preferences.holidays.filter((h) => h.date !== date);
     save();
-    onChange();
+    onChange(H_ALL);
   };
   var addWorkWeekend = (date) => {
     if (state.preferences.workWeekends.includes(date)) return;
     state.preferences.workWeekends.push(date);
     state.preferences.workWeekends.sort();
     save();
-    onChange();
+    onChange(H_ALL);
   };
   var removeWorkWeekend = (date) => {
     state.preferences.workWeekends = state.preferences.workWeekends.filter((d) => d !== date);
     save();
-    onChange();
+    onChange(H_ALL);
   };
   var getMembers = () => state.preferences.members;
   var addMember = (name) => {
@@ -501,12 +511,12 @@
     state.preferences.members.push(trimmed);
     state.preferences.members.sort((a, b) => a.localeCompare(b));
     save();
-    onChange();
+    onChange(H_ALL);
   };
   var removeMember = (name) => {
     state.preferences.members = state.preferences.members.filter((m) => m !== name);
     save();
-    onChange();
+    onChange(H_ALL);
   };
   var addMembersFromImport = (names) => {
     const existing = new Set(state.preferences.members);
@@ -522,7 +532,7 @@
     if (added) {
       state.preferences.members.sort((a, b) => a.localeCompare(b));
       save();
-      onChange();
+      onChange(H_ALL);
     }
   };
 
@@ -687,7 +697,7 @@
       taskSort.key = key;
       taskSort.asc = true;
     }
-    render();
+    render(H_TASKS);
   };
   var toggleBacklogPanelSort = (key) => {
     if (backlogPanelSort.key === key) backlogPanelSort.asc = !backlogPanelSort.asc;
@@ -695,7 +705,7 @@
       backlogPanelSort.key = key;
       backlogPanelSort.asc = true;
     }
-    render();
+    render(H_PANEL);
   };
   var toggleBacklogSort = (key) => {
     if (backlogSort.key === key) backlogSort.asc = !backlogSort.asc;
@@ -703,7 +713,7 @@
       backlogSort.key = key;
       backlogSort.asc = true;
     }
-    render();
+    render(H_BACKLOG);
   };
   var NUMERIC_KEYS = /* @__PURE__ */ new Set(["estimate", "actual", "priority"]);
   var sortItems = (items, key, asc) => {
@@ -724,7 +734,7 @@
     if (!id) return;
     editingIds.clear();
     editingIds.add(id);
-    render();
+    render(H_BACKLOG);
     if (focusAfter) {
       setTimeout(() => {
         const row = dom.backlogTableBody.querySelector(`[data-id="${id}"]`);
@@ -738,11 +748,11 @@
   var expandAll = () => {
     const backlog = getBacklog();
     for (const story of backlog.stories) expandedStoryIds.add(story.id);
-    render();
+    render(H_BACKLOG);
   };
   var collapseAll = () => {
     expandedStoryIds.clear();
-    render();
+    render(H_BACKLOG);
   };
   var renderSprintList = () => {
     dom.sprintList.innerHTML = "";
@@ -1000,7 +1010,7 @@
       expandToggle.addEventListener("click", () => {
         if (expandedStoryIds.has(story.id)) expandedStoryIds.delete(story.id);
         else expandedStoryIds.add(story.id);
-        render();
+        render(H_BACKLOG);
       });
       storyIdView.textContent = story.storyId || "";
       storyDescView.textContent = story.description || "";
@@ -1038,7 +1048,7 @@
       editBtn.addEventListener("click", () => {
         editingIds.clear();
         editingIds.add(story.id);
-        render();
+        render(H_BACKLOG);
       });
       saveBtn.addEventListener("click", () => {
         editingIds.delete(story.id);
@@ -1050,7 +1060,7 @@
       });
       cancelBtn.addEventListener("click", () => {
         editingIds.delete(story.id);
-        render();
+        render(H_BACKLOG);
       });
       deleteBtn.addEventListener("click", () => {
         if (window.confirm(`Delete story "${story.description || story.storyId}"? This cannot be undone.`)) {
@@ -1131,7 +1141,7 @@
           taskEditBtn.addEventListener("click", () => {
             editingIds.clear();
             editingIds.add(task.id);
-            render();
+            render(H_BACKLOG);
           });
           taskSaveBtn.addEventListener("click", () => {
             editingIds.delete(task.id);
@@ -1144,7 +1154,7 @@
           });
           taskCancelBtn.addEventListener("click", () => {
             editingIds.delete(task.id);
-            render();
+            render(H_BACKLOG);
           });
           taskDeleteBtn.addEventListener("click", () => {
             if (window.confirm(`Delete task "${task.description || task.taskId}"?`)) {
@@ -1184,15 +1194,17 @@
     const fmt = (v) => v.toFixed(2).replace(/0$/, "");
     dom.efficiencyDisplay.textContent = `${fmt(actualEff)} : ${fmt(idealEff)}`;
   };
-  var render = () => {
+  var render = (hints) => {
+    if (hints === void 0) hints = H_ALL;
+    const has = (h) => (hints & h) !== 0;
     dom.tabSprint.classList.toggle("active", activeTab === "sprint");
     dom.tabBacklog.classList.toggle("active", activeTab === "backlog");
     dom.sprintView.hidden = activeTab !== "sprint";
     dom.backlogView.hidden = activeTab !== "backlog";
     dom.sprintSubHeader.hidden = activeTab === "backlog";
-    renderSprintList();
+    if (has(H_SIDEBAR)) renderSprintList();
     if (activeTab === "backlog") {
-      renderBacklog();
+      if (has(H_BACKLOG)) renderBacklog();
       return;
     }
     const sprint = getActiveSprint();
@@ -1206,35 +1218,39 @@
     const defaultToday = real >= sprint.startDate && real <= maxToday ? real : real < sprint.startDate ? sprint.startDate : maxToday;
     patchActiveSprint({ today: defaultToday });
     const effectiveToday = sprint.today < sprint.startDate ? sprint.startDate : sprint.today > maxToday ? maxToday : sprint.today;
-    const state2 = getState();
-    const sprintNumber = state2.sprints.findIndex((s) => s.id === sprint.id) + 1;
-    dom.sprintTitleText.textContent = sprint.description || `Sprint ${sprintNumber}`;
-    dom.deleteSprintBtn.textContent = `Delete Sprint ${sprintNumber}`;
-    if (fpToday) fpToday.destroy();
-    fpToday = flatpickr(dom.sprintToday, {
-      dateFormat: "Y-m-d",
-      defaultDate: effectiveToday,
-      minDate: sprint.startDate || null,
-      maxDate: maxToday || null,
-      disableMobile: true,
-      disable: [
-        (date) => {
-          const iso = localIso(date);
-          if (holidaySet.has(iso)) return true;
-          const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-          if (isWeekend && workWeekendSet.has(iso)) return false;
-          return isWeekend;
+    if (has(H_HEADER)) {
+      const state2 = getState();
+      const sprintNumber = state2.sprints.findIndex((s) => s.id === sprint.id) + 1;
+      dom.sprintTitleText.textContent = sprint.description || `Sprint ${sprintNumber}`;
+      dom.deleteSprintBtn.textContent = `Delete Sprint ${sprintNumber}`;
+      if (fpToday) fpToday.destroy();
+      fpToday = flatpickr(dom.sprintToday, {
+        dateFormat: "Y-m-d",
+        defaultDate: effectiveToday,
+        minDate: sprint.startDate || null,
+        maxDate: maxToday || null,
+        disableMobile: true,
+        disable: [
+          (date) => {
+            const iso = localIso(date);
+            if (holidaySet.has(iso)) return true;
+            const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+            if (isWeekend && workWeekendSet.has(iso)) return false;
+            return isWeekend;
+          }
+        ],
+        onChange: ([date]) => {
+          if (date) updateToday(localIso(date));
         }
-      ],
-      onChange: ([date]) => {
-        if (date) updateToday(localIso(date));
-      }
-    });
-    renderTasks(sprint, holidaySet, workWeekendSet);
-    renderBacklogPanel(sprint);
-    const burndown = calculateBurndown(sprint, effectiveToday, holidaySet, workWeekendSet);
-    renderStats(sprint, burndown);
-    drawChart(burndown);
+      });
+    }
+    if (has(H_TASKS)) renderTasks(sprint, holidaySet, workWeekendSet);
+    if (has(H_PANEL)) renderBacklogPanel(sprint);
+    if (has(H_STATS) || has(H_CHART)) {
+      const burndown = calculateBurndown(sprint, effectiveToday, holidaySet, workWeekendSet);
+      if (has(H_STATS)) renderStats(sprint, burndown);
+      if (has(H_CHART)) drawChart(burndown);
+    }
   };
 
   // src/io.js
@@ -1563,7 +1579,7 @@
     if (e.target.files[0]) importData(e.target.files[0]);
     e.target.value = "";
   });
-  dom.showDayNumbers.addEventListener("change", render);
+  dom.showDayNumbers.addEventListener("change", () => render(H_CHART));
   dom.tabSprint.addEventListener("click", () => setActiveTab("sprint"));
   dom.tabBacklog.addEventListener("click", () => setActiveTab("backlog"));
   var commitAddById = () => {

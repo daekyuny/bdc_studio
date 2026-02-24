@@ -22,11 +22,11 @@ Single-page static app. No framework, no backend. Source lives in `src/` as ES m
 
 ```
 User action → event listener (main.js)
-           → state mutation (state.js) → save() → onChange()
-           → render() (render.js) → full DOM rebuild
+           → state mutation (state.js) → save() → onChange(hints)
+           → render(hints) (render.js) → selective DOM rebuild
 ```
 
-Every state change triggers a complete re-render (no diffing). `state.js` communicates to `render.js` via a callback registered by `main.js` (`setOnStateChange(render)`) — this avoids a circular import.
+State mutations pass a **bitmask hint** (`H_SIDEBAR`, `H_HEADER`, `H_TASKS`, `H_PANEL`, `H_STATS`, `H_CHART`, `H_BACKLOG`) to `onChange()`, and `render()` only rebuilds the flagged UI regions. If no hints are provided, all regions are rebuilt (backward-compatible). `state.js` communicates to `render.js` via a callback registered by `main.js` (`setOnStateChange(render)`) — this avoids a circular import.
 
 ### Module responsibilities
 
@@ -34,10 +34,10 @@ Every state change triggers a complete re-render (no diffing). `state.js` commun
 |---|---|
 | `main.js` | Entry point — wires all event listeners, registers the render callback |
 | `dom.js` | Single source of truth for all DOM element references |
-| `state.js` | All state mutations and localStorage load/save; fires `onChange` after every mutation |
+| `state.js` | All state mutations, localStorage load/save, render hint constants; fires `onChange(hints)` after every mutation |
 | `burndown.js` | Pure functions: ideal/actual burndown line computation, capacity math |
 | `chart.js` | Builds the SVG chart from burndown data (no external library) |
-| `render.js` | Full DOM rebuild: sprint sidebar, form fields, task table, stats, calls chart.js |
+| `render.js` | Selective DOM rebuild: sprint sidebar, header, task table, backlog panel, stats, chart; skips regions not flagged in hints |
 | `io.js` | JSON file export (download) and import (file read + validation + `replaceState`) |
 | `utils.js` | Pure helpers: ISO date math, `crypto.randomUUID()` wrapper, number formatting |
 
