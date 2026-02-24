@@ -60,8 +60,8 @@ Key pain points:
 |---|---|---|
 | Sprint tasks from backlog | Tasks are added to a sprint from the Product Backlog (by task ID or drag-and-drop) | Done |
 | Estimate vs Actual | `estimate` comes from backlog (read-only); `actual` is entered when task is marked Done | Done |
-| Task ID | Tasks carry a structured ID (e.g. `0.1.1`) from the backlog for reference | Done |
-| Assigned To tooltip | Assignee name shown as tooltip on hover over the task name cell | Done |
+| Task ID | Tasks carry a structured ID (e.g. `0.1.1`) from the backlog; hover shows parent User Story | Done |
+| Assigned To tooltip | Assignee name shown as tooltip on hover over task name (sprint) or task description (backlog panel) | Done |
 | Auto-fill on Done | Marking a task Done pre-fills actual with estimate and focuses the actual input | Done |
 | Status transitions | Todo → In Progress → Done; clearing Done resets actual and done date | Done |
 | Done Date | Date picker constrained to sprint range; auto-set to today when status → Done | Done |
@@ -175,4 +175,4 @@ Key pain points:
 | 2026-02-20 | 0.2 | Updated feature table with completed items (JSON export/import, day toggle, error recovery, modular codebase). Added status column to planned features. Updated Available Days formula. |
 | 2026-02-21 | 0.3 | Rewrote current features table to reflect UI redesign: modal sprint edit, Flatpickr pickers, overlap/gap validation, sprint title, Today override, side-by-side layout, working days chip, mm/dd date format. |
 | 2026-02-23 | 0.4 | Major update: added Product Backlog feature (F-104) as Done; split current features into Sprint Management, Task Tracking, Product Backlog, Visualization & Export, General sections; updated task model (estimate/actual replacing points); added Sprint/Backlog tab navigation; marked F-103 Done (now Excel export); updated planned features table. |
-| 2026-02-24 | 0.5 | Backlog Excel import now re-links sprint tasks by Task ID (refreshes name/estimate/assignedTo, preserves status/actual/doneDate); orphaned sprint tasks warned and removed; all import confirmations use custom styled dialogs instead of browser confirm(). |
+| 2026-02-24 | 0.5 | Backlog Excel import now re-links sprint tasks by Task ID (refreshes name/estimate/assignedTo, preserves status/actual/doneDate); orphaned sprint tasks warned and removed; all import confirmations use custom styled dialogs instead of browser confirm(). Task ID tooltip now shows parent User Story; assignedTo tooltip added to backlog panel descriptions. |
