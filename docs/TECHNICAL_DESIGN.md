@@ -1,7 +1,7 @@
 # Burndown Studio — Technical Design Document
 
-**Version:** 0.8
-**Last updated:** 2026-02-26
+**Version:** 0.9
+**Last updated:** 2026-02-27
 **Status:** Draft — open for review
 
 ---
@@ -99,6 +99,14 @@ burndown-studio (localStorage key)
         ├── today: string (YYYY-MM-DD, optional — overrides real today for chart)
         ├── developers: number (default 0)
         ├── efficiency: number 0-1 (default 1)
+        ├── scopeLog: Array
+        │   └── ScopeLogEntry
+        │       ├── date: string (YYYY-MM-DD)
+        │       ├── action: "add" | "remove"
+        │       ├── taskId: string (display ID)
+        │       ├── taskName: string
+        │       ├── estimate: number
+        │       └── totalAfter: number (sum of all task estimates after change)
         ├── createdAt: string (ISO 8601)
         └── tasks: Array
             └── SprintTask
@@ -127,6 +135,7 @@ burndown-studio (localStorage key)
 
 `migrateState()` in `state.js` (and `migrateImported()` in `io.js`) runs on every load:
 - If `backlog` key is missing, adds `{ stories: [] }`.
+- If a sprint has no `scopeLog`, adds `[]`.
 - If a sprint task has `points` but no `estimate`, renames `points → estimate`, sets `actual = null`.
 
 ### Storage Limits
@@ -164,17 +173,24 @@ burndown-studio (localStorage key)
 - **Ideal line:** Starts at `totalPoints`, decreases by `idealDailyBurn` per working day.
 - **Actual line:** For each working day, sums the `estimate` of tasks whose `doneDate` is after that day (i.e., not yet done). The `actual` field is **not used** in chart math — it's for retrospective reporting only.
 
-### 5.5 Today Override & Actual Line Clipping
+### 5.5 Scope Line (`calculateBurndown` in `burndown.js`)
+- If the sprint has `scopeLog` entries and `todayIndex >= 0`, a scope line is computed.
+- The initial scope is derived from the first log entry (reverse-engineering the total before the first change).
+- For each date up to today, the most recent `scopeLog` entry on or before that date determines the value (step function).
+- Returns `scopeLineData` (array of values or `null`). If no scope changes exist, returns `null`.
+- Rendered as an orange dashed polyline (`#f59e0b`, 1px, dash `6 3`) when the "Show scope line" toggle is checked.
+
+### 5.6 Today Override & Actual Line Clipping
 - `sprint.today` persists an overridden "today" date, useful for demos or past-sprint review.
 - `calculateBurndown(sprint, today)` accepts `today` and computes `todayIndex` — the last date index ≤ today.
 - Actual burn values are `null` for indices after `todayIndex`, so the red line never extends into the future.
 - A dashed vertical "Today" marker is drawn on the chart at `todayIndex`.
 
-### 5.6 Available Days (`renderStats` in `render.js`)
+### 5.7 Available Days (`renderStats` in `render.js`)
 - Formula: `effectiveManDays - totalPoints`.
 - Color coding: green if between -1.0 and 1.0, red if < -1.0.
 
-### 5.7 Priority Snapping
+### 5.8 Priority Snapping
 - The backlog story priority field uses `<input type="number" step="10" min="0">`.
 - Native spinner arrows (mouse click) snap to multiples of 10 automatically via `step="10"`.
 - Keyboard ArrowUp/ArrowDown are intercepted with `e.preventDefault()` and apply custom logic:
@@ -252,6 +268,8 @@ bdc/
 │   ├── TECHNICAL_DESIGN.md   # This document
 │   └── ROADMAP.md      # Delivery roadmap
 ├── package.json        # Build scripts and dev dependencies
+├── test/
+│   └── calculations.test.js   # Unit tests (Node built-in test runner)
 ├── .gitignore
 └── README.md
 ```
@@ -293,7 +311,7 @@ No circular dependencies. `state.js` communicates with `render.js` via a callbac
 |---|---|---|---|---|
 | TD-01 | No git repository | High | **Resolved** | Git initialized, connected to GitHub remote. |
 | TD-02 | Full re-render on every change | Medium | **Resolved** | Selective rendering via bitmask hints; each state mutation declares which UI regions need rebuilding. Individual regions still use full teardown/rebuild internally. |
-| TD-03 | No tests | Medium | Open | `calculateBurndown`, `getWorkingDates` are pure functions and easy to unit test. |
+| TD-03 | No tests | Medium | **Resolved** | 59 unit tests for `utils.js` and `burndown.js` via Node built-in test runner (`npm test`). |
 | TD-04 | Single JS file (~500 lines) | Low | **Resolved** | Split into 8 ES modules under `src/`. |
 | TD-05 | localStorage only | Medium | **Mitigated** | JSON export/import added. localStorage is still the primary store. |
 | TD-06 | No input validation | Low | Open | Invalid dates, negative estimates, or efficiency > 1 are not explicitly prevented in JS. |
@@ -329,3 +347,4 @@ No circular dependencies. `state.js` communicates with `render.js` via a callbac
 | 2026-02-24 | 0.6 | Added sprint↔backlog re-linking on backlog import (relinkSprintTasks, findOrphanedSprintTasks); custom confirm dialogs replacing window.confirm for imports; updated io.js dependency (now imports dom.js); partially resolved TD-09 |
 | 2026-02-24 | 0.7 | Resolved TD-02: selective rendering via bitmask render hints. Updated rendering strategy section (hint table, examples). Updated design principles and performance characteristics. render.js now imports hint constants from state.js. |
 | 2026-02-26 | 0.8 | Updated getWorkingDates algorithm: now accepts optional holidays Set and workWeekends Set (F-102 complete). |
+| 2026-02-27 | 0.9 | Phase 2 features: added scopeLog to data model, scope line algorithm (section 5.5), drag-and-drop reorder (`reorderTasks` in state.js), progress % in stats. Resolved TD-03 (59 unit tests). Added test/ to file structure. |

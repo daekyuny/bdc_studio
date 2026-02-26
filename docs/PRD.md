@@ -1,7 +1,7 @@
 # Burndown Studio — Product Requirements Document
 
-**Version:** 0.6
-**Last updated:** 2026-02-26
+**Version:** 0.7
+**Last updated:** 2026-02-27
 **Author:** [Your Name]
 **Status:** Draft — open for review
 
@@ -86,9 +86,9 @@ Key pain points:
 
 | Feature | Description | Status |
 |---|---|---|
-| Burndown chart | SVG ideal (blue) vs actual (red) line chart; actual clips at today; dashed today marker | Done |
+| Burndown chart | SVG ideal (blue) vs actual (red) line chart; optional scope line (orange dashed); actual clips at today; dashed today marker | Done |
 | Side-by-side layout | Sprint summary and burndown chart displayed side by side; tasks below | Done |
-| Stats dashboard | Duration, working days, total points, remaining, done tasks, available days | Done |
+| Stats dashboard | Duration, working days, total points, remaining, done tasks, available days, progress % | Done |
 | Available Days indicator | `effectiveManDays - totalPoints`, color-coded green/red | Done |
 | Date format | Dates displayed as mm/dd throughout (summary, chart x-axis) | Done |
 | Show day numbers toggle | Switch between D1/D2 labels and mm/dd dates on the chart X-axis | Done |
@@ -108,7 +108,7 @@ Key pain points:
 
 ## 5. Planned Features
 
-### 5.1 Phase 1 — Data Safety & Accuracy (partially complete)
+### 5.1 Phase 1 — Data Safety & Accuracy (DONE)
 
 | ID | Feature | Priority | Status | Description |
 |---|---|---|---|---|
@@ -121,10 +121,10 @@ Key pain points:
 
 | ID | Feature | Priority | Status | Description |
 |---|---|---|---|---|
-| F-201 | Task drag-and-drop reordering | P1 | Open | Reorder sprint tasks by dragging rows. Persisted order is used in the table. |
-| F-202 | Sprint progress percentage | P1 | Open | Show "X% complete" in the stats card based on done points vs total points. |
-| F-203 | Sprint cloning / templates | P2 | Open | Clone an existing sprint's task structure (names + estimates) into a new sprint with all statuses reset to Todo. |
-| F-204 | Scope change tracking | P2 | Open | Record when tasks are added/removed mid-sprint. Optionally display a "scope line" on the burndown chart. |
+| F-201 | Task drag-and-drop reordering | P1 | **Done** | Reorder sprint tasks by dragging the ⠿ handle. Persisted order. Disabled when column sort is active. |
+| F-202 | Sprint progress percentage | P1 | **Done** | "X% complete" in the stats card with visual progress bar, based on done estimates vs total estimates. |
+| F-203 | Sprint cloning / templates | P2 | Deferred | Clone an existing sprint's task structure (names + estimates) into a new sprint with all statuses reset to Todo. |
+| F-204 | Scope change tracking | P2 | **Done** | Per-sprint scopeLog records task add/remove with timestamps. Optional orange dashed "scope line" on burndown chart (toggle). |
 
 ### 5.3 Phase 3 — Insights & History
 
@@ -177,3 +177,4 @@ Key pain points:
 | 2026-02-23 | 0.4 | Major update: added Product Backlog feature (F-104) as Done; split current features into Sprint Management, Task Tracking, Product Backlog, Visualization & Export, General sections; updated task model (estimate/actual replacing points); added Sprint/Backlog tab navigation; marked F-103 Done (now Excel export); updated planned features table. |
 | 2026-02-24 | 0.5 | Backlog Excel import now re-links sprint tasks by Task ID (refreshes name/estimate/assignedTo, preserves status/actual/doneDate); orphaned sprint tasks warned and removed; all import confirmations use custom styled dialogs instead of browser confirm(). Task ID tooltip now shows parent User Story; assignedTo tooltip added to backlog panel descriptions. |
 | 2026-02-26 | 0.6 | Marked F-102 (Holiday/PTO exclusions) as Done. Holidays are managed as a global preferences list; excluded from working-day calculations, ideal burn line, and sprint date pickers. |
+| 2026-02-27 | 0.7 | Phase 2 features: marked F-201 (drag-and-drop), F-202 (progress %), F-204 (scope tracking) as Done. Deferred F-203. Updated current features (stats dashboard, burndown chart descriptions). |

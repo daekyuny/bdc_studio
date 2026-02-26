@@ -1,7 +1,7 @@
 # Burndown Studio — Project Roadmap
 
-**Version:** 0.7
-**Last updated:** 2026-02-26
+**Version:** 0.8
+**Last updated:** 2026-02-27
 **Status:** Draft — open for review
 
 ---
@@ -9,7 +9,7 @@
 ## Roadmap Overview
 
 ```
-Phase 0 (Done)     Phase 1 (Active)   Phase 2            Phase 3            Phase 4
+Phase 0 (Done)     Phase 1 (Done)     Phase 2 (Active)   Phase 3            Phase 4
 ──────────────     ────────────       ────────────       ────────────       ────────────
 MVP baseline       Data Safety        Daily Usability    Insights           Multi-user
 + Tech Foundation  & Accuracy                            & History          & Integrations
@@ -52,7 +52,7 @@ MVP baseline       Data Safety        Daily Usability    Insights           Mult
 
 ---
 
-## Phase 1 — Data Safety & Accuracy (ACTIVE)
+## Phase 1 — Data Safety & Accuracy (DONE)
 
 **Goal:** Make the burndown chart accurate for real-world sprints. Complete the data safety story. Establish a structured backlog to source sprint tasks from.
 
@@ -86,30 +86,33 @@ MVP baseline       Data Safety        Daily Usability    Insights           Mult
 
 ---
 
-## Phase 2 — Daily Usability
+## Phase 2 — Daily Usability (ACTIVE)
 
 **Goal:** Make the tool pleasant enough for daily standup use.
 
 ### Features
 
-| ID | Feature | Priority | Effort | Description |
-|---|---|---|---|---|
-| F-201 | Task drag-and-drop reordering | P1 | Medium | Drag sprint task rows to reorder; order persisted |
-| F-202 | Sprint progress percentage | P1 | Small | "X% complete" stat based on done points / total points |
-| F-203 | Sprint cloning | P2 | Small | Clone sprint structure with statuses reset to Todo |
-| F-204 | Scope change tracking | P2 | Medium | Log task additions/removals with timestamps; optional scope line on chart |
-| F-205 | Keyboard shortcuts | P2 | Small | e.g., `N` to add task, `Ctrl+E` to export |
+| ID | Feature | Priority | Effort | Status | Description |
+|---|---|---|---|---|---|
+| F-201 | Task drag-and-drop reordering | P1 | Medium | **Done** | Handle-only drag (`⠿`); disabled during column sort; order persisted via `reorderTasks()` |
+| F-202 | Sprint progress percentage | P1 | Small | **Done** | "X% complete" stat with visual progress bar in stats card |
+| F-203 | Sprint cloning | P2 | Small | Deferred | Clone sprint structure with statuses reset to Todo |
+| F-204 | Scope change tracking | P2 | Medium | **Done** | Per-sprint `scopeLog` records add/remove; optional orange dashed scope line on chart |
+| F-205 | Keyboard shortcuts | P2 | Small | Open | e.g., `N` to add task, `Ctrl+E` to export |
 
 ### Technical Foundation
 
-| ID | Item | Priority | Effort | Description |
-|---|---|---|---|---|
-| T-201 | Add unit tests for calculations | P1 | Small | Test `calculateBurndown`, `getWorkingDates` with edge cases |
+| ID | Item | Priority | Effort | Status | Description |
+|---|---|---|---|---|---|
+| T-201 | Add unit tests for calculations | P1 | Small | **Done** | 59 tests for `utils.js` and `burndown.js` using Node built-in test runner (`node --test`) |
 
 ### Exit Criteria
-- Tasks can be reordered by drag-and-drop.
-- Sprint health is visible at a glance (progress %).
-- Core calculation functions have test coverage.
+- Tasks can be reordered by drag-and-drop. **(Done)**
+- Sprint health is visible at a glance (progress %). **(Done)**
+- Core calculation functions have test coverage. **(Done)**
+
+### Remaining Work
+- F-205: Keyboard shortcuts
 
 ---
 
@@ -180,3 +183,4 @@ MVP baseline       Data Safety        Daily Usability    Insights           Mult
 | 2026-02-24 | 0.5 | Updated F-104 description: backlog re-import now re-links sprint tasks by Task ID with two-step custom confirm dialog and orphan warning. |
 | 2026-02-24 | 0.6 | Marked T-301 (Optimize rendering) as Done: selective rendering via bitmask render hints resolves TD-02. |
 | 2026-02-26 | 0.7 | Marked F-102 (Holiday/PTO exclusions) as Done with global scope. Updated exit criteria. Removed F-102 from remaining work. |
+| 2026-02-27 | 0.8 | Phase 2 progress: marked F-201, F-202, F-204, T-201 as Done. Deferred F-203. Added Status column to Phase 2 tables. Updated exit criteria. Phase 1 marked DONE, Phase 2 now ACTIVE. |
