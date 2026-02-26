@@ -1,7 +1,7 @@
 # Burndown Studio — Project Roadmap
 
-**Version:** 0.6
-**Last updated:** 2026-02-24
+**Version:** 0.7
+**Last updated:** 2026-02-26
 **Status:** Draft — open for review
 
 ---
@@ -61,7 +61,7 @@ MVP baseline       Data Safety        Daily Usability    Insights           Mult
 | ID | Feature | Priority | Effort | Status | Description |
 |---|---|---|---|---|---|
 | F-101 | JSON export/import | P0 | Small | **Done** | Download/upload full state as `.json` file |
-| F-102 | Holiday/PTO exclusions | P0 | Medium | Open | Per-sprint list of excluded dates; reflected in working days & ideal line |
+| F-102 | Holiday/PTO exclusions | P0 | Medium | **Done** | Global list of excluded dates in preferences; reflected in working days, ideal line & sprint date pickers |
 | F-103 | Sprint task export | P1 | Small | **Done** | Export active sprint's task list as `.xlsx` (Excel) |
 | F-104 | Product Backlog | P0 | Large | **Done** | Story→Task hierarchy; tasks assigned to sprint from backlog; estimate/actual split; Excel import/export; re-links sprint tasks on backlog re-import |
 
@@ -78,11 +78,10 @@ MVP baseline       Data Safety        Daily Usability    Insights           Mult
 - User can export all data, clear browser, import, and have everything restored. **(Done)**
 - Sprint tasks originate from a structured backlog; estimate and actual are tracked separately. **(Done)**
 - Sprint and backlog data can be exported to Excel and re-imported. **(Done)**
-- Holiday dates are excluded from working-day count and ideal burn line.
+- Holiday dates are excluded from working-day count and ideal burn line. **(Done)**
 - Git repo exists with clean commit history. **(Done)**
 
 ### Remaining Work
-- F-102: Holiday/PTO exclusions
 - T-102: Input validation
 
 ---
@@ -180,3 +179,4 @@ MVP baseline       Data Safety        Daily Usability    Insights           Mult
 | 2026-02-23 | 0.4 | Marked F-103 Done (Excel export); added F-104 (Product Backlog) as Done; updated Phase 1 goal and exit criteria to reflect backlog feature; removed F-103/F-104 from remaining work; updated Phase 1 remaining to F-102 + T-102 only. |
 | 2026-02-24 | 0.5 | Updated F-104 description: backlog re-import now re-links sprint tasks by Task ID with two-step custom confirm dialog and orphan warning. |
 | 2026-02-24 | 0.6 | Marked T-301 (Optimize rendering) as Done: selective rendering via bitmask render hints resolves TD-02. |
+| 2026-02-26 | 0.7 | Marked F-102 (Holiday/PTO exclusions) as Done with global scope. Updated exit criteria. Removed F-102 from remaining work. |

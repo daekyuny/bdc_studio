@@ -1,7 +1,7 @@
 # Burndown Studio — Product Requirements Document
 
-**Version:** 0.5
-**Last updated:** 2026-02-24
+**Version:** 0.6
+**Last updated:** 2026-02-26
 **Author:** [Your Name]
 **Status:** Draft — open for review
 
@@ -113,7 +113,7 @@ Key pain points:
 | ID | Feature | Priority | Status | Description |
 |---|---|---|---|---|
 | F-101 | JSON export/import | P0 | **Done** | Export full app state as JSON file; import to restore. Protects against data loss. |
-| F-102 | Holiday / PTO exclusions | P0 | Open | Mark specific dates as non-working. These dates are excluded from working-day calculations and the ideal burn line. |
+| F-102 | Holiday / PTO exclusions | P0 | **Done** | Mark specific dates as non-working (global preferences). These dates are excluded from working-day calculations, the ideal burn line, and sprint date pickers. |
 | F-103 | Sprint task export | P1 | **Done** | Export the task list of the active sprint as an Excel file. |
 | F-104 | Product Backlog | P0 | **Done** | Story→Task hierarchy independent of sprints; tasks assigned to sprints from backlog; Excel import/export. |
 
@@ -176,3 +176,4 @@ Key pain points:
 | 2026-02-21 | 0.3 | Rewrote current features table to reflect UI redesign: modal sprint edit, Flatpickr pickers, overlap/gap validation, sprint title, Today override, side-by-side layout, working days chip, mm/dd date format. |
 | 2026-02-23 | 0.4 | Major update: added Product Backlog feature (F-104) as Done; split current features into Sprint Management, Task Tracking, Product Backlog, Visualization & Export, General sections; updated task model (estimate/actual replacing points); added Sprint/Backlog tab navigation; marked F-103 Done (now Excel export); updated planned features table. |
 | 2026-02-24 | 0.5 | Backlog Excel import now re-links sprint tasks by Task ID (refreshes name/estimate/assignedTo, preserves status/actual/doneDate); orphaned sprint tasks warned and removed; all import confirmations use custom styled dialogs instead of browser confirm(). Task ID tooltip now shows parent User Story; assignedTo tooltip added to backlog panel descriptions. |
+| 2026-02-26 | 0.6 | Marked F-102 (Holiday/PTO exclusions) as Done. Holidays are managed as a global preferences list; excluded from working-day calculations, ideal burn line, and sprint date pickers. |

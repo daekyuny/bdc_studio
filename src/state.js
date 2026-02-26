@@ -29,6 +29,7 @@ const migrateState = (parsed) => {
   if (!parsed.backlog) parsed.backlog = { stories: [] };
   if (!parsed.preferences) parsed.preferences = { holidays: [], workWeekends: [], members: [] };
   for (const sprint of parsed.sprints) {
+    if (!sprint.scopeLog) sprint.scopeLog = [];
     for (const task of sprint.tasks) {
       if (task.points !== undefined && task.estimate === undefined) {
         task.estimate = task.points;
@@ -57,6 +58,7 @@ const defaultState = () => {
         developers: 4,
         efficiency: 0.8,
         tasks: [],
+        scopeLog: [],
         createdAt: new Date().toISOString(),
       },
     ],
@@ -103,6 +105,7 @@ export const createSprint = ({ description, startDate, endDate, developers, effi
     developers,
     efficiency,
     tasks: [],
+    scopeLog: [],
     createdAt: new Date().toISOString(),
   };
   state.sprints.push(newSprint);
@@ -140,6 +143,7 @@ export const deleteActiveSprint = () => {
       developers: 0,
       efficiency: 1,
       tasks: [],
+      scopeLog: [],
       createdAt: new Date().toISOString(),
     };
     state.sprints = [newSprint];
@@ -149,6 +153,20 @@ export const deleteActiveSprint = () => {
   }
   save();
   onChange(H_ALL);
+};
+
+export const reorderTasks = (taskIds) => {
+  const sprint = getActiveSprint();
+  if (!sprint) return;
+  const taskMap = new Map(sprint.tasks.map((t) => [t.id, t]));
+  const reordered = taskIds.map((id) => taskMap.get(id)).filter(Boolean);
+  // Append any tasks not in taskIds (safety net)
+  for (const t of sprint.tasks) {
+    if (!taskIds.includes(t.id)) reordered.push(t);
+  }
+  sprint.tasks = reordered;
+  save();
+  onChange(H_TASKS);
 };
 
 export const updateTask = (taskId, updates) => {
@@ -164,7 +182,17 @@ export const updateTask = (taskId, updates) => {
 export const removeTaskFromSprint = (taskId) => {
   const sprint = getActiveSprint();
   if (!sprint) return;
+  const removed = sprint.tasks.find((task) => task.id === taskId);
   sprint.tasks = sprint.tasks.filter((task) => task.id !== taskId);
+  if (removed) {
+    if (!sprint.scopeLog) sprint.scopeLog = [];
+    const totalAfter = sprint.tasks.reduce((s, t) => s + Number(t.estimate || 0), 0);
+    sprint.scopeLog.push({
+      date: todayIso(), action: "remove",
+      taskId: removed.taskId, taskName: removed.name,
+      estimate: Number(removed.estimate || 0), totalAfter,
+    });
+  }
   save();
   onChange(H_SPRINT_TASKS);
 };
@@ -181,13 +209,21 @@ export const addTaskFromBacklog = (backlogTaskId) => {
   }
   if (!foundTask) return;
   if (sprint.tasks.some(t => t.backlogTaskId === backlogTaskId)) return; // dup guard
+  const estimate = Number(foundTask.estimate) || 0;
   sprint.tasks.push({
     id: createId(), backlogTaskId,
     taskId: foundTask.taskId,
     name: foundTask.description,
     assignedTo: foundTask.assignedTo,
-    estimate: Number(foundTask.estimate) || 0,
+    estimate,
     actual: null, status: "Todo", doneDate: "",
+  });
+  if (!sprint.scopeLog) sprint.scopeLog = [];
+  const totalAfter = sprint.tasks.reduce((s, t) => s + Number(t.estimate || 0), 0);
+  sprint.scopeLog.push({
+    date: todayIso(), action: "add",
+    taskId: foundTask.taskId, taskName: foundTask.description,
+    estimate, totalAfter,
   });
   save(); onChange(H_SPRINT_TASKS);
 };

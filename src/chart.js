@@ -1,7 +1,7 @@
 import { dom } from "./dom.js";
 import { toShortDate } from "./utils.js";
 
-export const drawChart = ({ dates, totalPoints, ideal, actual, todayIndex }) => {
+export const drawChart = ({ dates, totalPoints, ideal, actual, todayIndex, scopeLineData, showScopeLine }) => {
   const width = 800;
   const height = 320;
   const padding = 50;
@@ -20,7 +20,8 @@ export const drawChart = ({ dates, totalPoints, ideal, actual, todayIndex }) => 
   }
 
   const nonNullActual = actual.filter((v) => v !== null);
-  const maxValue = Math.max(totalPoints, ...nonNullActual, 1);
+  const nonNullScope = (showScopeLine && scopeLineData) ? scopeLineData.filter((v) => v !== null) : [];
+  const maxValue = Math.max(totalPoints, ...nonNullActual, ...nonNullScope, 1);
   const minValue = Math.min(0, ...nonNullActual);
   const range = maxValue - minValue;
   const plotWidth = width - padding * 2;
@@ -109,6 +110,22 @@ export const drawChart = ({ dates, totalPoints, ideal, actual, todayIndex }) => 
   actualLine.style.strokeDashoffset = "1000";
   actualLine.style.animation = "dash 1.6s ease forwards";
   dom.chart.appendChild(actualLine);
+
+  // Scope line (orange dashed step function)
+  if (showScopeLine && scopeLineData) {
+    const scopePoints = scopeLineData
+      .map((val, i) => (val !== null ? toPoint(val, i) : null))
+      .filter(Boolean);
+    if (scopePoints.length > 0) {
+      const scopeLine = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+      scopeLine.setAttribute("fill", "none");
+      scopeLine.setAttribute("stroke", "#f59e0b");
+      scopeLine.setAttribute("stroke-width", "1");
+      scopeLine.setAttribute("stroke-dasharray", "6 3");
+      scopeLine.setAttribute("points", scopePoints.join(" "));
+      dom.chart.appendChild(scopeLine);
+    }
+  }
 
   const labels = document.createElementNS("http://www.w3.org/2000/svg", "g");
   labels.setAttribute("font-size", "11");

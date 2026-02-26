@@ -26,5 +26,24 @@ export const calculateBurndown = (sprint, today, holidays, workWeekends) => {
     return totalPoints - burned;
   });
 
-  return { dates, totalPoints, ideal, actual, manDays, effectiveManDays, idealDailyBurn, todayIndex };
+  // Scope line: step function showing how total scope changed over time.
+  const scopeLog = sprint.scopeLog || [];
+  let scopeLineData = null;
+  if (scopeLog.length > 0 && todayIndex >= 0) {
+    const first = scopeLog[0];
+    const initialScope = first.action === "add"
+      ? first.totalAfter - first.estimate
+      : first.totalAfter + first.estimate;
+
+    scopeLineData = dates.map((date, i) => {
+      if (i > todayIndex) return null;
+      let lastTotal = null;
+      for (const entry of scopeLog) {
+        if (entry.date <= date) lastTotal = entry.totalAfter;
+      }
+      return lastTotal !== null ? lastTotal : initialScope;
+    });
+  }
+
+  return { dates, totalPoints, ideal, actual, manDays, effectiveManDays, idealDailyBurn, todayIndex, scopeLineData };
 };

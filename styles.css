@@ -403,6 +403,13 @@ select:focus {
   background: var(--actual);
 }
 
+.swatch.scope {
+  background: #f59e0b;
+  border-radius: 0;
+  height: 2px;
+  border-top: 1px dashed #f59e0b;
+}
+
 .chart-wrap {
   width: 100%;
   overflow-x: auto;
@@ -543,6 +550,22 @@ h3 {
 
 .summary-row.alert .summary-value {
   color: #dc2626;
+}
+
+.progress-bar {
+  height: 6px;
+  background: var(--stroke);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+  width: 0%;
 }
 
 .summary-footer {
@@ -836,6 +859,7 @@ h3 {
   background: rgba(92, 103, 242, 0.10);
 }
 
+/* Drag-and-drop: backlog drag-to-add highlight */
 .task-table tbody tr.drag-over td {
   background: rgba(92, 103, 242, 0.08);
 }
@@ -843,6 +867,44 @@ h3 {
 .task-table tbody.drag-over {
   outline: 2px dashed var(--accent);
   outline-offset: -2px;
+}
+
+/* Drag handle column */
+.task-table .col-drag {
+  width: 24px;
+  padding: 0 2px;
+  text-align: center;
+}
+
+.task-table .drag-handle {
+  cursor: grab;
+  color: var(--muted);
+  font-size: 14px;
+  user-select: none;
+  line-height: 1;
+}
+
+.task-table .drag-handle:active {
+  cursor: grabbing;
+}
+
+.drag-handle-disabled {
+  cursor: default;
+  opacity: 0.25;
+}
+
+/* Dragging row */
+.task-table tbody tr.dragging {
+  opacity: 0.4;
+}
+
+/* Drop target indicators */
+.task-table tbody tr.drag-over-above td {
+  box-shadow: inset 0 2px 0 0 var(--accent);
+}
+
+.task-table tbody tr.drag-over-below td {
+  box-shadow: inset 0 -2px 0 0 var(--accent);
 }
 
 /* --- Add-by-ID row --- */
@@ -1025,15 +1087,15 @@ h3 {
   opacity: 0.45;
 }
 
-.bl-col-story-id    { width: 68px; }
+.bl-col-story-id    { width: 75px; }
 .bl-col-user-stories { width: 34%; }
 .bl-col-priority    { width: 72px; }
 .bl-col-priority .story-priority-edit { width: 65px; }
 .bl-col-task-id     { width: 78px; }
 .bl-col-task-desc   { width: 34%; }
 .bl-col-estimate    { width: 80px; }
-.bl-col-assigned    { width: 88px; }
-.bl-col-actions     { width: 165px; text-align: right; white-space: nowrap; }
+.bl-col-assigned    { width: 100px; }
+.bl-col-actions     { width: 180px; text-align: right; white-space: nowrap; }
 
 /* Story rows */
 .bl-story-row {

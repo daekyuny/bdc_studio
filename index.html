@@ -76,6 +76,13 @@
                     <span class="summary-label">Available Days</span>
                     <span class="summary-value" id="availableDaysValue">0</span>
                   </div>
+                  <div class="summary-row" id="progressRow">
+                    <span class="summary-label">Progress</span>
+                    <span class="summary-value" id="progressPercent">0%</span>
+                    <div class="progress-bar">
+                      <div class="progress-bar-fill" id="progressBarFill"></div>
+                    </div>
+                  </div>
                 </div>
                 <div class="summary-footer">
                   <button class="btn ghost small" id="editSprintBtn">Edit Sprint</button>
@@ -89,12 +96,19 @@
                     <input type="checkbox" id="showDayNumbers" checked />
                     <label for="showDayNumbers">Show day numbers</label>
                   </div>
+                  <div class="toggle">
+                    <input type="checkbox" id="showScopeLine" />
+                    <label for="showScopeLine">Show scope line</label>
+                  </div>
                   <div class="legend">
                     <span class="legend-item">
                       <span class="swatch ideal"></span>Ideal
                     </span>
                     <span class="legend-item">
                       <span class="swatch actual"></span>Actual
+                    </span>
+                    <span class="legend-item" id="scopeLegendItem" hidden>
+                      <span class="swatch scope"></span>Scope
                     </span>
                   </div>
                 </div>
@@ -127,6 +141,7 @@
                 <table class="task-table">
                   <thead>
                     <tr>
+                      <th class="col-drag"></th>
                       <th class="col-taskid sortable" data-sort-key="taskId">ID</th>
                       <th class="col-task sortable" data-sort-key="name">Task</th>
                       <th class="col-estimate sortable" data-sort-key="estimate">Est.</th>
@@ -326,6 +341,9 @@
 
     <template id="taskRowTemplate">
       <tr class="task-row">
+        <td class="col-drag">
+          <span class="drag-handle">⠿</span>
+        </td>
         <td class="col-taskid">
           <span class="task-taskid"></span>
         </td>

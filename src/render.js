@@ -6,6 +6,7 @@ import {
   setActiveSprint,
   updateTask,
   removeTaskFromSprint,
+  reorderTasks,
   addTaskFromBacklog,
   updateToday,
   patchActiveSprint,
@@ -134,10 +135,41 @@ const renderTasks = (sprint, holidaySet, workWeekendSet) => {
   const taskTable = dom.taskRows.closest("table");
   if (taskTable) applySortClasses(taskTable, taskSort);
 
+  const isSorted = taskSort.key !== null;
   const tasks = sortItems([...sprint.tasks], taskSort.key, taskSort.asc);
   tasks.forEach((task) => {
     const row = dom.taskRowTemplate.content.firstElementChild.cloneNode(true);
     row.dataset.taskId = task.id;
+
+    // Drag-and-drop reordering (disabled when column sort is active)
+    const dragHandle = row.querySelector(".drag-handle");
+    if (isSorted) {
+      row.draggable = false;
+      if (dragHandle) dragHandle.classList.add("drag-handle-disabled");
+    } else {
+      row.draggable = true;
+      let dragStartedFromHandle = false;
+      if (dragHandle) {
+        dragHandle.addEventListener("mousedown", () => { dragStartedFromHandle = true; });
+      }
+      row.addEventListener("dragstart", (e) => {
+        if (!dragStartedFromHandle) {
+          e.preventDefault();
+          return;
+        }
+        dragStartedFromHandle = false;
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", task.id);
+        row.classList.add("dragging");
+      });
+      row.addEventListener("dragend", () => {
+        row.classList.remove("dragging");
+        dragStartedFromHandle = false;
+        dom.taskRows.querySelectorAll(".drag-over-above, .drag-over-below").forEach((el) => {
+          el.classList.remove("drag-over-above", "drag-over-below");
+        });
+      });
+    }
 
     // Highlight newly added task
     if (highlightBacklogTaskId && task.backlogTaskId === highlightBacklogTaskId) {
@@ -268,19 +300,50 @@ const renderTasks = (sprint, holidaySet, workWeekendSet) => {
       dom.confirmRemoveTaskCancel.addEventListener("click", onCancel);
     });
 
+    // Dragover/drop for backlog drag-to-add AND task reorder
     row.addEventListener("dragover", (e) => {
       e.preventDefault();
-      row.classList.add("drag-over");
+      const rect = row.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+      row.classList.remove("drag-over-above", "drag-over-below", "drag-over");
+      if (e.dataTransfer.types.includes("text/plain")) {
+        if (e.clientY < midY) {
+          row.classList.add("drag-over-above");
+        } else {
+          row.classList.add("drag-over-below");
+        }
+      } else {
+        row.classList.add("drag-over");
+      }
     });
-    row.addEventListener("dragleave", () => row.classList.remove("drag-over"));
+    row.addEventListener("dragleave", () => {
+      row.classList.remove("drag-over", "drag-over-above", "drag-over-below");
+    });
     row.addEventListener("drop", (e) => {
       e.preventDefault();
-      row.classList.remove("drag-over");
+      row.classList.remove("drag-over", "drag-over-above", "drag-over-below");
+
+      // Check for backlog drag-to-add first
       const backlogTaskId = e.dataTransfer.getData("backlogTaskId");
       if (backlogTaskId) {
         highlightBacklogTaskId = backlogTaskId;
         addTaskFromBacklog(backlogTaskId);
+        return;
       }
+
+      // Task reorder
+      const draggedId = e.dataTransfer.getData("text/plain");
+      if (!draggedId || draggedId === task.id) return;
+
+      const currentIds = Array.from(dom.taskRows.querySelectorAll("tr[data-task-id]"))
+        .map((tr) => tr.dataset.taskId);
+      const filtered = currentIds.filter((id) => id !== draggedId);
+      const targetIdx = filtered.indexOf(task.id);
+      const rect = row.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+      const insertIdx = e.clientY < midY ? targetIdx : targetIdx + 1;
+      filtered.splice(insertIdx, 0, draggedId);
+      reorderTasks(filtered);
     });
 
     dom.taskRows.appendChild(row);
@@ -608,6 +671,16 @@ const renderStats = (sprint, burndown) => {
     dom.availableDays.classList.add("ok");
   }
 
+  // Progress percentage (done points / total points)
+  const donePoints = sprint.tasks
+    .filter((t) => t.status === "Done")
+    .reduce((sum, t) => sum + Number(t.estimate || 0), 0);
+  const progressPct = burndown.totalPoints > 0
+    ? Math.round((donePoints / burndown.totalPoints) * 100)
+    : 0;
+  dom.progressPercent.textContent = `${progressPct}%`;
+  dom.progressBarFill.style.width = `${progressPct}%`;
+
   // Efficiency (Actual : Ideal)
   const developers = Math.max(0, Number(sprint.developers || 0));
   const idealEff = Math.min(1, Math.max(0, Number(sprint.efficiency || 0)));
@@ -697,6 +770,10 @@ export const render = (hints) => {
   if (has(H_STATS) || has(H_CHART)) {
     const burndown = calculateBurndown(sprint, effectiveToday, holidaySet, workWeekendSet);
     if (has(H_STATS)) renderStats(sprint, burndown);
-    if (has(H_CHART)) drawChart(burndown);
+    if (has(H_CHART)) {
+      const showScopeLine = dom.showScopeLine.checked;
+      dom.scopeLegendItem.hidden = !showScopeLine;
+      drawChart({ ...burndown, showScopeLine });
+    }
   }
 };

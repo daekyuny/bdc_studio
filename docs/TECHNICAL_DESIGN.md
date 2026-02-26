@@ -1,7 +1,7 @@
 # Burndown Studio — Technical Design Document
 
-**Version:** 0.7
-**Last updated:** 2026-02-24
+**Version:** 0.8
+**Last updated:** 2026-02-26
 **Status:** Draft — open for review
 
 ---
@@ -144,7 +144,8 @@ burndown-studio (localStorage key)
 - Iterates from `startDate` to `endDate` inclusive.
 - Excludes Saturday (day 6) and Sunday (day 0).
 - Returns an array of ISO date strings.
-- **Gap:** Does not exclude holidays or PTO (planned as F-102).
+- Accepts an optional `holidays` Set of ISO date strings; dates in the Set that fall on weekdays are excluded from the result.
+- Accepts an optional `workWeekends` Set of ISO date strings; dates in the Set that fall on weekends are included in the result.
 
 ### 5.2 Timezone-Safe Date Formatting (`localIso` in `utils.js`)
 - All date arithmetic uses `getFullYear() / getMonth() / getDate()` (local time) instead of `toISOString().slice(0,10)` (UTC).
@@ -327,3 +328,4 @@ No circular dependencies. `state.js` communicates with `render.js` via a callbac
 | 2026-02-23 | 0.5 | Major update for Product Backlog feature: added backlog data model (Story, BacklogTask, denormalized SprintTask); updated data migration section; added SheetJS to tech stack; updated io.js responsibilities (Excel import/export); rewrote burndown algorithm (estimate not points); added tab state and backlog UI state sections to rendering strategy; added priority snapping algorithm; added TD-09 (denormalization); updated module responsibilities table |
 | 2026-02-24 | 0.6 | Added sprint↔backlog re-linking on backlog import (relinkSprintTasks, findOrphanedSprintTasks); custom confirm dialogs replacing window.confirm for imports; updated io.js dependency (now imports dom.js); partially resolved TD-09 |
 | 2026-02-24 | 0.7 | Resolved TD-02: selective rendering via bitmask render hints. Updated rendering strategy section (hint table, examples). Updated design principles and performance characteristics. render.js now imports hint constants from state.js. |
+| 2026-02-26 | 0.8 | Updated getWorkingDates algorithm: now accepts optional holidays Set and workWeekends Set (F-102 complete). |

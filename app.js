@@ -18,8 +18,12 @@
     doneTasks: document.getElementById("doneTasks"),
     availableDays: document.getElementById("availableDays"),
     availableDaysValue: document.getElementById("availableDaysValue"),
+    progressPercent: document.getElementById("progressPercent"),
+    progressBarFill: document.getElementById("progressBarFill"),
     chart: document.getElementById("burndownChart"),
     showDayNumbers: document.getElementById("showDayNumbers"),
+    showScopeLine: document.getElementById("showScopeLine"),
+    scopeLegendItem: document.getElementById("scopeLegendItem"),
     exportCsvBtn: document.getElementById("exportCsvBtn"),
     exportBtn: document.getElementById("exportBtn"),
     importBtn: document.getElementById("importBtn"),
@@ -199,6 +203,7 @@
     if (!parsed.backlog) parsed.backlog = { stories: [] };
     if (!parsed.preferences) parsed.preferences = { holidays: [], workWeekends: [], members: [] };
     for (const sprint of parsed.sprints) {
+      if (!sprint.scopeLog) sprint.scopeLog = [];
       for (const task of sprint.tasks) {
         if (task.points !== void 0 && task.estimate === void 0) {
           task.estimate = task.points;
@@ -226,6 +231,7 @@
           developers: 4,
           efficiency: 0.8,
           tasks: [],
+          scopeLog: [],
           createdAt: (/* @__PURE__ */ new Date()).toISOString()
         }
       ]
@@ -264,6 +270,7 @@
       developers,
       efficiency,
       tasks: [],
+      scopeLog: [],
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     state.sprints.push(newSprint);
@@ -298,6 +305,7 @@
         developers: 0,
         efficiency: 1,
         tasks: [],
+        scopeLog: [],
         createdAt: (/* @__PURE__ */ new Date()).toISOString()
       };
       state.sprints = [newSprint];
@@ -307,6 +315,18 @@
     }
     save();
     onChange(H_ALL);
+  };
+  var reorderTasks = (taskIds) => {
+    const sprint = getActiveSprint();
+    if (!sprint) return;
+    const taskMap = new Map(sprint.tasks.map((t) => [t.id, t]));
+    const reordered = taskIds.map((id) => taskMap.get(id)).filter(Boolean);
+    for (const t of sprint.tasks) {
+      if (!taskIds.includes(t.id)) reordered.push(t);
+    }
+    sprint.tasks = reordered;
+    save();
+    onChange(H_TASKS);
   };
   var updateTask = (taskId, updates) => {
     const sprint = getActiveSprint();
@@ -320,7 +340,20 @@
   var removeTaskFromSprint = (taskId) => {
     const sprint = getActiveSprint();
     if (!sprint) return;
+    const removed = sprint.tasks.find((task) => task.id === taskId);
     sprint.tasks = sprint.tasks.filter((task) => task.id !== taskId);
+    if (removed) {
+      if (!sprint.scopeLog) sprint.scopeLog = [];
+      const totalAfter = sprint.tasks.reduce((s, t) => s + Number(t.estimate || 0), 0);
+      sprint.scopeLog.push({
+        date: todayIso(),
+        action: "remove",
+        taskId: removed.taskId,
+        taskName: removed.name,
+        estimate: Number(removed.estimate || 0),
+        totalAfter
+      });
+    }
     save();
     onChange(H_SPRINT_TASKS);
   };
@@ -340,16 +373,27 @@
     }
     if (!foundTask) return;
     if (sprint.tasks.some((t) => t.backlogTaskId === backlogTaskId)) return;
+    const estimate = Number(foundTask.estimate) || 0;
     sprint.tasks.push({
       id: createId(),
       backlogTaskId,
       taskId: foundTask.taskId,
       name: foundTask.description,
       assignedTo: foundTask.assignedTo,
-      estimate: Number(foundTask.estimate) || 0,
+      estimate,
       actual: null,
       status: "Todo",
       doneDate: ""
+    });
+    if (!sprint.scopeLog) sprint.scopeLog = [];
+    const totalAfter = sprint.tasks.reduce((s, t) => s + Number(t.estimate || 0), 0);
+    sprint.scopeLog.push({
+      date: todayIso(),
+      action: "add",
+      taskId: foundTask.taskId,
+      taskName: foundTask.description,
+      estimate,
+      totalAfter
     });
     save();
     onChange(H_SPRINT_TASKS);
@@ -562,11 +606,25 @@
       }, 0);
       return totalPoints - burned;
     });
-    return { dates, totalPoints, ideal, actual, manDays, effectiveManDays, idealDailyBurn, todayIndex };
+    const scopeLog = sprint.scopeLog || [];
+    let scopeLineData = null;
+    if (scopeLog.length > 0 && todayIndex >= 0) {
+      const first = scopeLog[0];
+      const initialScope = first.action === "add" ? first.totalAfter - first.estimate : first.totalAfter + first.estimate;
+      scopeLineData = dates.map((date, i) => {
+        if (i > todayIndex) return null;
+        let lastTotal = null;
+        for (const entry of scopeLog) {
+          if (entry.date <= date) lastTotal = entry.totalAfter;
+        }
+        return lastTotal !== null ? lastTotal : initialScope;
+      });
+    }
+    return { dates, totalPoints, ideal, actual, manDays, effectiveManDays, idealDailyBurn, todayIndex, scopeLineData };
   };
 
   // src/chart.js
-  var drawChart = ({ dates, totalPoints, ideal, actual, todayIndex }) => {
+  var drawChart = ({ dates, totalPoints, ideal, actual, todayIndex, scopeLineData, showScopeLine }) => {
     const width = 800;
     const height = 320;
     const padding = 50;
@@ -583,7 +641,8 @@
       return;
     }
     const nonNullActual = actual.filter((v) => v !== null);
-    const maxValue = Math.max(totalPoints, ...nonNullActual, 1);
+    const nonNullScope = showScopeLine && scopeLineData ? scopeLineData.filter((v) => v !== null) : [];
+    const maxValue = Math.max(totalPoints, ...nonNullActual, ...nonNullScope, 1);
     const minValue = Math.min(0, ...nonNullActual);
     const range = maxValue - minValue;
     const plotWidth = width - padding * 2;
@@ -659,6 +718,18 @@
     actualLine.style.strokeDashoffset = "1000";
     actualLine.style.animation = "dash 1.6s ease forwards";
     dom.chart.appendChild(actualLine);
+    if (showScopeLine && scopeLineData) {
+      const scopePoints = scopeLineData.map((val, i) => val !== null ? toPoint(val, i) : null).filter(Boolean);
+      if (scopePoints.length > 0) {
+        const scopeLine = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+        scopeLine.setAttribute("fill", "none");
+        scopeLine.setAttribute("stroke", "#f59e0b");
+        scopeLine.setAttribute("stroke-width", "1");
+        scopeLine.setAttribute("stroke-dasharray", "6 3");
+        scopeLine.setAttribute("points", scopePoints.join(" "));
+        dom.chart.appendChild(scopeLine);
+      }
+    }
     const labels = document.createElementNS("http://www.w3.org/2000/svg", "g");
     labels.setAttribute("font-size", "11");
     labels.setAttribute("fill", "#6b7080");
@@ -778,10 +849,41 @@
     dom.taskRows.innerHTML = "";
     const taskTable = dom.taskRows.closest("table");
     if (taskTable) applySortClasses(taskTable, taskSort);
+    const isSorted = taskSort.key !== null;
     const tasks = sortItems([...sprint.tasks], taskSort.key, taskSort.asc);
     tasks.forEach((task) => {
       const row = dom.taskRowTemplate.content.firstElementChild.cloneNode(true);
       row.dataset.taskId = task.id;
+      const dragHandle = row.querySelector(".drag-handle");
+      if (isSorted) {
+        row.draggable = false;
+        if (dragHandle) dragHandle.classList.add("drag-handle-disabled");
+      } else {
+        row.draggable = true;
+        let dragStartedFromHandle = false;
+        if (dragHandle) {
+          dragHandle.addEventListener("mousedown", () => {
+            dragStartedFromHandle = true;
+          });
+        }
+        row.addEventListener("dragstart", (e) => {
+          if (!dragStartedFromHandle) {
+            e.preventDefault();
+            return;
+          }
+          dragStartedFromHandle = false;
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData("text/plain", task.id);
+          row.classList.add("dragging");
+        });
+        row.addEventListener("dragend", () => {
+          row.classList.remove("dragging");
+          dragStartedFromHandle = false;
+          dom.taskRows.querySelectorAll(".drag-over-above, .drag-over-below").forEach((el) => {
+            el.classList.remove("drag-over-above", "drag-over-below");
+          });
+        });
+      }
       if (highlightBacklogTaskId && task.backlogTaskId === highlightBacklogTaskId) {
         row.classList.add("task-row-highlight");
       }
@@ -904,17 +1006,41 @@
       });
       row.addEventListener("dragover", (e) => {
         e.preventDefault();
-        row.classList.add("drag-over");
+        const rect = row.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        row.classList.remove("drag-over-above", "drag-over-below", "drag-over");
+        if (e.dataTransfer.types.includes("text/plain")) {
+          if (e.clientY < midY) {
+            row.classList.add("drag-over-above");
+          } else {
+            row.classList.add("drag-over-below");
+          }
+        } else {
+          row.classList.add("drag-over");
+        }
       });
-      row.addEventListener("dragleave", () => row.classList.remove("drag-over"));
+      row.addEventListener("dragleave", () => {
+        row.classList.remove("drag-over", "drag-over-above", "drag-over-below");
+      });
       row.addEventListener("drop", (e) => {
         e.preventDefault();
-        row.classList.remove("drag-over");
+        row.classList.remove("drag-over", "drag-over-above", "drag-over-below");
         const backlogTaskId = e.dataTransfer.getData("backlogTaskId");
         if (backlogTaskId) {
           highlightBacklogTaskId = backlogTaskId;
           addTaskFromBacklog(backlogTaskId);
+          return;
         }
+        const draggedId = e.dataTransfer.getData("text/plain");
+        if (!draggedId || draggedId === task.id) return;
+        const currentIds = Array.from(dom.taskRows.querySelectorAll("tr[data-task-id]")).map((tr) => tr.dataset.taskId);
+        const filtered = currentIds.filter((id) => id !== draggedId);
+        const targetIdx = filtered.indexOf(task.id);
+        const rect = row.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        const insertIdx = e.clientY < midY ? targetIdx : targetIdx + 1;
+        filtered.splice(insertIdx, 0, draggedId);
+        reorderTasks(filtered);
       });
       dom.taskRows.appendChild(row);
     });
@@ -1183,6 +1309,10 @@
     } else if (availableDays >= -1 && availableDays <= 1) {
       dom.availableDays.classList.add("ok");
     }
+    const donePoints = sprint.tasks.filter((t) => t.status === "Done").reduce((sum, t) => sum + Number(t.estimate || 0), 0);
+    const progressPct = burndown.totalPoints > 0 ? Math.round(donePoints / burndown.totalPoints * 100) : 0;
+    dom.progressPercent.textContent = `${progressPct}%`;
+    dom.progressBarFill.style.width = `${progressPct}%`;
     const developers = Math.max(0, Number(sprint.developers || 0));
     const idealEff = Math.min(1, Math.max(0, Number(sprint.efficiency || 0)));
     const daysElapsed = burndown.todayIndex;
@@ -1249,7 +1379,11 @@
     if (has(H_STATS) || has(H_CHART)) {
       const burndown = calculateBurndown(sprint, effectiveToday, holidaySet, workWeekendSet);
       if (has(H_STATS)) renderStats(sprint, burndown);
-      if (has(H_CHART)) drawChart(burndown);
+      if (has(H_CHART)) {
+        const showScopeLine = dom.showScopeLine.checked;
+        dom.scopeLegendItem.hidden = !showScopeLine;
+        drawChart({ ...burndown, showScopeLine });
+      }
     }
   };
 
@@ -1580,6 +1714,7 @@
     e.target.value = "";
   });
   dom.showDayNumbers.addEventListener("change", () => render(H_CHART));
+  dom.showScopeLine.addEventListener("change", () => render(H_CHART));
   dom.tabSprint.addEventListener("click", () => setActiveTab("sprint"));
   dom.tabBacklog.addEventListener("click", () => setActiveTab("backlog"));
   var commitAddById = () => {

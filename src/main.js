@@ -182,6 +182,7 @@ dom.importFile.addEventListener("change", (e) => {
 });
 
 dom.showDayNumbers.addEventListener("change", () => render(H_CHART));
+dom.showScopeLine.addEventListener("change", () => render(H_CHART));
 
 // --- Tabs ---
 dom.tabSprint.addEventListener("click", () => setActiveTab("sprint"));
