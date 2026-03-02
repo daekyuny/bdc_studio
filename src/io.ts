@@ -1,8 +1,16 @@
-import { getState, getActiveSprint, replaceState, getBacklog, replaceBacklog, addMembersFromImport, findOrphanedSprintTasks, relinkSprintTasks } from "./state.js";
-import { todayIso, createId } from "./utils.js";
-import { dom } from "./dom.js";
+import { getState, getActiveSprint, replaceState, getBacklog, replaceBacklog, addMembersFromImport, findOrphanedSprintTasks, relinkSprintTasks } from "./state.ts";
+import { todayIso, createId } from "./utils.ts";
+import { dom } from "./dom.ts";
+import type { AppState, BacklogStory, BacklogTask } from "./types.ts";
 
-const showImportConfirm = ({ title, message, subtext = "", okLabel = "Proceed" }) =>
+interface ImportConfirmOptions {
+  title: string;
+  message: string;
+  subtext?: string;
+  okLabel?: string;
+}
+
+const showImportConfirm = ({ title, message, subtext = "", okLabel = "Proceed" }: ImportConfirmOptions): Promise<boolean> =>
   new Promise((resolve) => {
     dom.importConfirmTitle.textContent = title;
     dom.importConfirmMessage.innerHTML = message;
@@ -11,18 +19,18 @@ const showImportConfirm = ({ title, message, subtext = "", okLabel = "Proceed" }
     dom.importConfirmOk.textContent = okLabel;
     dom.importConfirmModal.hidden = false;
 
-    const cleanup = () => {
+    const cleanup = (): void => {
       dom.importConfirmModal.hidden = true;
       dom.importConfirmOk.removeEventListener("click", onOk);
       dom.importConfirmCancel.removeEventListener("click", onCancel);
     };
-    const onOk = () => { cleanup(); resolve(true); };
-    const onCancel = () => { cleanup(); resolve(false); };
+    const onOk = (): void => { cleanup(); resolve(true); };
+    const onCancel = (): void => { cleanup(); resolve(false); };
     dom.importConfirmOk.addEventListener("click", onOk);
     dom.importConfirmCancel.addEventListener("click", onCancel);
   });
 
-export const exportData = () => {
+export const exportData = (): void => {
   const state = getState();
   const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -34,13 +42,13 @@ export const exportData = () => {
 };
 
 // XLSX is loaded globally from CDN (xlsx.full.min.js)
-export const exportSprintExcel = () => {
+export const exportSprintExcel = (): void => {
   const sprint = getActiveSprint();
   if (!sprint) return;
   const state = getState();
   const sprintNumber = state.sprints.findIndex((s) => s.id === sprint.id) + 1;
 
-  const aoa = [
+  const aoa: unknown[][] = [
     ["Task ID", "Task", "Estimate", "Actual", "Status", "Done Date"],
     ...sprint.tasks.map((t) => [t.taskId || "", t.name, t.estimate ?? "", t.actual ?? "", t.status, t.doneDate || ""]),
   ];
@@ -50,7 +58,7 @@ export const exportSprintExcel = () => {
   XLSX.writeFile(wb, `sprint-${sprintNumber}-tasks-${todayIso()}.xlsx`);
 };
 
-const migrateImported = (imported) => {
+const migrateImported = (imported: any): AppState => {
   if (!imported.backlog) imported.backlog = { stories: [] };
   for (const sprint of imported.sprints) {
     for (const task of sprint.tasks) {
@@ -61,14 +69,14 @@ const migrateImported = (imported) => {
       }
     }
   }
-  return imported;
+  return imported as AppState;
 };
 
-export const importData = (file) => {
+export const importData = (file: File): void => {
   const reader = new FileReader();
   reader.onload = async (e) => {
     try {
-      const imported = JSON.parse(e.target.result);
+      const imported = JSON.parse((e.target as FileReader).result as string);
       if (!imported || !Array.isArray(imported.sprints)) {
         alert("Invalid file: expected a Burndown Studio JSON export.");
         return;
@@ -91,9 +99,9 @@ export const importData = (file) => {
   reader.readAsText(file);
 };
 
-export const exportBacklogExcel = () => {
+export const exportBacklogExcel = (): void => {
   const backlog = getBacklog();
-  const aoa = [
+  const aoa: unknown[][] = [
     ["Story ID", "User Stories", "Priority", "Task ID", "Task Description", "Estimate(days)", "Assigned To"],
   ];
   for (const story of backlog.stories) {
@@ -116,11 +124,11 @@ export const exportBacklogExcel = () => {
 };
 
 // XLSX is loaded globally from CDN (xlsx.full.min.js)
-export const importBacklogExcel = (file) => {
+export const importBacklogExcel = (file: File): void => {
   const reader = new FileReader();
   reader.onload = async (e) => {
-    const data = new Uint8Array(e.target.result);
-    let workbook;
+    const data = new Uint8Array((e.target as FileReader).result as ArrayBuffer);
+    let workbook: ReturnType<typeof XLSX.read>;
     try {
       workbook = XLSX.read(data, { type: "array" });
     } catch {
@@ -129,17 +137,15 @@ export const importBacklogExcel = (file) => {
     }
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
-    // raw: false → all values as strings; defval: "" → empty cells as ""
     const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: "" });
 
     if (rows.length < 2) { alert("File is empty or has no data rows."); return; }
 
-    const stories = [];
-    let currentStory = null;
+    const stories: BacklogStory[] = [];
+    let currentStory: BacklogStory | null = null;
 
     for (let i = 1; i < rows.length; i++) {
-      const cols = rows[i];
-      // Skip completely empty rows
+      const cols = rows[i] as string[];
       if (cols.every(c => String(c ?? "").trim() === "")) continue;
 
       const storyId    = String(cols[0] ?? "").trim();
@@ -166,7 +172,6 @@ export const importBacklogExcel = (file) => {
       return;
     }
 
-    // Step 1: General import confirmation
     const existing = getBacklog();
     const hasExisting = existing?.stories?.length > 0;
     const message = hasExisting
@@ -180,7 +185,6 @@ export const importBacklogExcel = (file) => {
     });
     if (!ok) return;
 
-    // Step 2: Orphan warning if any sprint tasks will be removed
     const orphans = findOrphanedSprintTasks(stories);
     if (orphans.length > 0) {
       const lines = orphans.map(o =>
@@ -197,7 +201,6 @@ export const importBacklogExcel = (file) => {
     replaceBacklog({ stories });
     relinkSprintTasks();
 
-    // Auto-add unique assignedTo values to members list
     const uniqueNames = [...new Set(
       stories.flatMap(s => s.tasks.map(t => t.assignedTo)).filter(Boolean)
     )];

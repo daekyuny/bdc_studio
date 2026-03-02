@@ -1,4 +1,4 @@
-import { dom } from "./dom.js";
+import { dom } from "./dom.ts";
 import {
   setOnStateChange,
   createSprint,
@@ -6,7 +6,6 @@ import {
   updateSprintById,
   addTaskFromBacklog,
   addStory,
-  updateToday,
   getActiveSprint,
   getState,
   replaceBacklog,
@@ -18,25 +17,26 @@ import {
   getMembers,
   addMember,
   removeMember,
-} from "./state.js";
-import { render, setActiveTab, startEditing, expandAll, collapseAll, toggleTaskSort, toggleBacklogSort, setHighlightBacklogTaskId } from "./render.js";
-import { H_CHART } from "./state.js";
-import { exportData, exportSprintExcel, importData, exportBacklogExcel, importBacklogExcel } from "./io.js";
-import { getNextWorkingDay, addWorkingDays, findGaps, sprintsOverlap, todayIso, getWorkingDates, localIso } from "./utils.js";
+} from "./state.ts";
+import { render, setActiveTab, startEditing, expandAll, collapseAll, toggleTaskSort, toggleBacklogSort, setHighlightBacklogTaskId } from "./render.ts";
+import { H_CHART } from "./state.ts";
+import { exportData, exportSprintExcel, importData, exportBacklogExcel, importBacklogExcel } from "./io.ts";
+import { getNextWorkingDay, addWorkingDays, findGaps, sprintsOverlap, todayIso, getWorkingDates, localIso } from "./utils.ts";
+import type { Sprint } from "./types.ts";
 
 setOnStateChange(render);
 
 // --- Flatpickr instances ---
-let fpStart = null;
-let fpEnd = null;
+let fpStart: FlatpickrInstance | null = null;
+let fpEnd: FlatpickrInstance | null = null;
 
-const getDisabledRanges = (excludeId) => {
+const getDisabledRanges = (excludeId: string | null): FlatpickrOptions["disable"] => {
   const others = getState().sprints.filter((s) => s.id !== excludeId);
   const prefs = getPreferences();
   const holidaySet = new Set(prefs.holidays.map((h) => h.date));
   const workWeekendSet = new Set(prefs.workWeekends);
   return [
-    (date) => {
+    (date: Date) => {
       const iso = localIso(date);
       if (holidaySet.has(iso)) return true;
       const isWeekend = date.getDay() === 0 || date.getDay() === 6;
@@ -47,7 +47,7 @@ const getDisabledRanges = (excludeId) => {
   ];
 };
 
-const fixCalendarPosition = (instance) => {
+const fixCalendarPosition = (instance: FlatpickrInstance): void => {
   setTimeout(() => {
     const rect = instance.input.getBoundingClientRect();
     const cal = instance.calendarContainer;
@@ -58,7 +58,7 @@ const fixCalendarPosition = (instance) => {
   }, 0);
 };
 
-const updateWorkingDaysChip = () => {
+const updateWorkingDaysChip = (): void => {
   const start = fpStart?.selectedDates[0];
   const end = fpEnd?.selectedDates[0];
   if (start && end) {
@@ -74,15 +74,15 @@ const updateWorkingDaysChip = () => {
   }
 };
 
-const initDatePickers = (excludeId, defaultStart, defaultEnd) => {
+const initDatePickers = (excludeId: string | null, defaultStart?: string, defaultEnd?: string): void => {
   if (fpStart) fpStart.destroy();
   if (fpEnd) fpEnd.destroy();
   const disabled = getDisabledRanges(excludeId);
-  const base = {
+  const base: FlatpickrOptions = {
     dateFormat: "Y-m-d",
     disableMobile: true,
     disable: disabled,
-    onOpen: (_, __, instance) => fixCalendarPosition(instance),
+    onOpen: (_: Date[], __: string, instance: FlatpickrInstance) => fixCalendarPosition(instance),
     onChange: () => updateWorkingDaysChip(),
   };
   fpStart = flatpickr(dom.modalStartDate, { ...base, defaultDate: defaultStart || null });
@@ -91,23 +91,32 @@ const initDatePickers = (excludeId, defaultStart, defaultEnd) => {
 };
 
 // --- Modal ---
-let modalMode = "edit";
-let modalSprintId = null;
+let modalMode: "edit" | "create" = "edit";
+let modalSprintId: string | null = null;
 
-const openModal = (mode, sprint) => {
+interface ModalSprint {
+  id?: string;
+  description?: string;
+  startDate?: string;
+  endDate?: string;
+  developers?: number;
+  efficiency?: number;
+}
+
+const openModal = (mode: "edit" | "create", sprint: ModalSprint): void => {
   modalMode = mode;
-  modalSprintId = sprint ? sprint.id : null;
+  modalSprintId = sprint.id ?? null;
   dom.modalTitle.textContent = mode === "create" ? "New Sprint" : "Edit Sprint";
-  dom.modalDescription.value = sprint?.description || "";
-  dom.modalDevelopers.value = sprint?.developers ?? 4;
-  dom.modalEfficiency.value = sprint?.efficiency ?? 0.8;
+  dom.modalDescription.value = sprint.description || "";
+  dom.modalDevelopers.value = String(sprint.developers ?? 4);
+  dom.modalEfficiency.value = String(sprint.efficiency ?? 0.8);
   dom.modalError.hidden = true;
   dom.sprintModal.hidden = false;
 
-  initDatePickers(sprint?.id || null, sprint?.startDate, sprint?.endDate);
+  initDatePickers(sprint.id || null, sprint.startDate, sprint.endDate);
 };
 
-const closeModal = () => {
+const closeModal = (): void => {
   dom.sprintModal.hidden = true;
   if (fpStart) { fpStart.destroy(); fpStart = null; }
   if (fpEnd) { fpEnd.destroy(); fpEnd = null; }
@@ -146,7 +155,7 @@ dom.modalSave.addEventListener("click", () => {
   if (modalMode === "create") {
     createSprint(updates);
   } else {
-    updateSprintById(modalSprintId, updates);
+    updateSprintById(modalSprintId!, updates);
   }
   closeModal();
 
@@ -158,7 +167,7 @@ dom.modalSave.addEventListener("click", () => {
 
 // --- New Sprint ---
 dom.newSprintBtn.addEventListener("click", () => {
-  const sprints = getState().sprints; // sorted by startDate
+  const sprints = getState().sprints;
   const latestEnd = sprints.length > 0 ? sprints[sprints.length - 1].endDate : "";
   const start = latestEnd ? getNextWorkingDay(latestEnd) : todayIso();
   const end = addWorkingDays(start, 10);
@@ -177,23 +186,23 @@ if (dom.exportCsvBtn) dom.exportCsvBtn.addEventListener("click", exportSprintExc
 dom.exportBtn.addEventListener("click", exportData);
 dom.importBtn.addEventListener("click", () => dom.importFile.click());
 dom.importFile.addEventListener("change", (e) => {
-  if (e.target.files[0]) importData(e.target.files[0]);
-  e.target.value = "";
+  const target = e.target as HTMLInputElement;
+  if (target.files?.[0]) importData(target.files[0]);
+  target.value = "";
 });
 
 dom.showDayNumbers.addEventListener("change", () => render(H_CHART));
-dom.showScopeLine.addEventListener("change", () => render(H_CHART));
 
 // --- Tabs ---
 dom.tabSprint.addEventListener("click", () => setActiveTab("sprint"));
 dom.tabBacklog.addEventListener("click", () => setActiveTab("backlog"));
 
 // --- Add-by-ID ---
-const commitAddById = () => {
+const commitAddById = (): void => {
   const input = dom.addByIdInput.value.trim();
   if (!input) return;
   const backlog = getState().backlog;
-  let uuid = null;
+  let uuid: string | null = null;
   for (const story of backlog?.stories ?? []) {
     const found = story.tasks.find(t => t.taskId === input);
     if (found) { uuid = found.id; break; }
@@ -210,11 +219,11 @@ dom.addByIdInput.addEventListener("keydown", (e) => {
 
 // --- Backlog panel toggle (open state persists across re-renders) ---
 let backlogPanelOpen = false;
-document.getElementById("backlogPanelToggle").addEventListener("click", () => {
+document.getElementById("backlogPanelToggle")!.addEventListener("click", () => {
   backlogPanelOpen = !backlogPanelOpen;
-  document.getElementById("backlogPanelRows").hidden = !backlogPanelOpen;
-  document.getElementById("backlogPanelToggle").querySelector(".panel-toggle-chevron").textContent =
-    backlogPanelOpen ? "▲" : "▼";
+  (document.getElementById("backlogPanelRows") as HTMLElement).hidden = !backlogPanelOpen;
+  document.getElementById("backlogPanelToggle")!.querySelector(".panel-toggle-chevron")!.textContent =
+    backlogPanelOpen ? "\u25B2" : "\u25BC";
 });
 
 // --- Backlog panel: tbody drop target ---
@@ -226,7 +235,7 @@ dom.taskRows.addEventListener("dragleave", () => dom.taskRows.classList.remove("
 dom.taskRows.addEventListener("drop", (e) => {
   e.preventDefault();
   dom.taskRows.classList.remove("drag-over");
-  const backlogTaskId = e.dataTransfer.getData("backlogTaskId");
+  const backlogTaskId = (e as DragEvent).dataTransfer!.getData("backlogTaskId");
   if (backlogTaskId) {
     setHighlightBacklogTaskId(backlogTaskId);
     addTaskFromBacklog(backlogTaskId);
@@ -253,36 +262,30 @@ dom.confirmDeleteBacklogConfirm.addEventListener("click", () => {
 });
 dom.backlogImportCsvBtn.addEventListener("click", () => dom.backlogImportFile.click());
 dom.backlogImportFile.addEventListener("change", (e) => {
-  if (e.target.files[0]) importBacklogExcel(e.target.files[0]);
-  e.target.value = "";
+  const target = e.target as HTMLInputElement;
+  if (target.files?.[0]) importBacklogExcel(target.files[0]);
+  target.value = "";
 });
 
 // --- Sortable column headers ---
 document.querySelectorAll(".task-table thead th.sortable").forEach((th) => {
-  th.addEventListener("click", () => toggleTaskSort(th.dataset.sortKey));
+  th.addEventListener("click", () => toggleTaskSort((th as HTMLElement).dataset.sortKey!));
 });
 document.querySelectorAll(".backlog-table thead th.sortable").forEach((th) => {
   th.addEventListener("click", (e) => {
-    // Don't sort when clicking the column resizer
-    if (e.target.classList.contains("col-resizer")) return;
-    toggleBacklogSort(th.dataset.sortKey);
+    if ((e.target as HTMLElement).classList.contains("col-resizer")) return;
+    toggleBacklogSort((th as HTMLElement).dataset.sortKey!);
   });
 });
 
 // --- Backlog column resizing ---
 (function initBacklogResize() {
-  const table = document.querySelector(".backlog-table");
-  const ths   = Array.from(table.querySelectorAll("thead th"));
-  const cols  = Array.from(table.querySelectorAll("col"));
+  const table = document.querySelector(".backlog-table") as HTMLTableElement;
+  const ths   = Array.from(table.querySelectorAll("thead th")) as HTMLTableCellElement[];
+  const cols  = Array.from(table.querySelectorAll("col")) as HTMLTableColElement[];
   let frozen = false;
 
-  // Lock every column AND the table itself to exact pixel widths.
-  // - We set BOTH col.style.width AND th.style.width so there is no
-  //   ambiguity about which the browser uses for fixed-layout column sizing.
-  // - We set table.style.width to an exact px value (NOT 'auto') because
-  //   table-layout:fixed with width:auto silently reverts to content-based
-  //   layout in Chrome/Firefox, making col widths irrelevant.
-  function freezeWidths() {
+  function freezeWidths(): void {
     if (frozen) return;
     frozen = true;
     ths.forEach((th, i) => {
@@ -293,7 +296,6 @@ document.querySelectorAll(".backlog-table thead th.sortable").forEach((th) => {
     table.style.width = table.offsetWidth + "px";
   }
 
-  // All columns except the last (actions) get a resizer
   ths.slice(0, -1).forEach((th, i) => {
     const resizer = th.querySelector(".col-resizer");
     if (!resizer) return;
@@ -301,26 +303,25 @@ document.querySelectorAll(".backlog-table thead th.sortable").forEach((th) => {
 
     resizer.addEventListener("mousedown", (e) => {
       freezeWidths();
-      const startX  = e.clientX;
-      const startW  = th.offsetWidth;        // column width at drag start
-      const tableW  = table.offsetWidth;     // total table width at drag start
+      const me = e as MouseEvent;
+      const startX  = me.clientX;
+      const startW  = th.offsetWidth;
+      const tableW  = table.offsetWidth;
 
       resizer.classList.add("resizing");
       document.body.style.cursor    = "col-resize";
       document.body.style.userSelect = "none";
 
-      const onMove = (ev) => {
+      const onMove = (ev: MouseEvent): void => {
         const delta   = ev.clientX - startX;
         const newColW = Math.max(40, startW + delta);
         const diff    = newColW - startW;
-        // Update column via both col and th — belt-and-suspenders across browsers
         th.style.width = newColW + "px";
         if (col) col.style.width = newColW + "px";
-        // Grow/shrink the table by the same amount so no other column shifts
         table.style.width = (tableW + diff) + "px";
       };
 
-      const onUp = () => {
+      const onUp = (): void => {
         resizer.classList.remove("resizing");
         document.body.style.cursor    = "";
         document.body.style.userSelect = "";
@@ -329,52 +330,49 @@ document.querySelectorAll(".backlog-table thead th.sortable").forEach((th) => {
       };
       document.addEventListener("mousemove", onMove);
       document.addEventListener("mouseup", onUp);
-      e.preventDefault();
+      me.preventDefault();
     });
   });
 })();
 
 // --- Preferences modal ---
-let fpPrefHoliday = null;
-let fpPrefWeekend = null;
+let fpPrefHoliday: FlatpickrInstance | null = null;
+let fpPrefWeekend: FlatpickrInstance | null = null;
 
-const renderPrefLists = () => {
+const renderPrefLists = (): void => {
   const prefs = getPreferences();
 
-  // Holiday list
   dom.prefHolidayList.innerHTML = "";
   for (const h of prefs.holidays) {
     const row = document.createElement("div");
     row.className = "pref-list-row";
     row.innerHTML = `<span class="pref-list-date">${h.date}</span><span class="pref-list-name">${h.name || ""}</span><button class="btn ghost small pref-list-delete">&times;</button>`;
-    row.querySelector(".pref-list-delete").addEventListener("click", () => {
+    row.querySelector(".pref-list-delete")!.addEventListener("click", () => {
       removeHoliday(h.date);
       renderPrefLists();
     });
     dom.prefHolidayList.appendChild(row);
   }
 
-  // Work weekend list
   dom.prefWeekendList.innerHTML = "";
   for (const d of prefs.workWeekends) {
     const row = document.createElement("div");
     row.className = "pref-list-row";
     row.innerHTML = `<span class="pref-list-date">${d}</span><button class="btn ghost small pref-list-delete">&times;</button>`;
-    row.querySelector(".pref-list-delete").addEventListener("click", () => {
+    row.querySelector(".pref-list-delete")!.addEventListener("click", () => {
       removeWorkWeekend(d);
       renderPrefLists();
     });
     dom.prefWeekendList.appendChild(row);
   }
 
-  // Member list
   dom.prefMemberList.innerHTML = "";
   const members = getMembers();
   for (const name of members) {
     const row = document.createElement("div");
     row.className = "pref-list-row";
     row.innerHTML = `<span class="pref-list-name">${name}</span><button class="btn ghost small pref-list-delete">&times;</button>`;
-    row.querySelector(".pref-list-delete").addEventListener("click", () => {
+    row.querySelector(".pref-list-delete")!.addEventListener("click", () => {
       removeMember(name);
       renderPrefLists();
     });
@@ -382,7 +380,7 @@ const renderPrefLists = () => {
   }
 };
 
-const openPreferences = () => {
+const openPreferences = (): void => {
   dom.preferencesModal.hidden = false;
   dom.prefHolidayDate.value = "";
   dom.prefHolidayName.value = "";
@@ -392,21 +390,21 @@ const openPreferences = () => {
   fpPrefHoliday = flatpickr(dom.prefHolidayDate, {
     dateFormat: "Y-m-d",
     disableMobile: true,
-    onOpen: (_, __, instance) => fixCalendarPosition(instance),
+    onOpen: (_: Date[], __: string, instance: FlatpickrInstance) => fixCalendarPosition(instance),
   });
 
   if (fpPrefWeekend) fpPrefWeekend.destroy();
   fpPrefWeekend = flatpickr(dom.prefWeekendDate, {
     dateFormat: "Y-m-d",
     disableMobile: true,
-    disable: [(date) => date.getDay() !== 0 && date.getDay() !== 6],
-    onOpen: (_, __, instance) => fixCalendarPosition(instance),
+    disable: [(date: Date) => date.getDay() !== 0 && date.getDay() !== 6],
+    onOpen: (_: Date[], __: string, instance: FlatpickrInstance) => fixCalendarPosition(instance),
   });
 
   renderPrefLists();
 };
 
-const closePreferences = () => {
+const closePreferences = (): void => {
   dom.preferencesModal.hidden = true;
   if (fpPrefHoliday) { fpPrefHoliday.destroy(); fpPrefHoliday = null; }
   if (fpPrefWeekend) { fpPrefWeekend.destroy(); fpPrefWeekend = null; }
@@ -440,7 +438,7 @@ dom.prefWeekendAddBtn.addEventListener("click", () => {
   renderPrefLists();
 });
 
-const commitAddMember = () => {
+const commitAddMember = (): void => {
   const name = dom.prefMemberName.value.trim();
   if (!name) return;
   addMember(name);
@@ -454,8 +452,8 @@ dom.prefMemberName.addEventListener("keydown", (e) => {
 
 // --- Clear task highlight on any click ---
 document.addEventListener("click", (e) => {
-  // Don't clear if clicking an Add button in the backlog panel (those set their own highlight)
-  if (e.target.closest(".bp-add-btn") || e.target.closest(".add-by-id-row")) return;
+  const target = e.target as HTMLElement;
+  if (target.closest(".bp-add-btn") || target.closest(".add-by-id-row")) return;
   const highlighted = document.querySelector(".task-row-highlight");
   if (highlighted) highlighted.classList.remove("task-row-highlight");
   setHighlightBacklogTaskId(null);

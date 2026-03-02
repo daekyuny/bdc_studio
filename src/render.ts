@@ -1,5 +1,5 @@
-import { dom } from "./dom.js";
-import { statusOptions, todayIso, localIso, formatSprintRange, getNextWorkingDay } from "./utils.js";
+import { dom } from "./dom.ts";
+import { statusOptions, todayIso, localIso, formatSprintRange, getNextWorkingDay } from "./utils.ts";
 import {
   getState,
   getActiveSprint,
@@ -19,42 +19,43 @@ import {
   getPreferences,
   getMembers,
   H_SIDEBAR, H_HEADER, H_TASKS, H_PANEL, H_STATS, H_CHART, H_BACKLOG, H_ALL,
-} from "./state.js";
-import { calculateBurndown } from "./burndown.js";
-import { drawChart } from "./chart.js";
+} from "./state.ts";
+import { calculateBurndown } from "./burndown.ts";
+import { drawChart } from "./chart.ts";
+import type { Sprint, SprintTask, BacklogTask, BacklogStory, BurndownData, SortState } from "./types.ts";
 
-let fpToday = null;
+let fpToday: FlatpickrInstance | null = null;
 
-let activeTab = "sprint";
-export const setActiveTab = (tab) => { activeTab = tab; render(); };
+let activeTab: "sprint" | "backlog" = "sprint";
+export const setActiveTab = (tab: "sprint" | "backlog"): void => { activeTab = tab; render(); };
 
 // Backlog state — persists across renders
-const editingIds = new Set();
-const expandedStoryIds = new Set();
+const editingIds = new Set<string>();
+const expandedStoryIds = new Set<string>();
 
 // Highlight state — tracks the backlogTaskId of a just-added task
-let highlightBacklogTaskId = null;
+let highlightBacklogTaskId: string | null = null;
 
 // Sort state — UI-only, not persisted
-let taskSort = { key: null, asc: true };
-let backlogPanelSort = { key: null, asc: true };
-let backlogSort = { key: null, asc: true };
+let taskSort: SortState = { key: null, asc: true };
+let backlogPanelSort: SortState = { key: null, asc: true };
+let backlogSort: SortState = { key: null, asc: true };
 
-export const setHighlightBacklogTaskId = (id) => { highlightBacklogTaskId = id; };
+export const setHighlightBacklogTaskId = (id: string | null): void => { highlightBacklogTaskId = id; };
 
-export const toggleTaskSort = (key) => {
+export const toggleTaskSort = (key: string): void => {
   if (taskSort.key === key) taskSort.asc = !taskSort.asc;
   else { taskSort.key = key; taskSort.asc = true; }
   render(H_TASKS);
 };
 
-export const toggleBacklogPanelSort = (key) => {
+export const toggleBacklogPanelSort = (key: string): void => {
   if (backlogPanelSort.key === key) backlogPanelSort.asc = !backlogPanelSort.asc;
   else { backlogPanelSort.key = key; backlogPanelSort.asc = true; }
   render(H_PANEL);
 };
 
-export const toggleBacklogSort = (key) => {
+export const toggleBacklogSort = (key: string): void => {
   if (backlogSort.key === key) backlogSort.asc = !backlogSort.asc;
   else { backlogSort.key = key; backlogSort.asc = true; }
   render(H_BACKLOG);
@@ -62,11 +63,11 @@ export const toggleBacklogSort = (key) => {
 
 const NUMERIC_KEYS = new Set(["estimate", "actual", "priority"]);
 
-const sortItems = (items, key, asc) => {
+const sortItems = <T extends Record<string, any>>(items: T[], key: string | null, asc: boolean): T[] => {
   if (!key) return items;
   const sorted = [...items].sort((a, b) => {
-    let va = a[key] ?? "";
-    let vb = b[key] ?? "";
+    let va: any = a[key] ?? "";
+    let vb: any = b[key] ?? "";
     if (NUMERIC_KEYS.has(key)) {
       va = Number(va) || 0;
       vb = Number(vb) || 0;
@@ -77,7 +78,7 @@ const sortItems = (items, key, asc) => {
   return asc ? sorted : sorted.reverse();
 };
 
-export const startEditing = (id, focusAfter = false) => {
+export const startEditing = (id: string | null, focusAfter = false): void => {
   if (!id) return;
   editingIds.clear();
   editingIds.add(id);
@@ -87,62 +88,60 @@ export const startEditing = (id, focusAfter = false) => {
       const row = dom.backlogTableBody.querySelector(`[data-id="${id}"]`);
       if (row) {
         row.scrollIntoView({ behavior: "smooth", block: "nearest" });
-        row.querySelector("input")?.focus();
+        (row.querySelector("input") as HTMLInputElement | null)?.focus();
       }
     }, 0);
   }
 };
 
-export const expandAll = () => {
+export const expandAll = (): void => {
   const backlog = getBacklog();
   for (const story of backlog.stories) expandedStoryIds.add(story.id);
   render(H_BACKLOG);
 };
 
-export const collapseAll = () => {
+export const collapseAll = (): void => {
   expandedStoryIds.clear();
   render(H_BACKLOG);
 };
 
-const renderSprintList = () => {
+const renderSprintList = (): void => {
   dom.sprintList.innerHTML = "";
 
   if (activeTab === "backlog") return;
 
   const state = getState();
   state.sprints.forEach((sprint, index) => {
-    const node = dom.sprintItemTemplate.content.firstElementChild.cloneNode(true);
-    node.querySelector(".sprint-label").textContent = `Sprint ${index + 1}`;
+    const node = (dom.sprintItemTemplate.content.firstElementChild!.cloneNode(true)) as HTMLElement;
+    (node.querySelector(".sprint-label") as HTMLElement).textContent = `Sprint ${index + 1}`;
     if (sprint.id === state.activeSprintId) node.classList.add("active");
     node.addEventListener("click", () => setActiveSprint(sprint.id));
     dom.sprintList.appendChild(node);
   });
 };
 
-const applySortClasses = (container, sortState) => {
+const applySortClasses = (container: HTMLElement, sortState: SortState): void => {
   container.querySelectorAll("th.sortable").forEach((th) => {
     th.classList.remove("sort-asc", "sort-desc");
-    if (th.dataset.sortKey === sortState.key) {
+    if ((th as HTMLElement).dataset.sortKey === sortState.key) {
       th.classList.add(sortState.asc ? "sort-asc" : "sort-desc");
     }
   });
 };
 
-const renderTasks = (sprint, holidaySet, workWeekendSet) => {
+const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Set<string>): void => {
   dom.taskRows.innerHTML = "";
 
-  // Apply sort indicator to task table headers
   const taskTable = dom.taskRows.closest("table");
-  if (taskTable) applySortClasses(taskTable, taskSort);
+  if (taskTable) applySortClasses(taskTable as HTMLElement, taskSort);
 
   const isSorted = taskSort.key !== null;
   const tasks = sortItems([...sprint.tasks], taskSort.key, taskSort.asc);
   tasks.forEach((task) => {
-    const row = dom.taskRowTemplate.content.firstElementChild.cloneNode(true);
+    const row = (dom.taskRowTemplate.content.firstElementChild!.cloneNode(true)) as HTMLTableRowElement;
     row.dataset.taskId = task.id;
 
-    // Drag-and-drop reordering (disabled when column sort is active)
-    const dragHandle = row.querySelector(".drag-handle");
+    const dragHandle = row.querySelector(".drag-handle") as HTMLElement | null;
     if (isSorted) {
       row.draggable = false;
       if (dragHandle) dragHandle.classList.add("drag-handle-disabled");
@@ -158,8 +157,8 @@ const renderTasks = (sprint, holidaySet, workWeekendSet) => {
           return;
         }
         dragStartedFromHandle = false;
-        e.dataTransfer.effectAllowed = "move";
-        e.dataTransfer.setData("text/plain", task.id);
+        e.dataTransfer!.effectAllowed = "move";
+        e.dataTransfer!.setData("text/plain", task.id);
         row.classList.add("dragging");
       });
       row.addEventListener("dragend", () => {
@@ -171,23 +170,21 @@ const renderTasks = (sprint, holidaySet, workWeekendSet) => {
       });
     }
 
-    // Highlight newly added task
     if (highlightBacklogTaskId && task.backlogTaskId === highlightBacklogTaskId) {
       row.classList.add("task-row-highlight");
     }
 
-    const taskIdSpan = row.querySelector(".task-taskid");
-    const nameSpan = row.querySelector(".task-name");
-    const estimateSpan = row.querySelector(".task-estimate");
-    const actualInput = row.querySelector(".task-actual");
-    const statusSelect = row.querySelector(".task-status");
-    const doneInput = row.querySelector(".task-done");
-    const removeBtn = row.querySelector(".task-remove");
+    const taskIdSpan = row.querySelector(".task-taskid") as HTMLElement;
+    const nameSpan = row.querySelector(".task-name") as HTMLElement;
+    const estimateSpan = row.querySelector(".task-estimate") as HTMLElement;
+    const actualInput = row.querySelector(".task-actual") as HTMLInputElement;
+    const statusSelect = row.querySelector(".task-status") as HTMLSelectElement;
+    const doneInput = row.querySelector(".task-done") as HTMLInputElement;
+    const removeBtn = row.querySelector(".task-remove") as HTMLButtonElement;
 
     taskIdSpan.textContent = task.taskId || "";
     nameSpan.textContent = task.name;
 
-    // Look up current assignedTo and parent story from backlog
     let currentAssigned = task.assignedTo || "";
     let parentStoryDesc = "";
     if (task.backlogTaskId) {
@@ -203,12 +200,12 @@ const renderTasks = (sprint, holidaySet, workWeekendSet) => {
     }
     if (parentStoryDesc) taskIdSpan.title = parentStoryDesc;
     nameSpan.title = currentAssigned;
-    estimateSpan.textContent = task.estimate ?? "";
+    estimateSpan.textContent = String(task.estimate ?? "");
 
-    actualInput.value = task.actual ?? "";
+    actualInput.value = String(task.actual ?? "");
     actualInput.disabled = task.status !== "Done";
 
-    statusSelect.value = statusOptions.includes(task.status) ? task.status : "Todo";
+    statusSelect.value = (statusOptions as readonly string[]).includes(task.status) ? task.status : "Todo";
     doneInput.value = task.doneDate || "";
     doneInput.disabled = statusSelect.value !== "Done";
 
@@ -220,7 +217,7 @@ const renderTasks = (sprint, holidaySet, workWeekendSet) => {
         maxDate: sprint.endDate || null,
         disableMobile: true,
         disable: [
-          (date) => {
+          (date: Date) => {
             const iso = localIso(date);
             if (holidaySet && holidaySet.has(iso)) return true;
             const isWeekend = date.getDay() === 0 || date.getDay() === 6;
@@ -229,7 +226,7 @@ const renderTasks = (sprint, holidaySet, workWeekendSet) => {
           },
         ],
         allowInput: false,
-        onChange: ([date]) => {
+        onChange: ([date]: Date[]) => {
           if (date) {
             updateTask(task.id, { doneDate: localIso(date), status: "Done" });
           }
@@ -237,7 +234,7 @@ const renderTasks = (sprint, holidaySet, workWeekendSet) => {
       });
     }
 
-    const commitActual = () => {
+    const commitActual = (): void => {
       const val = actualInput.value;
       updateTask(task.id, { actual: val === "" ? null : Number(val) });
     };
@@ -247,7 +244,7 @@ const renderTasks = (sprint, holidaySet, workWeekendSet) => {
       if (e.key === "Enter") { e.preventDefault(); commitActual(); actualInput.blur(); }
     });
 
-    const commitStatus = (statusValue) => {
+    const commitStatus = (statusValue: string): void => {
       const status = statusValue;
       let doneDate = task.doneDate;
       let actual = task.actual;
@@ -265,20 +262,20 @@ const renderTasks = (sprint, holidaySet, workWeekendSet) => {
         doneDate = "";
         actual = null;
       }
-      updateTask(task.id, { status, doneDate, actual });
+      updateTask(task.id, { status: status as SprintTask["status"], doneDate, actual });
       if (status === "Done") {
         const tid = task.id;
         setTimeout(() => {
           const found = dom.taskRows.querySelector(`[data-task-id="${tid}"]`);
-          found?.querySelector(".task-actual")?.focus();
+          (found?.querySelector(".task-actual") as HTMLElement | null)?.focus();
         }, 0);
       }
     };
 
-    statusSelect.addEventListener("change", (e) => commitStatus(e.target.value));
-    statusSelect.addEventListener("blur", (e) => commitStatus(e.target.value));
+    statusSelect.addEventListener("change", (e) => commitStatus((e.target as HTMLSelectElement).value));
+    statusSelect.addEventListener("blur", (e) => commitStatus((e.target as HTMLSelectElement).value));
     statusSelect.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") { e.preventDefault(); commitStatus(e.target.value); statusSelect.blur(); }
+      if (e.key === "Enter") { e.preventDefault(); commitStatus((e.target as HTMLSelectElement).value); statusSelect.blur(); }
     });
 
 
@@ -286,12 +283,12 @@ const renderTasks = (sprint, holidaySet, workWeekendSet) => {
       const label = task.taskId ? `[${task.taskId}] ${task.name}` : task.name || "this task";
       dom.confirmRemoveTaskName.textContent = label;
       dom.confirmRemoveTaskModal.hidden = false;
-      const onConfirm = () => {
+      const onConfirm = (): void => {
         removeTaskFromSprint(task.id);
         cleanup();
       };
-      const onCancel = () => cleanup();
-      const cleanup = () => {
+      const onCancel = (): void => cleanup();
+      const cleanup = (): void => {
         dom.confirmRemoveTaskModal.hidden = true;
         dom.confirmRemoveTaskConfirm.removeEventListener("click", onConfirm);
         dom.confirmRemoveTaskCancel.removeEventListener("click", onCancel);
@@ -300,13 +297,12 @@ const renderTasks = (sprint, holidaySet, workWeekendSet) => {
       dom.confirmRemoveTaskCancel.addEventListener("click", onCancel);
     });
 
-    // Dragover/drop for backlog drag-to-add AND task reorder
     row.addEventListener("dragover", (e) => {
       e.preventDefault();
       const rect = row.getBoundingClientRect();
       const midY = rect.top + rect.height / 2;
       row.classList.remove("drag-over-above", "drag-over-below", "drag-over");
-      if (e.dataTransfer.types.includes("text/plain")) {
+      if (e.dataTransfer!.types.includes("text/plain")) {
         if (e.clientY < midY) {
           row.classList.add("drag-over-above");
         } else {
@@ -323,20 +319,18 @@ const renderTasks = (sprint, holidaySet, workWeekendSet) => {
       e.preventDefault();
       row.classList.remove("drag-over", "drag-over-above", "drag-over-below");
 
-      // Check for backlog drag-to-add first
-      const backlogTaskId = e.dataTransfer.getData("backlogTaskId");
+      const backlogTaskId = e.dataTransfer!.getData("backlogTaskId");
       if (backlogTaskId) {
         highlightBacklogTaskId = backlogTaskId;
         addTaskFromBacklog(backlogTaskId);
         return;
       }
 
-      // Task reorder
-      const draggedId = e.dataTransfer.getData("text/plain");
+      const draggedId = e.dataTransfer!.getData("text/plain");
       if (!draggedId || draggedId === task.id) return;
 
       const currentIds = Array.from(dom.taskRows.querySelectorAll("tr[data-task-id]"))
-        .map((tr) => tr.dataset.taskId);
+        .map((tr) => (tr as HTMLElement).dataset.taskId!);
       const filtered = currentIds.filter((id) => id !== draggedId);
       const targetIdx = filtered.indexOf(task.id);
       const rect = row.getBoundingClientRect();
@@ -350,20 +344,19 @@ const renderTasks = (sprint, holidaySet, workWeekendSet) => {
   });
 };
 
-const renderBacklogPanel = (sprint) => {
+const renderBacklogPanel = (sprint: Sprint): void => {
   const backlog = getBacklog();
   if (!backlog || !dom.backlogPanelRows) return;
 
   const allSprints = getState().sprints;
-  const assignedIds = new Set(
-    allSprints.flatMap(s => s.tasks.map(t => t.backlogTaskId)).filter(Boolean)
+  const assignedIds = new Set<string>(
+    allSprints.flatMap(s => s.tasks.map(t => t.backlogTaskId).filter((id): id is string => Boolean(id)))
   );
 
   dom.backlogPanelRows.innerHTML = "";
 
-  // Collect unassigned tasks (with parent story reference)
-  let unassigned = [];
-  const taskStoryMap = new Map();
+  let unassigned: BacklogTask[] = [];
+  const taskStoryMap = new Map<string, BacklogStory>();
   for (const story of backlog.stories) {
     for (const task of story.tasks) {
       if (!assignedIds.has(task.id)) {
@@ -373,45 +366,43 @@ const renderBacklogPanel = (sprint) => {
     }
   }
 
-  // Sort if active
   unassigned = sortItems(unassigned, backlogPanelSort.key, backlogPanelSort.asc);
 
-  // Header row
   const header = document.createElement("div");
   header.className = "backlog-panel-header";
   header.innerHTML = `<span class="bp-drag-col"></span><span class="bp-taskid sortable" data-sort-key="taskId">Task ID</span><span class="bp-description sortable" data-sort-key="description">Description</span><span class="bp-estimate sortable" data-sort-key="estimate">Est.</span><span class="bp-actions-col"></span>`;
   header.querySelectorAll(".sortable").forEach((el) => {
-    if (el.dataset.sortKey === backlogPanelSort.key) {
-      el.classList.add(backlogPanelSort.asc ? "sort-asc" : "sort-desc");
+    const htmlEl = el as HTMLElement;
+    if (htmlEl.dataset.sortKey === backlogPanelSort.key) {
+      htmlEl.classList.add(backlogPanelSort.asc ? "sort-asc" : "sort-desc");
     }
-    el.addEventListener("click", () => toggleBacklogPanelSort(el.dataset.sortKey));
+    htmlEl.addEventListener("click", () => toggleBacklogPanelSort(htmlEl.dataset.sortKey!));
   });
   dom.backlogPanelRows.appendChild(header);
 
   unassigned.forEach((task, idx) => {
-    const row = dom.backlogPanelRowTemplate.content.firstElementChild.cloneNode(true);
-    const bpTaskId = row.querySelector(".bp-taskid");
+    const row = (dom.backlogPanelRowTemplate.content.firstElementChild!.cloneNode(true)) as HTMLElement;
+    const bpTaskId = row.querySelector(".bp-taskid") as HTMLElement;
     bpTaskId.textContent = task.taskId || "";
     const parentStory = taskStoryMap.get(task.id);
     if (parentStory?.description) bpTaskId.title = parentStory.description;
-    const bpDesc = row.querySelector(".bp-description");
+    const bpDesc = row.querySelector(".bp-description") as HTMLElement;
     bpDesc.textContent = task.description;
     if (task.assignedTo) bpDesc.title = task.assignedTo;
-    row.querySelector(".bp-estimate").textContent = task.estimate ?? "";
+    (row.querySelector(".bp-estimate") as HTMLElement).textContent = String(task.estimate ?? "");
 
     row.addEventListener("dragstart", (e) => {
-      e.dataTransfer.setData("backlogTaskId", task.id);
+      (e as DragEvent).dataTransfer!.setData("backlogTaskId", task.id);
     });
 
-    row.querySelector(".bp-add-btn").addEventListener("click", () => {
+    (row.querySelector(".bp-add-btn") as HTMLButtonElement).addEventListener("click", () => {
       highlightBacklogTaskId = task.id;
-      const focusIdx = idx; // after removal, the next task slides into this index
+      const focusIdx = idx;
       addTaskFromBacklog(task.id);
-      // After re-render, focus the Add button at the same index position
       setTimeout(() => {
         const btns = dom.backlogPanelRows.querySelectorAll(".bp-add-btn");
         const target = btns[focusIdx] || btns[btns.length - 1];
-        if (target) target.focus();
+        if (target) (target as HTMLElement).focus();
       }, 0);
     });
 
@@ -421,21 +412,19 @@ const renderBacklogPanel = (sprint) => {
 
 const STORY_SORT_KEYS = new Set(["storyId", "description", "priority"]);
 
-const renderBacklog = () => {
+const renderBacklog = (): void => {
   const backlog = getBacklog();
   if (!backlog) return;
 
   const sprint = getActiveSprint();
-  const assignedIds = new Set(sprint?.tasks.map(t => t.backlogTaskId).filter(Boolean) || []);
+  const assignedIds = new Set<string>(sprint?.tasks.map(t => t.backlogTaskId).filter((id): id is string => Boolean(id)) || []);
 
   dom.backlogTableBody.innerHTML = "";
 
-  // Apply sort indicator to backlog table headers
   const blTable = dom.backlogTableBody.closest("table");
-  if (blTable) applySortClasses(blTable, backlogSort);
+  if (blTable) applySortClasses(blTable as HTMLElement, backlogSort);
 
-  // Sort stories or tasks within stories
-  let stories = backlog.stories;
+  let stories: BacklogStory[] = backlog.stories;
   if (backlogSort.key) {
     if (STORY_SORT_KEYS.has(backlogSort.key)) {
       stories = sortItems([...stories], backlogSort.key, backlogSort.asc);
@@ -446,22 +435,22 @@ const renderBacklog = () => {
     const isExpanded = expandedStoryIds.has(story.id);
     const isEditing = editingIds.has(story.id);
 
-    const storyRow = dom.backlogStoryRowTemplate.content.firstElementChild.cloneNode(true);
+    const storyRow = (dom.backlogStoryRowTemplate.content.firstElementChild!.cloneNode(true)) as HTMLTableRowElement;
     storyRow.dataset.id = story.id;
-    const expandToggle = storyRow.querySelector(".story-expand-toggle");
-    const storyIdView = storyRow.querySelector(".story-id-view");
-    const storyIdEdit = storyRow.querySelector(".story-id-edit");
-    const storyDescView = storyRow.querySelector(".story-desc-view");
-    const storyDescEdit = storyRow.querySelector(".story-desc-edit");
-    const storyPriorityView = storyRow.querySelector(".story-priority-view");
-    const storyPriorityEdit = storyRow.querySelector(".story-priority-edit");
-    const editBtn = storyRow.querySelector(".story-edit-btn");
-    const addTaskBtn = storyRow.querySelector(".story-add-task-btn");
-    const saveBtn = storyRow.querySelector(".story-save-btn");
-    const cancelBtn = storyRow.querySelector(".story-cancel-btn");
-    const deleteBtn = storyRow.querySelector(".story-delete-btn");
+    const expandToggle = storyRow.querySelector(".story-expand-toggle") as HTMLButtonElement;
+    const storyIdView = storyRow.querySelector(".story-id-view") as HTMLElement;
+    const storyIdEdit = storyRow.querySelector(".story-id-edit") as HTMLInputElement;
+    const storyDescView = storyRow.querySelector(".story-desc-view") as HTMLElement;
+    const storyDescEdit = storyRow.querySelector(".story-desc-edit") as HTMLInputElement;
+    const storyPriorityView = storyRow.querySelector(".story-priority-view") as HTMLElement;
+    const storyPriorityEdit = storyRow.querySelector(".story-priority-edit") as HTMLInputElement;
+    const editBtn = storyRow.querySelector(".story-edit-btn") as HTMLButtonElement;
+    const addTaskBtn = storyRow.querySelector(".story-add-task-btn") as HTMLButtonElement;
+    const saveBtn = storyRow.querySelector(".story-save-btn") as HTMLButtonElement;
+    const cancelBtn = storyRow.querySelector(".story-cancel-btn") as HTMLButtonElement;
+    const deleteBtn = storyRow.querySelector(".story-delete-btn") as HTMLButtonElement;
 
-    expandToggle.textContent = isExpanded ? "▼" : "▶";
+    expandToggle.textContent = isExpanded ? "\u25BC" : "\u25B6";
     expandToggle.addEventListener("click", () => {
       if (expandedStoryIds.has(story.id)) expandedStoryIds.delete(story.id);
       else expandedStoryIds.add(story.id);
@@ -470,7 +459,7 @@ const renderBacklog = () => {
 
     storyIdView.textContent = story.storyId || "";
     storyDescView.textContent = story.description || "";
-    storyPriorityView.textContent = story.priority ?? 100;
+    storyPriorityView.textContent = String(story.priority ?? 100);
 
     if (isEditing) {
       storyRow.classList.add('row-editing');
@@ -486,15 +475,15 @@ const renderBacklog = () => {
 
       storyPriorityView.hidden = true;
       storyPriorityEdit.hidden = false;
-      storyPriorityEdit.value = story.priority ?? 100;
+      storyPriorityEdit.value = String(story.priority ?? 100);
       storyPriorityEdit.addEventListener("keydown", (e) => {
         const cur = parseInt(storyPriorityEdit.value, 10) || 0;
         if (e.key === "ArrowUp") {
           e.preventDefault();
-          storyPriorityEdit.value = Math.floor(cur / 10) * 10 + 10;
+          storyPriorityEdit.value = String(Math.floor(cur / 10) * 10 + 10);
         } else if (e.key === "ArrowDown") {
           e.preventDefault();
-          storyPriorityEdit.value = Math.max(0, Math.ceil(cur / 10) * 10 - 10);
+          storyPriorityEdit.value = String(Math.max(0, Math.ceil(cur / 10) * 10 - 10));
         }
       });
 
@@ -536,41 +525,39 @@ const renderBacklog = () => {
 
     addTaskBtn.addEventListener("click", () => {
       expandedStoryIds.add(story.id);
-      const newTaskId = addBacklogTask(story.id); // triggers onChange → render
-      startEditing(newTaskId); // second render with new task in edit mode
+      const newTaskId = addBacklogTask(story.id);
+      startEditing(newTaskId);
     });
 
     dom.backlogTableBody.appendChild(storyRow);
 
-    // Task rows (only when expanded)
     if (isExpanded) {
-      // Sort tasks within story if a task-level sort key is active
-      let storyTasks = story.tasks;
+      let storyTasks: BacklogTask[] = story.tasks;
       if (backlogSort.key && !STORY_SORT_KEYS.has(backlogSort.key)) {
-        const taskKeyMap = { taskId: "taskId", taskDesc: "description", estimate: "estimate", assignedTo: "assignedTo" };
+        const taskKeyMap: Record<string, string> = { taskId: "taskId", taskDesc: "description", estimate: "estimate", assignedTo: "assignedTo" };
         const mappedKey = taskKeyMap[backlogSort.key] || backlogSort.key;
         storyTasks = sortItems([...storyTasks], mappedKey, backlogSort.asc);
       }
       for (const task of storyTasks) {
         const isTaskEditing = editingIds.has(task.id);
 
-        const taskRow = dom.backlogTaskRowTemplate.content.firstElementChild.cloneNode(true);
-        const taskIdView = taskRow.querySelector(".task-id-view");
-        const taskIdEdit = taskRow.querySelector(".task-id-edit");
-        const taskDescView = taskRow.querySelector(".task-desc-view");
-        const taskDescEdit = taskRow.querySelector(".task-desc-edit");
-        const taskEstView = taskRow.querySelector(".task-estimate-view");
-        const taskEstEdit = taskRow.querySelector(".task-estimate-edit");
-        const taskAssignedView = taskRow.querySelector(".task-assigned-view");
-        const taskAssignedEdit = taskRow.querySelector(".task-assigned-edit");
-        const taskEditBtn = taskRow.querySelector(".task-edit-btn");
-        const taskSaveBtn = taskRow.querySelector(".task-save-btn");
-        const taskCancelBtn = taskRow.querySelector(".task-cancel-btn");
-        const taskDeleteBtn = taskRow.querySelector(".task-delete-btn");
+        const taskRow = (dom.backlogTaskRowTemplate.content.firstElementChild!.cloneNode(true)) as HTMLTableRowElement;
+        const taskIdView = taskRow.querySelector(".task-id-view") as HTMLElement;
+        const taskIdEdit = taskRow.querySelector(".task-id-edit") as HTMLInputElement;
+        const taskDescView = taskRow.querySelector(".task-desc-view") as HTMLElement;
+        const taskDescEdit = taskRow.querySelector(".task-desc-edit") as HTMLInputElement;
+        const taskEstView = taskRow.querySelector(".task-estimate-view") as HTMLElement;
+        const taskEstEdit = taskRow.querySelector(".task-estimate-edit") as HTMLInputElement;
+        const taskAssignedView = taskRow.querySelector(".task-assigned-view") as HTMLElement;
+        const taskAssignedEdit = taskRow.querySelector(".task-assigned-edit") as HTMLSelectElement;
+        const taskEditBtn = taskRow.querySelector(".task-edit-btn") as HTMLButtonElement;
+        const taskSaveBtn = taskRow.querySelector(".task-save-btn") as HTMLButtonElement;
+        const taskCancelBtn = taskRow.querySelector(".task-cancel-btn") as HTMLButtonElement;
+        const taskDeleteBtn = taskRow.querySelector(".task-delete-btn") as HTMLButtonElement;
 
         taskIdView.textContent = task.taskId || "";
         taskDescView.textContent = task.description || "";
-        taskEstView.textContent = task.estimate ?? "";
+        taskEstView.textContent = String(task.estimate ?? "");
         taskAssignedView.textContent = task.assignedTo || "";
 
         if (assignedIds.has(task.id)) taskRow.classList.add("assigned");
@@ -587,7 +574,7 @@ const renderBacklog = () => {
 
           taskEstView.hidden = true;
           taskEstEdit.hidden = false;
-          taskEstEdit.value = task.estimate ?? "";
+          taskEstEdit.value = String(task.estimate ?? "");
 
           taskAssignedView.hidden = true;
           taskAssignedEdit.hidden = false;
@@ -595,7 +582,7 @@ const renderBacklog = () => {
           const members = getMembers();
           const emptyOpt = document.createElement("option");
           emptyOpt.value = "";
-          emptyOpt.textContent = "—";
+          emptyOpt.textContent = "\u2014";
           taskAssignedEdit.appendChild(emptyOpt);
           for (const m of members) {
             const opt = document.createElement("option");
@@ -603,7 +590,6 @@ const renderBacklog = () => {
             opt.textContent = m;
             taskAssignedEdit.appendChild(opt);
           }
-          // If current assignedTo is not in members (deleted member), still show it
           if (task.assignedTo && !members.includes(task.assignedTo)) {
             const legacyOpt = document.createElement("option");
             legacyOpt.value = task.assignedTo;
@@ -652,16 +638,16 @@ const renderBacklog = () => {
   }
 };
 
-const renderStats = (sprint, burndown) => {
+const renderStats = (sprint: Sprint, burndown: BurndownData): void => {
   const doneTasks = sprint.tasks.filter((t) => t.status === "Done").length;
   const availableDays = burndown.effectiveManDays - burndown.totalPoints;
 
   dom.summaryDuration.textContent = formatSprintRange(sprint);
-  dom.workingDays.textContent = burndown.dates.length;
+  dom.workingDays.textContent = String(burndown.dates.length);
   dom.totalPoints.textContent = burndown.totalPoints.toFixed(1).replace(/\.0$/, "");
-  const lastActual = [...burndown.actual].reverse().find((v) => v !== null) ?? 0;
+  const lastActual = [...burndown.actual].reverse().find((v): v is number => v !== null) ?? 0;
   dom.remainingPoints.textContent = lastActual.toFixed(1).replace(/\.0$/, "");
-  dom.doneTasks.textContent = doneTasks;
+  dom.doneTasks.textContent = String(doneTasks);
   dom.availableDaysValue.textContent = availableDays.toFixed(1).replace(/\.0$/, "");
 
   dom.availableDays.classList.remove("ok", "alert");
@@ -671,7 +657,6 @@ const renderStats = (sprint, burndown) => {
     dom.availableDays.classList.add("ok");
   }
 
-  // Progress percentage (done points / total points)
   const donePoints = sprint.tasks
     .filter((t) => t.status === "Done")
     .reduce((sum, t) => sum + Number(t.estimate || 0), 0);
@@ -681,7 +666,6 @@ const renderStats = (sprint, burndown) => {
   dom.progressPercent.textContent = `${progressPct}%`;
   dom.progressBarFill.style.width = `${progressPct}%`;
 
-  // Efficiency (Actual : Ideal)
   const developers = Math.max(0, Number(sprint.developers || 0));
   const idealEff = Math.min(1, Math.max(0, Number(sprint.efficiency || 0)));
   const daysElapsed = burndown.todayIndex;
@@ -690,21 +674,19 @@ const renderStats = (sprint, burndown) => {
   if (developers > 0 && daysElapsed > 0) {
     actualEff = pointsBurned / (developers * daysElapsed);
   }
-  const fmt = (v) => v.toFixed(2).replace(/0$/, "");
+  const fmt = (v: number): string => v.toFixed(2).replace(/0$/, "");
   dom.efficiencyDisplay.textContent = `${fmt(actualEff)} : ${fmt(idealEff)}`;
 };
 
-export const render = (hints) => {
+export const render = (hints?: number): void => {
   if (hints === undefined) hints = H_ALL;
-  const has = (h) => (hints & h) !== 0;
+  const has = (h: number): boolean => (hints! & h) !== 0;
 
-  // Tab switching — always cheap, always do it
   dom.tabSprint.classList.toggle("active", activeTab === "sprint");
   dom.tabBacklog.classList.toggle("active", activeTab === "backlog");
   dom.sprintView.hidden = activeTab !== "sprint";
   dom.backlogView.hidden = activeTab !== "backlog";
 
-  // Hide sprint sub-header (toolbar + sprint tabs) on backlog tab
   dom.sprintSubHeader.hidden = activeTab === "backlog";
 
   if (has(H_SIDEBAR)) renderSprintList();
@@ -719,7 +701,6 @@ export const render = (hints) => {
 
   patchActiveSprint({ developers: 0, efficiency: 1 });
 
-  // Build holiday / work-weekend sets from preferences
   const prefs = getPreferences();
   const holidaySet = new Set(prefs.holidays.map((h) => h.date));
   const workWeekendSet = new Set(prefs.workWeekends);
@@ -732,9 +713,9 @@ export const render = (hints) => {
   patchActiveSprint({ today: defaultToday });
 
   const effectiveToday =
-    sprint.today < sprint.startDate ? sprint.startDate :
-    sprint.today > maxToday ? maxToday :
-    sprint.today;
+    sprint.today! < sprint.startDate ? sprint.startDate :
+    sprint.today! > maxToday ? maxToday :
+    sprint.today!;
 
   if (has(H_HEADER)) {
     const state = getState();
@@ -750,7 +731,7 @@ export const render = (hints) => {
       maxDate: maxToday || null,
       disableMobile: true,
       disable: [
-        (date) => {
+        (date: Date) => {
           const iso = localIso(date);
           if (holidaySet.has(iso)) return true;
           const isWeekend = date.getDay() === 0 || date.getDay() === 6;
@@ -758,7 +739,7 @@ export const render = (hints) => {
           return isWeekend;
         },
       ],
-      onChange: ([date]) => {
+      onChange: ([date]: Date[]) => {
         if (date) updateToday(localIso(date));
       },
     });
@@ -771,9 +752,7 @@ export const render = (hints) => {
     const burndown = calculateBurndown(sprint, effectiveToday, holidaySet, workWeekendSet);
     if (has(H_STATS)) renderStats(sprint, burndown);
     if (has(H_CHART)) {
-      const showScopeLine = dom.showScopeLine.checked;
-      dom.scopeLegendItem.hidden = !showScopeLine;
-      drawChart({ ...burndown, showScopeLine });
+      drawChart(burndown);
     }
   }
 };

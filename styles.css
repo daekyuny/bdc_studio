@@ -403,13 +403,6 @@ select:focus {
   background: var(--actual);
 }
 
-.swatch.scope {
-  background: #f59e0b;
-  border-radius: 0;
-  height: 2px;
-  border-top: 1px dashed #f59e0b;
-}
-
 .chart-wrap {
   width: 100%;
   overflow-x: auto;

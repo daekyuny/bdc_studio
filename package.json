@@ -3,12 +3,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "esbuild src/main.js --bundle --outfile=app.js",
+    "build": "esbuild src/main.ts --bundle --outfile=app.js",
     "dev": "python3 -m http.server 5173",
-    "test": "node --test test/*.test.js"
+    "test": "tsx --test test/*.test.ts",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@types/node": "^25.3.3",
     "esbuild": "^0.27.3",
-    "jsdom": "^28.1.0"
+    "jsdom": "^28.1.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
   }
 }

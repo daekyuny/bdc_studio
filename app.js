@@ -1,106 +1,106 @@
+"use strict";
 (() => {
-  // src/dom.js
+  // src/dom.ts
+  var $ = (id) => document.getElementById(id);
   var dom = {
-    mainLayout: document.getElementById("mainLayout"),
-    sprintSubHeader: document.getElementById("sprintSubHeader"),
-    sprintList: document.getElementById("sprintList"),
-    newSprintBtn: document.getElementById("newSprintBtn"),
-    deleteSprintBtn: document.getElementById("deleteSprintBtn"),
-    sprintTitleText: document.getElementById("sprintTitleText"),
-    editSprintBtn: document.getElementById("editSprintBtn"),
-    summaryDuration: document.getElementById("summaryDuration"),
-    sprintToday: document.getElementById("sprintToday"),
-    efficiencyDisplay: document.getElementById("efficiencyDisplay"),
-    taskRows: document.getElementById("taskRows"),
-    totalPoints: document.getElementById("totalPoints"),
-    remainingPoints: document.getElementById("remainingPoints"),
-    workingDays: document.getElementById("workingDays"),
-    doneTasks: document.getElementById("doneTasks"),
-    availableDays: document.getElementById("availableDays"),
-    availableDaysValue: document.getElementById("availableDaysValue"),
-    progressPercent: document.getElementById("progressPercent"),
-    progressBarFill: document.getElementById("progressBarFill"),
-    chart: document.getElementById("burndownChart"),
-    showDayNumbers: document.getElementById("showDayNumbers"),
-    showScopeLine: document.getElementById("showScopeLine"),
-    scopeLegendItem: document.getElementById("scopeLegendItem"),
+    mainLayout: $("mainLayout"),
+    sprintSubHeader: $("sprintSubHeader"),
+    sprintList: $("sprintList"),
+    newSprintBtn: $("newSprintBtn"),
+    deleteSprintBtn: $("deleteSprintBtn"),
+    sprintTitleText: $("sprintTitleText"),
+    editSprintBtn: $("editSprintBtn"),
+    summaryDuration: $("summaryDuration"),
+    sprintToday: $("sprintToday"),
+    efficiencyDisplay: $("efficiencyDisplay"),
+    taskRows: $("taskRows"),
+    totalPoints: $("totalPoints"),
+    remainingPoints: $("remainingPoints"),
+    workingDays: $("workingDays"),
+    doneTasks: $("doneTasks"),
+    availableDays: $("availableDays"),
+    availableDaysValue: $("availableDaysValue"),
+    progressPercent: $("progressPercent"),
+    progressBarFill: $("progressBarFill"),
+    chart: $("burndownChart"),
+    showDayNumbers: $("showDayNumbers"),
     exportCsvBtn: document.getElementById("exportCsvBtn"),
-    exportBtn: document.getElementById("exportBtn"),
-    importBtn: document.getElementById("importBtn"),
-    importFile: document.getElementById("importFile"),
-    sprintModal: document.getElementById("sprintModal"),
-    modalTitle: document.getElementById("modalTitle"),
-    modalDescription: document.getElementById("modalDescription"),
-    modalStartDate: document.getElementById("modalStartDate"),
-    modalWorkingDays: document.getElementById("modalWorkingDays"),
-    modalEndDate: document.getElementById("modalEndDate"),
-    modalDevelopers: document.getElementById("modalDevelopers"),
-    modalEfficiency: document.getElementById("modalEfficiency"),
-    modalError: document.getElementById("modalError"),
-    modalSave: document.getElementById("modalSave"),
-    modalCancel: document.getElementById("modalCancel"),
-    modalClose: document.getElementById("modalClose"),
-    sprintItemTemplate: document.getElementById("sprintItemTemplate"),
-    taskRowTemplate: document.getElementById("taskRowTemplate"),
+    exportBtn: $("exportBtn"),
+    importBtn: $("importBtn"),
+    importFile: $("importFile"),
+    sprintModal: $("sprintModal"),
+    modalTitle: $("modalTitle"),
+    modalDescription: $("modalDescription"),
+    modalStartDate: $("modalStartDate"),
+    modalWorkingDays: $("modalWorkingDays"),
+    modalEndDate: $("modalEndDate"),
+    modalDevelopers: $("modalDevelopers"),
+    modalEfficiency: $("modalEfficiency"),
+    modalError: $("modalError"),
+    modalSave: $("modalSave"),
+    modalCancel: $("modalCancel"),
+    modalClose: $("modalClose"),
+    sprintItemTemplate: $("sprintItemTemplate"),
+    taskRowTemplate: $("taskRowTemplate"),
     // Tabs
-    tabSprint: document.getElementById("tabSprint"),
-    tabBacklog: document.getElementById("tabBacklog"),
-    sprintView: document.getElementById("sprintView"),
-    backlogView: document.getElementById("backlogView"),
+    tabSprint: $("tabSprint"),
+    tabBacklog: $("tabBacklog"),
+    sprintView: $("sprintView"),
+    backlogView: $("backlogView"),
     // Sprint task card — add-by-ID
-    addByIdInput: document.getElementById("addByIdInput"),
-    addByIdBtn: document.getElementById("addByIdBtn"),
+    addByIdInput: $("addByIdInput"),
+    addByIdBtn: $("addByIdBtn"),
     // Backlog panel (sprint view, drag-to-add)
-    backlogPanel: document.getElementById("backlogPanel"),
-    backlogPanelToggle: document.getElementById("backlogPanelToggle"),
-    backlogPanelRows: document.getElementById("backlogPanelRows"),
-    backlogPanelRowTemplate: document.getElementById("backlogPanelRowTemplate"),
+    backlogPanel: $("backlogPanel"),
+    backlogPanelToggle: $("backlogPanelToggle"),
+    backlogPanelRows: $("backlogPanelRows"),
+    backlogPanelRowTemplate: $("backlogPanelRowTemplate"),
     // Backlog view
-    backlogExpandAllBtn: document.getElementById("backlogExpandAllBtn"),
-    backlogCollapseAllBtn: document.getElementById("backlogCollapseAllBtn"),
-    backlogAddStoryBtn: document.getElementById("backlogAddStoryBtn"),
-    backlogImportCsvBtn: document.getElementById("backlogImportCsvBtn"),
-    backlogExportCsvBtn: document.getElementById("backlogExportCsvBtn"),
-    backlogDeleteAllBtn: document.getElementById("backlogDeleteAllBtn"),
-    backlogImportFile: document.getElementById("backlogImportFile"),
-    backlogTableBody: document.getElementById("backlogTableBody"),
-    backlogStoryRowTemplate: document.getElementById("backlogStoryRowTemplate"),
-    backlogTaskRowTemplate: document.getElementById("backlogTaskRowTemplate"),
+    backlogExpandAllBtn: $("backlogExpandAllBtn"),
+    backlogCollapseAllBtn: $("backlogCollapseAllBtn"),
+    backlogAddStoryBtn: $("backlogAddStoryBtn"),
+    backlogImportCsvBtn: $("backlogImportCsvBtn"),
+    backlogExportCsvBtn: $("backlogExportCsvBtn"),
+    backlogDeleteAllBtn: $("backlogDeleteAllBtn"),
+    backlogImportFile: $("backlogImportFile"),
+    backlogTableBody: $("backlogTableBody"),
+    backlogStoryRowTemplate: $("backlogStoryRowTemplate"),
+    backlogTaskRowTemplate: $("backlogTaskRowTemplate"),
     // Backlog "Clear All" confirm dialog
-    confirmDeleteBacklogModal: document.getElementById("confirmDeleteBacklogModal"),
-    confirmDeleteBacklogCancel: document.getElementById("confirmDeleteBacklogCancel"),
-    confirmDeleteBacklogConfirm: document.getElementById("confirmDeleteBacklogConfirm"),
+    confirmDeleteBacklogModal: $("confirmDeleteBacklogModal"),
+    confirmDeleteBacklogCancel: $("confirmDeleteBacklogCancel"),
+    confirmDeleteBacklogConfirm: $("confirmDeleteBacklogConfirm"),
     // Task remove confirm dialog
-    confirmRemoveTaskModal: document.getElementById("confirmRemoveTaskModal"),
-    confirmRemoveTaskName: document.getElementById("confirmRemoveTaskName"),
-    confirmRemoveTaskCancel: document.getElementById("confirmRemoveTaskCancel"),
-    confirmRemoveTaskConfirm: document.getElementById("confirmRemoveTaskConfirm"),
+    confirmRemoveTaskModal: $("confirmRemoveTaskModal"),
+    confirmRemoveTaskName: $("confirmRemoveTaskName"),
+    confirmRemoveTaskCancel: $("confirmRemoveTaskCancel"),
+    confirmRemoveTaskConfirm: $("confirmRemoveTaskConfirm"),
     // Import confirm dialog (reusable)
-    importConfirmModal: document.getElementById("importConfirmModal"),
-    importConfirmTitle: document.getElementById("importConfirmTitle"),
-    importConfirmMessage: document.getElementById("importConfirmMessage"),
-    importConfirmSubtext: document.getElementById("importConfirmSubtext"),
-    importConfirmCancel: document.getElementById("importConfirmCancel"),
-    importConfirmOk: document.getElementById("importConfirmOk"),
+    importConfirmModal: $("importConfirmModal"),
+    importConfirmTitle: $("importConfirmTitle"),
+    importConfirmMessage: $("importConfirmMessage"),
+    importConfirmSubtext: $("importConfirmSubtext"),
+    importConfirmCancel: $("importConfirmCancel"),
+    importConfirmOk: $("importConfirmOk"),
     // Preferences modal
-    settingsBtn: document.getElementById("settingsBtn"),
-    preferencesModal: document.getElementById("preferencesModal"),
-    prefClose: document.getElementById("prefClose"),
-    prefDone: document.getElementById("prefDone"),
-    prefHolidayDate: document.getElementById("prefHolidayDate"),
-    prefHolidayName: document.getElementById("prefHolidayName"),
-    prefHolidayAddBtn: document.getElementById("prefHolidayAddBtn"),
-    prefHolidayList: document.getElementById("prefHolidayList"),
-    prefWeekendDate: document.getElementById("prefWeekendDate"),
-    prefWeekendAddBtn: document.getElementById("prefWeekendAddBtn"),
-    prefWeekendList: document.getElementById("prefWeekendList"),
+    settingsBtn: $("settingsBtn"),
+    preferencesModal: $("preferencesModal"),
+    prefClose: $("prefClose"),
+    prefDone: $("prefDone"),
+    prefHolidayDate: $("prefHolidayDate"),
+    prefHolidayName: $("prefHolidayName"),
+    prefHolidayAddBtn: $("prefHolidayAddBtn"),
+    prefHolidayList: $("prefHolidayList"),
+    prefWeekendDate: $("prefWeekendDate"),
+    prefWeekendAddBtn: $("prefWeekendAddBtn"),
+    prefWeekendList: $("prefWeekendList"),
     // Members
-    prefMemberName: document.getElementById("prefMemberName"),
-    prefMemberAddBtn: document.getElementById("prefMemberAddBtn"),
-    prefMemberList: document.getElementById("prefMemberList")
+    prefMemberName: $("prefMemberName"),
+    prefMemberAddBtn: $("prefMemberAddBtn"),
+    prefMemberList: $("prefMemberList")
   };
 
-  // src/utils.js
+  // src/utils.ts
   var statusOptions = ["Todo", "In Progress", "Done"];
   var localIso = (date) => {
     const y = date.getFullYear();
@@ -119,7 +119,7 @@
   var getWorkingDates = (startIso, endIso, holidays, workWeekends) => {
     if (!startIso || !endIso) return [];
     const dates = [];
-    let cursor = /* @__PURE__ */ new Date(startIso + "T00:00:00");
+    const cursor = /* @__PURE__ */ new Date(startIso + "T00:00:00");
     const end = /* @__PURE__ */ new Date(endIso + "T00:00:00");
     while (cursor <= end) {
       const day = cursor.getDay();
@@ -179,7 +179,7 @@
     return gaps;
   };
 
-  // src/state.js
+  // src/state.ts
   var H_SIDEBAR = 1;
   var H_HEADER = 2;
   var H_TASKS = 4;
@@ -203,7 +203,10 @@
     if (!parsed.backlog) parsed.backlog = { stories: [] };
     if (!parsed.preferences) parsed.preferences = { holidays: [], workWeekends: [], members: [] };
     for (const sprint of parsed.sprints) {
-      if (!sprint.scopeLog) sprint.scopeLog = [];
+      delete sprint.scopeLog;
+      delete sprint.locked;
+      delete sprint.lockedAt;
+      delete sprint.lockedBaseline;
       for (const task of sprint.tasks) {
         if (task.points !== void 0 && task.estimate === void 0) {
           task.estimate = task.points;
@@ -231,7 +234,6 @@
           developers: 4,
           efficiency: 0.8,
           tasks: [],
-          scopeLog: [],
           createdAt: (/* @__PURE__ */ new Date()).toISOString()
         }
       ]
@@ -270,7 +272,6 @@
       developers,
       efficiency,
       tasks: [],
-      scopeLog: [],
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     state.sprints.push(newSprint);
@@ -305,7 +306,6 @@
         developers: 0,
         efficiency: 1,
         tasks: [],
-        scopeLog: [],
         createdAt: (/* @__PURE__ */ new Date()).toISOString()
       };
       state.sprints = [newSprint];
@@ -320,7 +320,7 @@
     const sprint = getActiveSprint();
     if (!sprint) return;
     const taskMap = new Map(sprint.tasks.map((t) => [t.id, t]));
-    const reordered = taskIds.map((id) => taskMap.get(id)).filter(Boolean);
+    const reordered = taskIds.map((id) => taskMap.get(id)).filter((t) => Boolean(t));
     for (const t of sprint.tasks) {
       if (!taskIds.includes(t.id)) reordered.push(t);
     }
@@ -340,32 +340,18 @@
   var removeTaskFromSprint = (taskId) => {
     const sprint = getActiveSprint();
     if (!sprint) return;
-    const removed = sprint.tasks.find((task) => task.id === taskId);
     sprint.tasks = sprint.tasks.filter((task) => task.id !== taskId);
-    if (removed) {
-      if (!sprint.scopeLog) sprint.scopeLog = [];
-      const totalAfter = sprint.tasks.reduce((s, t) => s + Number(t.estimate || 0), 0);
-      sprint.scopeLog.push({
-        date: todayIso(),
-        action: "remove",
-        taskId: removed.taskId,
-        taskName: removed.name,
-        estimate: Number(removed.estimate || 0),
-        totalAfter
-      });
-    }
     save();
     onChange(H_SPRINT_TASKS);
   };
   var addTaskFromBacklog = (backlogTaskId) => {
     const sprint = getActiveSprint();
     if (!sprint) return;
-    let foundTask = null, foundStory = null;
+    let foundTask = null;
     for (const story of state.backlog.stories) {
       for (const t of story.tasks) {
         if (t.id === backlogTaskId) {
           foundTask = t;
-          foundStory = story;
           break;
         }
       }
@@ -384,16 +370,6 @@
       actual: null,
       status: "Todo",
       doneDate: ""
-    });
-    if (!sprint.scopeLog) sprint.scopeLog = [];
-    const totalAfter = sprint.tasks.reduce((s, t) => s + Number(t.estimate || 0), 0);
-    sprint.scopeLog.push({
-      date: todayIso(),
-      action: "add",
-      taskId: foundTask.taskId,
-      taskName: foundTask.description,
-      estimate,
-      totalAfter
     });
     save();
     onChange(H_SPRINT_TASKS);
@@ -580,7 +556,7 @@
     }
   };
 
-  // src/burndown.js
+  // src/burndown.ts
   var calculateBurndown = (sprint, today, holidays, workWeekends) => {
     const sprintDates = getWorkingDates(sprint.startDate, sprint.endDate, holidays, workWeekends);
     const extraDay = sprint.endDate ? getNextWorkingDay(sprint.endDate, holidays, workWeekends) : null;
@@ -606,25 +582,11 @@
       }, 0);
       return totalPoints - burned;
     });
-    const scopeLog = sprint.scopeLog || [];
-    let scopeLineData = null;
-    if (scopeLog.length > 0 && todayIndex >= 0) {
-      const first = scopeLog[0];
-      const initialScope = first.action === "add" ? first.totalAfter - first.estimate : first.totalAfter + first.estimate;
-      scopeLineData = dates.map((date, i) => {
-        if (i > todayIndex) return null;
-        let lastTotal = null;
-        for (const entry of scopeLog) {
-          if (entry.date <= date) lastTotal = entry.totalAfter;
-        }
-        return lastTotal !== null ? lastTotal : initialScope;
-      });
-    }
-    return { dates, totalPoints, ideal, actual, manDays, effectiveManDays, idealDailyBurn, todayIndex, scopeLineData };
+    return { dates, totalPoints, ideal, actual, manDays, effectiveManDays, idealDailyBurn, todayIndex };
   };
 
-  // src/chart.js
-  var drawChart = ({ dates, totalPoints, ideal, actual, todayIndex, scopeLineData, showScopeLine }) => {
+  // src/chart.ts
+  var drawChart = ({ dates, totalPoints, ideal, actual, todayIndex }) => {
     const width = 800;
     const height = 320;
     const padding = 50;
@@ -632,8 +594,8 @@
     dom.chart.innerHTML = "";
     if (!dates.length) {
       const emptyText = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      emptyText.setAttribute("x", width / 2);
-      emptyText.setAttribute("y", height / 2);
+      emptyText.setAttribute("x", String(width / 2));
+      emptyText.setAttribute("y", String(height / 2));
       emptyText.setAttribute("text-anchor", "middle");
       emptyText.setAttribute("fill", "#6b7080");
       emptyText.textContent = "Set sprint dates to see the chart.";
@@ -641,8 +603,7 @@
       return;
     }
     const nonNullActual = actual.filter((v) => v !== null);
-    const nonNullScope = showScopeLine && scopeLineData ? scopeLineData.filter((v) => v !== null) : [];
-    const maxValue = Math.max(totalPoints, ...nonNullActual, ...nonNullScope, 1);
+    const maxValue = Math.max(totalPoints, ...nonNullActual, 1);
     const minValue = Math.min(0, ...nonNullActual);
     const range = maxValue - minValue;
     const plotWidth = width - padding * 2;
@@ -657,27 +618,27 @@
     for (let i = 0; i <= 4; i++) {
       const y = padding + plotHeight * (i / 4);
       const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-      line.setAttribute("x1", padding);
-      line.setAttribute("x2", width - padding);
-      line.setAttribute("y1", y);
-      line.setAttribute("y2", y);
+      line.setAttribute("x1", String(padding));
+      line.setAttribute("x2", String(width - padding));
+      line.setAttribute("y1", String(y));
+      line.setAttribute("y2", String(y));
       grid.appendChild(line);
       const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      label.setAttribute("x", 14);
-      label.setAttribute("y", y + 4);
+      label.setAttribute("x", "14");
+      label.setAttribute("y", String(y + 4));
       label.setAttribute("fill", "#6b7080");
       label.setAttribute("font-size", "11");
-      label.textContent = Math.round(maxValue - range * (i / 4));
+      label.textContent = String(Math.round(maxValue - range * (i / 4)));
       dom.chart.appendChild(label);
     }
     dom.chart.appendChild(grid);
     if (minValue < 0) {
       const zeroY = padding + plotHeight * (1 - (0 - minValue) / range);
       const zeroLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
-      zeroLine.setAttribute("x1", padding);
-      zeroLine.setAttribute("x2", width - padding);
-      zeroLine.setAttribute("y1", zeroY);
-      zeroLine.setAttribute("y2", zeroY);
+      zeroLine.setAttribute("x1", String(padding));
+      zeroLine.setAttribute("x2", String(width - padding));
+      zeroLine.setAttribute("y1", String(zeroY));
+      zeroLine.setAttribute("y2", String(zeroY));
       zeroLine.setAttribute("stroke", "rgba(44, 47, 58, 0.3)");
       zeroLine.setAttribute("stroke-width", "1.5");
       zeroLine.setAttribute("stroke-dasharray", "4 3");
@@ -686,17 +647,17 @@
     if (todayIndex >= 0) {
       const tx = padding + plotWidth * (dates.length === 1 ? 0 : todayIndex / (dates.length - 1));
       const todayLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
-      todayLine.setAttribute("x1", tx);
-      todayLine.setAttribute("x2", tx);
-      todayLine.setAttribute("y1", padding);
-      todayLine.setAttribute("y2", height - padding);
+      todayLine.setAttribute("x1", String(tx));
+      todayLine.setAttribute("x2", String(tx));
+      todayLine.setAttribute("y1", String(padding));
+      todayLine.setAttribute("y2", String(height - padding));
       todayLine.setAttribute("stroke", "rgba(92, 103, 242, 0.45)");
       todayLine.setAttribute("stroke-width", "1.5");
       todayLine.setAttribute("stroke-dasharray", "4 3");
       dom.chart.appendChild(todayLine);
       const todayLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      todayLabel.setAttribute("x", tx + 4);
-      todayLabel.setAttribute("y", padding + 12);
+      todayLabel.setAttribute("x", String(tx + 4));
+      todayLabel.setAttribute("y", String(padding + 12));
       todayLabel.setAttribute("fill", "rgba(92, 103, 242, 0.65)");
       todayLabel.setAttribute("font-size", "10");
       todayLabel.textContent = "Today";
@@ -708,7 +669,16 @@
     idealLine.setAttribute("stroke-width", "1.5");
     idealLine.setAttribute("points", ideal.map(toPoint).join(" "));
     dom.chart.appendChild(idealLine);
-    const actualPoints = actual.map((val, i) => val !== null ? toPoint(val, i) : null).filter(Boolean);
+    ideal.forEach((val, i) => {
+      const [cx, cy] = toPoint(val, i).split(",");
+      const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      dot.setAttribute("cx", cx);
+      dot.setAttribute("cy", cy);
+      dot.setAttribute("r", "3");
+      dot.setAttribute("fill", "#3b82f6");
+      dom.chart.appendChild(dot);
+    });
+    const actualPoints = actual.map((val, i) => val !== null ? toPoint(val, i) : null).filter((v) => v !== null);
     const actualLine = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
     actualLine.setAttribute("fill", "none");
     actualLine.setAttribute("stroke", "#ef4444");
@@ -718,18 +688,16 @@
     actualLine.style.strokeDashoffset = "1000";
     actualLine.style.animation = "dash 1.6s ease forwards";
     dom.chart.appendChild(actualLine);
-    if (showScopeLine && scopeLineData) {
-      const scopePoints = scopeLineData.map((val, i) => val !== null ? toPoint(val, i) : null).filter(Boolean);
-      if (scopePoints.length > 0) {
-        const scopeLine = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
-        scopeLine.setAttribute("fill", "none");
-        scopeLine.setAttribute("stroke", "#f59e0b");
-        scopeLine.setAttribute("stroke-width", "1");
-        scopeLine.setAttribute("stroke-dasharray", "6 3");
-        scopeLine.setAttribute("points", scopePoints.join(" "));
-        dom.chart.appendChild(scopeLine);
-      }
-    }
+    actual.forEach((val, i) => {
+      if (val === null) return;
+      const [cx, cy] = toPoint(val, i).split(",");
+      const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      dot.setAttribute("cx", cx);
+      dot.setAttribute("cy", cy);
+      dot.setAttribute("r", "3");
+      dot.setAttribute("fill", "#ef4444");
+      dom.chart.appendChild(dot);
+    });
     const labels = document.createElementNS("http://www.w3.org/2000/svg", "g");
     labels.setAttribute("font-size", "11");
     labels.setAttribute("fill", "#6b7080");
@@ -737,8 +705,8 @@
     dates.forEach((date, index) => {
       const x = padding + plotWidth * (dates.length === 1 ? 0 : index / (dates.length - 1));
       const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      label.setAttribute("x", x);
-      label.setAttribute("y", height - 18);
+      label.setAttribute("x", String(x));
+      label.setAttribute("y", String(height - 18));
       label.setAttribute("text-anchor", "middle");
       label.textContent = showDays ? `D${index}` : toShortDate(date);
       labels.appendChild(label);
@@ -746,7 +714,7 @@
     dom.chart.appendChild(labels);
   };
 
-  // src/render.js
+  // src/render.ts
   var fpToday = null;
   var activeTab = "sprint";
   var setActiveTab = (tab) => {
@@ -911,8 +879,8 @@
       }
       if (parentStoryDesc) taskIdSpan.title = parentStoryDesc;
       nameSpan.title = currentAssigned;
-      estimateSpan.textContent = task.estimate ?? "";
-      actualInput.value = task.actual ?? "";
+      estimateSpan.textContent = String(task.estimate ?? "");
+      actualInput.value = String(task.actual ?? "");
       actualInput.disabled = task.status !== "Done";
       statusSelect.value = statusOptions.includes(task.status) ? task.status : "Todo";
       doneInput.value = task.doneDate || "";
@@ -1050,7 +1018,7 @@
     if (!backlog || !dom.backlogPanelRows) return;
     const allSprints = getState().sprints;
     const assignedIds = new Set(
-      allSprints.flatMap((s) => s.tasks.map((t) => t.backlogTaskId)).filter(Boolean)
+      allSprints.flatMap((s) => s.tasks.map((t) => t.backlogTaskId).filter((id) => Boolean(id)))
     );
     dom.backlogPanelRows.innerHTML = "";
     let unassigned = [];
@@ -1068,10 +1036,11 @@
     header.className = "backlog-panel-header";
     header.innerHTML = `<span class="bp-drag-col"></span><span class="bp-taskid sortable" data-sort-key="taskId">Task ID</span><span class="bp-description sortable" data-sort-key="description">Description</span><span class="bp-estimate sortable" data-sort-key="estimate">Est.</span><span class="bp-actions-col"></span>`;
     header.querySelectorAll(".sortable").forEach((el) => {
-      if (el.dataset.sortKey === backlogPanelSort.key) {
-        el.classList.add(backlogPanelSort.asc ? "sort-asc" : "sort-desc");
+      const htmlEl = el;
+      if (htmlEl.dataset.sortKey === backlogPanelSort.key) {
+        htmlEl.classList.add(backlogPanelSort.asc ? "sort-asc" : "sort-desc");
       }
-      el.addEventListener("click", () => toggleBacklogPanelSort(el.dataset.sortKey));
+      htmlEl.addEventListener("click", () => toggleBacklogPanelSort(htmlEl.dataset.sortKey));
     });
     dom.backlogPanelRows.appendChild(header);
     unassigned.forEach((task, idx) => {
@@ -1083,7 +1052,7 @@
       const bpDesc = row.querySelector(".bp-description");
       bpDesc.textContent = task.description;
       if (task.assignedTo) bpDesc.title = task.assignedTo;
-      row.querySelector(".bp-estimate").textContent = task.estimate ?? "";
+      row.querySelector(".bp-estimate").textContent = String(task.estimate ?? "");
       row.addEventListener("dragstart", (e) => {
         e.dataTransfer.setData("backlogTaskId", task.id);
       });
@@ -1105,7 +1074,7 @@
     const backlog = getBacklog();
     if (!backlog) return;
     const sprint = getActiveSprint();
-    const assignedIds = new Set(sprint?.tasks.map((t) => t.backlogTaskId).filter(Boolean) || []);
+    const assignedIds = new Set(sprint?.tasks.map((t) => t.backlogTaskId).filter((id) => Boolean(id)) || []);
     dom.backlogTableBody.innerHTML = "";
     const blTable = dom.backlogTableBody.closest("table");
     if (blTable) applySortClasses(blTable, backlogSort);
@@ -1140,7 +1109,7 @@
       });
       storyIdView.textContent = story.storyId || "";
       storyDescView.textContent = story.description || "";
-      storyPriorityView.textContent = story.priority ?? 100;
+      storyPriorityView.textContent = String(story.priority ?? 100);
       if (isEditing) {
         storyRow.classList.add("row-editing");
         expandToggle.hidden = true;
@@ -1152,15 +1121,15 @@
         storyDescEdit.value = story.description || "";
         storyPriorityView.hidden = true;
         storyPriorityEdit.hidden = false;
-        storyPriorityEdit.value = story.priority ?? 100;
+        storyPriorityEdit.value = String(story.priority ?? 100);
         storyPriorityEdit.addEventListener("keydown", (e) => {
           const cur = parseInt(storyPriorityEdit.value, 10) || 0;
           if (e.key === "ArrowUp") {
             e.preventDefault();
-            storyPriorityEdit.value = Math.floor(cur / 10) * 10 + 10;
+            storyPriorityEdit.value = String(Math.floor(cur / 10) * 10 + 10);
           } else if (e.key === "ArrowDown") {
             e.preventDefault();
-            storyPriorityEdit.value = Math.max(0, Math.ceil(cur / 10) * 10 - 10);
+            storyPriorityEdit.value = String(Math.max(0, Math.ceil(cur / 10) * 10 - 10));
           }
         });
         editBtn.hidden = true;
@@ -1224,7 +1193,7 @@
           const taskDeleteBtn = taskRow.querySelector(".task-delete-btn");
           taskIdView.textContent = task.taskId || "";
           taskDescView.textContent = task.description || "";
-          taskEstView.textContent = task.estimate ?? "";
+          taskEstView.textContent = String(task.estimate ?? "");
           taskAssignedView.textContent = task.assignedTo || "";
           if (assignedIds.has(task.id)) taskRow.classList.add("assigned");
           if (isTaskEditing) {
@@ -1237,7 +1206,7 @@
             taskDescEdit.value = task.description || "";
             taskEstView.hidden = true;
             taskEstEdit.hidden = false;
-            taskEstEdit.value = task.estimate ?? "";
+            taskEstEdit.value = String(task.estimate ?? "");
             taskAssignedView.hidden = true;
             taskAssignedEdit.hidden = false;
             taskAssignedEdit.innerHTML = "";
@@ -1297,11 +1266,11 @@
     const doneTasks = sprint.tasks.filter((t) => t.status === "Done").length;
     const availableDays = burndown.effectiveManDays - burndown.totalPoints;
     dom.summaryDuration.textContent = formatSprintRange(sprint);
-    dom.workingDays.textContent = burndown.dates.length;
+    dom.workingDays.textContent = String(burndown.dates.length);
     dom.totalPoints.textContent = burndown.totalPoints.toFixed(1).replace(/\.0$/, "");
     const lastActual = [...burndown.actual].reverse().find((v) => v !== null) ?? 0;
     dom.remainingPoints.textContent = lastActual.toFixed(1).replace(/\.0$/, "");
-    dom.doneTasks.textContent = doneTasks;
+    dom.doneTasks.textContent = String(doneTasks);
     dom.availableDaysValue.textContent = availableDays.toFixed(1).replace(/\.0$/, "");
     dom.availableDays.classList.remove("ok", "alert");
     if (availableDays < -1) {
@@ -1380,14 +1349,12 @@
       const burndown = calculateBurndown(sprint, effectiveToday, holidaySet, workWeekendSet);
       if (has(H_STATS)) renderStats(sprint, burndown);
       if (has(H_CHART)) {
-        const showScopeLine = dom.showScopeLine.checked;
-        dom.scopeLegendItem.hidden = !showScopeLine;
-        drawChart({ ...burndown, showScopeLine });
+        drawChart(burndown);
       }
     }
   };
 
-  // src/io.js
+  // src/io.ts
   var showImportConfirm = ({ title, message, subtext = "", okLabel = "Proceed" }) => new Promise((resolve) => {
     dom.importConfirmTitle.textContent = title;
     dom.importConfirmMessage.innerHTML = message;
@@ -1573,7 +1540,7 @@
     reader.readAsArrayBuffer(file);
   };
 
-  // src/main.js
+  // src/main.ts
   setOnStateChange(render);
   var fpStart = null;
   var fpEnd = null;
@@ -1637,14 +1604,14 @@
   var modalSprintId = null;
   var openModal = (mode, sprint) => {
     modalMode = mode;
-    modalSprintId = sprint ? sprint.id : null;
+    modalSprintId = sprint.id ?? null;
     dom.modalTitle.textContent = mode === "create" ? "New Sprint" : "Edit Sprint";
-    dom.modalDescription.value = sprint?.description || "";
-    dom.modalDevelopers.value = sprint?.developers ?? 4;
-    dom.modalEfficiency.value = sprint?.efficiency ?? 0.8;
+    dom.modalDescription.value = sprint.description || "";
+    dom.modalDevelopers.value = String(sprint.developers ?? 4);
+    dom.modalEfficiency.value = String(sprint.efficiency ?? 0.8);
     dom.modalError.hidden = true;
     dom.sprintModal.hidden = false;
-    initDatePickers(sprint?.id || null, sprint?.startDate, sprint?.endDate);
+    initDatePickers(sprint.id || null, sprint.startDate, sprint.endDate);
   };
   var closeModal = () => {
     dom.sprintModal.hidden = true;
@@ -1710,11 +1677,11 @@
   dom.exportBtn.addEventListener("click", exportData);
   dom.importBtn.addEventListener("click", () => dom.importFile.click());
   dom.importFile.addEventListener("change", (e) => {
-    if (e.target.files[0]) importData(e.target.files[0]);
-    e.target.value = "";
+    const target = e.target;
+    if (target.files?.[0]) importData(target.files[0]);
+    target.value = "";
   });
   dom.showDayNumbers.addEventListener("change", () => render(H_CHART));
-  dom.showScopeLine.addEventListener("change", () => render(H_CHART));
   dom.tabSprint.addEventListener("click", () => setActiveTab("sprint"));
   dom.tabBacklog.addEventListener("click", () => setActiveTab("backlog"));
   var commitAddById = () => {
@@ -1783,8 +1750,9 @@
   });
   dom.backlogImportCsvBtn.addEventListener("click", () => dom.backlogImportFile.click());
   dom.backlogImportFile.addEventListener("change", (e) => {
-    if (e.target.files[0]) importBacklogExcel(e.target.files[0]);
-    e.target.value = "";
+    const target = e.target;
+    if (target.files?.[0]) importBacklogExcel(target.files[0]);
+    target.value = "";
   });
   document.querySelectorAll(".task-table thead th.sortable").forEach((th) => {
     th.addEventListener("click", () => toggleTaskSort(th.dataset.sortKey));
@@ -1816,7 +1784,8 @@
       const col = cols[i];
       resizer.addEventListener("mousedown", (e) => {
         freezeWidths();
-        const startX = e.clientX;
+        const me = e;
+        const startX = me.clientX;
         const startW = th.offsetWidth;
         const tableW = table.offsetWidth;
         resizer.classList.add("resizing");
@@ -1839,7 +1808,7 @@
         };
         document.addEventListener("mousemove", onMove);
         document.addEventListener("mouseup", onUp);
-        e.preventDefault();
+        me.preventDefault();
       });
     });
   })();
@@ -1953,7 +1922,8 @@
     }
   });
   document.addEventListener("click", (e) => {
-    if (e.target.closest(".bp-add-btn") || e.target.closest(".add-by-id-row")) return;
+    const target = e.target;
+    if (target.closest(".bp-add-btn") || target.closest(".add-by-id-row")) return;
     const highlighted = document.querySelector(".task-row-highlight");
     if (highlighted) highlighted.classList.remove("task-row-highlight");
     setHighlightBacklogTaskId(null);

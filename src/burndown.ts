@@ -1,6 +1,12 @@
-import { getWorkingDates, getNextWorkingDay } from "./utils.js";
+import { getWorkingDates, getNextWorkingDay } from "./utils.ts";
+import type { Sprint, BurndownData } from "./types.ts";
 
-export const calculateBurndown = (sprint, today, holidays, workWeekends) => {
+export const calculateBurndown = (
+  sprint: Sprint,
+  today: string,
+  holidays?: Set<string>,
+  workWeekends?: Set<string>,
+): BurndownData => {
   const sprintDates = getWorkingDates(sprint.startDate, sprint.endDate, holidays, workWeekends);
   const extraDay = sprint.endDate ? getNextWorkingDay(sprint.endDate, holidays, workWeekends) : null;
   const dates = extraDay ? [...sprintDates, extraDay] : sprintDates;
@@ -17,7 +23,7 @@ export const calculateBurndown = (sprint, today, holidays, workWeekends) => {
     return Math.round(Math.max(remaining, 0) * 100) / 100;
   });
   const todayIndex = dates.reduce((last, date, i) => (date <= today ? i : last), -1);
-  const actual = dates.map((date, i) => {
+  const actual = dates.map((date, i): number | null => {
     if (todayIndex < 0 || i > todayIndex) return null;
     const burned = sprint.tasks.reduce((sum, task) => {
       if (!task.doneDate || task.doneDate > date) return sum;
@@ -26,24 +32,5 @@ export const calculateBurndown = (sprint, today, holidays, workWeekends) => {
     return totalPoints - burned;
   });
 
-  // Scope line: step function showing how total scope changed over time.
-  const scopeLog = sprint.scopeLog || [];
-  let scopeLineData = null;
-  if (scopeLog.length > 0 && todayIndex >= 0) {
-    const first = scopeLog[0];
-    const initialScope = first.action === "add"
-      ? first.totalAfter - first.estimate
-      : first.totalAfter + first.estimate;
-
-    scopeLineData = dates.map((date, i) => {
-      if (i > todayIndex) return null;
-      let lastTotal = null;
-      for (const entry of scopeLog) {
-        if (entry.date <= date) lastTotal = entry.totalAfter;
-      }
-      return lastTotal !== null ? lastTotal : initialScope;
-    });
-  }
-
-  return { dates, totalPoints, ideal, actual, manDays, effectiveManDays, idealDailyBurn, todayIndex, scopeLineData };
+  return { dates, totalPoints, ideal, actual, manDays, effectiveManDays, idealDailyBurn, todayIndex };
 };
