@@ -30,7 +30,6 @@ const migrateState = (parsed: any): AppState => {
   if (!parsed.backlog) parsed.backlog = { stories: [] };
   if (!parsed.preferences) parsed.preferences = { holidays: [], workWeekends: [], members: [] };
   for (const sprint of parsed.sprints) {
-    delete sprint.scopeLog;
     delete sprint.locked;
     delete sprint.lockedAt;
     delete sprint.lockedBaseline;
@@ -52,6 +51,7 @@ const migrateState = (parsed: any): AppState => {
         delete (task as any).actual;
       }
       if (!task.remainLog) task.remainLog = [];
+      if (!task.workedLog) task.workedLog = [];
     }
   }
   return parsed as AppState;
@@ -228,6 +228,7 @@ export const addTaskFromBacklog = (backlogTaskId: string): void => {
     remain: estimate,
     status: "Todo", doneDate: "",
     remainLog: [],
+    workedLog: [],
   });
   save(); onChange(H_SPRINT_TASKS);
 };
@@ -241,7 +242,7 @@ export const updateToday = (date: string): void => {
     date > maxDate ? maxDate : date;
   sprint.today = clamped;
   save();
-  onChange(H_STATS | H_CHART);
+  onChange(H_HEADER | H_TASKS | H_STATS | H_CHART);
 };
 
 export const replaceState = (newState: AppState): void => {

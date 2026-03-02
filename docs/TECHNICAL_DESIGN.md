@@ -1,7 +1,7 @@
 # Burndown Studio — Technical Design Document
 
-**Version:** 0.9
-**Last updated:** 2026-02-27
+**Version:** 1.0
+**Last updated:** 2026-03-03
 **Status:** Draft — open for review
 
 ---
@@ -20,14 +20,16 @@ Browser
 
 Development
   └── src/
-      ├── main.js       → entry point, event wiring
-      ├── dom.js        → DOM element references
-      ├── state.js      → state management, CRUD
-      ├── burndown.js   → pure calculation functions
-      ├── chart.js      → SVG chart rendering
-      ├── render.js     → DOM rendering (sidebar, tasks, backlog, stats)
-      ├── io.js         → JSON/Excel export and import
-      └── utils.js      → shared helpers (dates, IDs)
+      ├── main.ts       → entry point, event wiring
+      ├── dom.ts        → DOM element references
+      ├── state.ts      → state management, CRUD
+      ├── types.ts      → shared TypeScript interfaces
+      ├── burndown.ts   → pure calculation functions
+      ├── chart.ts      → SVG chart rendering
+      ├── render.ts     → DOM rendering (sidebar, tasks, backlog, stats)
+      ├── io.ts         → JSON/Excel export and import
+      ├── utils.ts      → shared helpers (dates, IDs)
+      └── globals.d.ts  → ambient declarations for CDN globals (flatpickr, XLSX)
 ```
 
 ### Design Principles
@@ -44,7 +46,7 @@ Development
 |---|---|---|
 | Markup | HTML5 | Semantic elements, `<template>` for row/item cloning |
 | Styling | Vanilla CSS | CSS custom properties, grid, responsive breakpoints |
-| Logic | Vanilla JS (ES2020+) | `crypto.randomUUID()`, ES modules, arrow functions |
+| Logic | TypeScript (strict) | ES modules, `crypto.randomUUID()`, compiled via esbuild type-stripping; `tsc --noEmit` for type checking |
 | Chart | Hand-rolled SVG | `<polyline>` elements built via DOM API |
 | Fonts | Google Fonts (CDN) | Fraunces (headings), Source Sans 3 (body) |
 | Date picker | Flatpickr (CDN) | Calendar UI for sprint dates and Today field; weekends/occupied ranges disabled |
@@ -62,8 +64,10 @@ src/*.js  ──esbuild──▶  app.js  ──browser──▶  runs in any br
 
 | Command | Description |
 |---|---|
-| `npm install` | Install esbuild (first time only) |
-| `npm run build` | Bundle `src/main.js` → `app.js` |
+| `npm install` | Install esbuild, typescript, tsx (first time only) |
+| `npm run build` | Bundle `src/main.ts` → `app.js` |
+| `npm run typecheck` | Run `tsc --noEmit` (zero errors expected) |
+| `npm run test` | Run unit tests via tsx |
 | `npm run dev` | Start local dev server on port 5173 |
 
 `app.js` is committed to git so the app works out-of-the-box after cloning — no build step needed to just use the app. The build step is only required after editing files in `src/`.
@@ -99,14 +103,6 @@ burndown-studio (localStorage key)
         ├── today: string (YYYY-MM-DD, optional — overrides real today for chart)
         ├── developers: number (default 0)
         ├── efficiency: number 0-1 (default 1)
-        ├── scopeLog: Array
-        │   └── ScopeLogEntry
-        │       ├── date: string (YYYY-MM-DD)
-        │       ├── action: "add" | "remove"
-        │       ├── taskId: string (display ID)
-        │       ├── taskName: string
-        │       ├── estimate: number
-        │       └── totalAfter: number (sum of all task estimates after change)
         ├── createdAt: string (ISO 8601)
         └── tasks: Array
             └── SprintTask
@@ -116,16 +112,21 @@ burndown-studio (localStorage key)
                 ├── name: string (denormalized from backlog description)
                 ├── assignedTo: string (denormalized from backlog)
                 ├── estimate: number (denormalized from backlog — read-only in sprint)
-                ├── actual: number | null (entered by user when task is Done)
+                ├── worked: number (cumulative days worked)
+                ├── remain: number (remaining days)
                 ├── status: "Todo" | "In Progress" | "Done"
-                └── doneDate: string (YYYY-MM-DD) or ""
+                ├── doneDate: string (YYYY-MM-DD) or "" (auto-set when remain → 0)
+                ├── workedLog: Array
+                │   └── WorkedEntry { date: string, worked: number }
+                └── remainLog: Array
+                    └── RemainEntry { date: string, remain: number }
 ```
 
 **Sprint numbering** is computed dynamically (sorted index + 1) and never stored. Sprints are always kept sorted by `startDate` via `sortSprints()` after every create or update.
 
 **New sprint defaults:** `developers: 0`, `efficiency: 1`. Start date defaults to next working day after last sprint end; end date is 10 working days after start.
 
-**Estimate vs Actual:** `estimate` is copied from the backlog task when a task is added to a sprint and is read-only thereafter. `actual` is entered by the user when the task is marked Done (pre-filled with `estimate`). Only `estimate` is used in burndown chart math; `actual` is for retrospective reporting only.
+**Estimate vs Worked/Remain:** `estimate` is copied from the backlog task when a task is added and is read-only thereafter. `worked` and `remain` are updated together via the Change/Save button. Every Save appends `{ date, worked }` to `workedLog` and `{ date, remain }` to `remainLog`, enabling historical reconstruction of the burndown and scope lines. `worked + remain` is displayed as "Actual/Est" — the current scope estimate for the task.
 
 **Denormalization:** Sprint tasks copy `taskId`, `name`, and `assignedTo` from the backlog at the time of assignment. These copies are not kept in sync if the backlog is edited after assignment, but are refreshed when backlog is re-imported via Excel (see Re-linking below).
 
@@ -133,10 +134,11 @@ burndown-studio (localStorage key)
 
 ### Data Migration
 
-`migrateState()` in `state.js` (and `migrateImported()` in `io.js`) runs on every load:
+`migrateState()` in `state.ts` (and `migrateImported()` in `io.ts`) runs on every load:
 - If `backlog` key is missing, adds `{ stories: [] }`.
-- If a sprint has no `scopeLog`, adds `[]`.
-- If a sprint task has `points` but no `estimate`, renames `points → estimate`, sets `actual = null`.
+- If a sprint task has `points` but no `estimate`, renames `points → estimate`.
+- If a sprint task has no `worked`/`remain`, initializes from the old `actual` field (or estimate for Done, 0 for others).
+- If a sprint task has no `remainLog` or `workedLog`, initializes both to `[]`.
 
 ### Storage Limits
 - localStorage is typically capped at **5-10 MB** per origin.
@@ -165,26 +167,25 @@ burndown-studio (localStorage key)
 - **Overlap:** `sprintsOverlap(a, b)` — `a.startDate <= b.endDate && a.endDate >= b.startDate`. Used in the modal save handler to block overlapping sprints.
 - **Gap:** `findGaps(sprints)` — iterates sorted sprints; if `getNextWorkingDay(sprint[i].endDate) < sprint[i+1].startDate`, a gap exists. Warns after save but does not block.
 
-### 5.4 Burndown Calculation (`calculateBurndown` in `burndown.js`)
+### 5.4 Burndown Calculation (`calculateBurndown` in `burndown.ts`)
 - **Total points:** Sum of all sprint task `estimate` values.
 - **Man-days:** `developers * workingDays`.
 - **Effective man-days:** `manDays * efficiency`.
 - **Ideal daily burn:** `effectiveManDays / workingDays`.
 - **Ideal line:** Starts at `totalPoints`, decreases by `idealDailyBurn` per working day.
-- **Actual line:** For each working day, sums the `estimate` of tasks whose `doneDate` is after that day (i.e., not yet done). The `actual` field is **not used** in chart math — it's for retrospective reporting only.
+- **Actual line:** For each working day up to today, sums `getRemainAtDate(task, date)` across all tasks. `getRemainAtDate` returns 0 if `task.doneDate ≤ date`, otherwise walks `task.remainLog` for the most recent entry on or before `date`, falling back to `task.remain`.
 
-### 5.5 Scope Line (`calculateBurndown` in `burndown.js`)
-- If the sprint has `scopeLog` entries and `todayIndex >= 0`, a scope line is computed.
-- The initial scope is derived from the first log entry (reverse-engineering the total before the first change).
-- For each date up to today, the most recent `scopeLog` entry on or before that date determines the value (step function).
-- Returns `scopeLineData` (array of values or `null`). If no scope changes exist, returns `null`.
-- Rendered as an orange dashed polyline (`#f59e0b`, 1px, dash `6 3`) when the "Show scope line" toggle is checked.
+### 5.5 Scope Line (`calculateBurndown` in `burndown.ts`)
+- For each working day up to today, sums `getWorkedAtDate(task, date) + getRemainAtDate(task, date)` across all tasks.
+- `getWorkedAtDate` walks `task.workedLog` for the most recent entry on or before `date`, falling back to `task.worked`.
+- Returns `scope: (number | null)[]` — `null` for dates after today. Rendered as a green dashed polyline (`#10b981`, 1.5px, dash `5 3`).
 
 ### 5.6 Today Override & Actual Line Clipping
 - `sprint.today` persists an overridden "today" date, useful for demos or past-sprint review.
 - `calculateBurndown(sprint, today)` accepts `today` and computes `todayIndex` — the last date index ≤ today.
-- Actual burn values are `null` for indices after `todayIndex`, so the red line never extends into the future.
+- Actual and scope values are `null` for indices after `todayIndex`, so neither line extends into the future.
 - A dashed vertical "Today" marker is drawn on the chart at `todayIndex`.
+- TODAY can be changed via the Flatpickr header picker, or by clicking any date label on the chart x-axis. Clicking fires `updateToday(date)` which clamps to `[startDate, nextWorkingDay(endDate)]` and re-renders header, tasks, stats, and chart (`H_HEADER | H_TASKS | H_STATS | H_CHART`).
 
 ### 5.7 Available Days (`renderStats` in `render.js`)
 - Formula: `effectiveManDays - totalPoints`.
@@ -222,7 +223,7 @@ The app uses a **selective re-render** approach with bitmask render hints:
 
 Convenience groups: `H_SPRINT_TASKS` (tasks + panel + stats + chart) and `H_BACKLOG_DATA` (backlog + panel).
 
-Examples: `updateTask()` passes `H_SPRINT_TASKS` — only the task table, backlog panel, stats, and chart are rebuilt; the sidebar and header are untouched. `updateToday()` passes `H_STATS | H_CHART` — only the stats card and SVG chart are rebuilt.
+Examples: `updateTask()` passes `H_SPRINT_TASKS` — only the task table, backlog panel, stats, and chart are rebuilt; the sidebar and header are untouched. `updateToday()` passes `H_HEADER | H_TASKS | H_STATS | H_CHART` — the header (TODAY picker), task table, stats, and chart are all rebuilt to reflect the new date.
 
 ### Tab State
 - `activeTab` (`"sprint"` | `"backlog"`) is a module-level variable in `render.js`.
@@ -255,21 +256,24 @@ bdc/
 ├── app.js              # Bundled output (built from src/, committed to git)
 ├── styles.css          # All styling (no preprocessor)
 ├── src/
-│   ├── main.js         # Entry point — event wiring, init, modal logic
-│   ├── dom.js          # DOM element references
-│   ├── state.js        # State management — load, save, CRUD (sprints + backlog)
-│   ├── burndown.js     # Pure burndown calculation functions
-│   ├── chart.js        # SVG chart rendering
-│   ├── render.js       # DOM rendering (sprint list, tasks, backlog, stats)
-│   ├── io.js           # JSON/Excel export and import
-│   └── utils.js        # Shared helpers (dates, IDs, formatting)
+│   ├── main.ts         # Entry point — event wiring, init, modal logic
+│   ├── dom.ts          # DOM element references
+│   ├── state.ts        # State management — load, save, CRUD (sprints + backlog)
+│   ├── types.ts        # Shared TypeScript interfaces (Sprint, SprintTask, etc.)
+│   ├── burndown.ts     # Pure burndown calculation functions
+│   ├── chart.ts        # SVG chart rendering
+│   ├── render.ts       # DOM rendering (sprint list, tasks, backlog, stats)
+│   ├── io.ts           # JSON/Excel export and import
+│   ├── utils.ts        # Shared helpers (dates, IDs, formatting)
+│   └── globals.d.ts    # Ambient declarations for CDN globals (flatpickr, XLSX)
 ├── docs/
 │   ├── PRD.md          # Product requirements
 │   ├── TECHNICAL_DESIGN.md   # This document
 │   └── ROADMAP.md      # Delivery roadmap
 ├── package.json        # Build scripts and dev dependencies
+├── tsconfig.json       # TypeScript compiler configuration
 ├── test/
-│   └── calculations.test.js   # Unit tests (Node built-in test runner)
+│   └── calculations.test.ts   # Unit tests (Node built-in test runner via tsx)
 ├── .gitignore
 └── README.md
 ```
@@ -277,33 +281,34 @@ bdc/
 ### Module Dependency Graph
 
 ```
-main.js
-├── dom.js
-├── state.js ← utils.js
-├── render.js
-│   ├── dom.js
-│   ├── state.js
-│   ├── burndown.js ← utils.js
-│   ├── chart.js ← dom.js, utils.js
-│   └── utils.js
-└── io.js ← state.js, utils.js, dom.js
+main.ts
+├── dom.ts
+├── state.ts ← utils.ts, types.ts
+├── render.ts
+│   ├── dom.ts
+│   ├── state.ts
+│   ├── burndown.ts ← utils.ts, types.ts
+│   ├── chart.ts ← dom.ts, utils.ts, types.ts
+│   └── utils.ts
+└── io.ts ← state.ts, utils.ts, dom.ts, types.ts
 ```
 
-No circular dependencies. `state.js` communicates with `render.js` via a callback
-(`setOnStateChange`) registered by `main.js`, avoiding a direct import cycle. `render.js` imports render hint constants from `state.js` (data-only, no circular call chain).
+No circular dependencies. `state.ts` communicates with `render.ts` via a callback
+(`setOnStateChange`) registered by `main.ts`, avoiding a direct import cycle. `render.ts` imports render hint constants from `state.ts` (data-only, no circular call chain).
 
 ### Module Responsibilities
 
 | Module | Responsibility |
 |---|---|
-| `utils.js` | Pure helpers: timezone-safe date math, overlap/gap detection, UUID, formatting |
-| `dom.js` | Queries and exports all DOM element references (~60 elements) |
-| `state.js` | State CRUD for sprints and backlog, localStorage load/save, change callback, migration |
-| `burndown.js` | Pure burndown calculation (ideal/actual lines, today clipping, capacity) |
-| `chart.js` | SVG chart rendering (grid, lines, today marker, labels) |
-| `render.js` | Full DOM rebuild: tab switching, sprint list, task table, backlog table (stories + tasks), stats card, Flatpickr Today picker |
-| `io.js` | JSON export/import; sprint Excel export; backlog Excel export and import (SheetJS); sprint↔backlog re-linking on backlog import; custom confirm dialogs |
-| `main.js` | Entry point: tab/toolbar event wiring, modal logic, Flatpickr date pickers, Add-by-ID, drag-to-sprint, Delete All |
+| `types.ts` | Shared interfaces: `Sprint`, `SprintTask`, `RemainEntry`, `WorkedEntry`, `BacklogStory`, `BacklogTask`, `BurndownData`, `AppState`, etc. |
+| `utils.ts` | Pure helpers: timezone-safe date math, overlap/gap detection, UUID, formatting |
+| `dom.ts` | Queries and exports all DOM element references (~60 elements) |
+| `state.ts` | State CRUD for sprints and backlog, localStorage load/save, change callback, migration |
+| `burndown.ts` | Pure burndown calculation (ideal/actual/scope lines, today clipping, capacity, log-aware helpers) |
+| `chart.ts` | SVG chart rendering (grid, lines, today marker, clickable date labels) |
+| `render.ts` | Full DOM rebuild: tab switching, sprint list, task table (Change/Save UX, status toggle), backlog table, stats card, Flatpickr Today picker |
+| `io.ts` | JSON export/import; sprint Excel export; backlog Excel export and import (SheetJS); sprint↔backlog re-linking; custom confirm dialogs |
+| `main.ts` | Entry point: tab/toolbar event wiring, modal logic, Flatpickr date pickers, Add-by-ID, drag-to-sprint, Delete All |
 
 ## 8. Technical Debt & Risks
 
@@ -328,12 +333,11 @@ No circular dependencies. `state.js` communicates with `render.js` via a callbac
 
 ### If migrating to Vite:
 - Vite could replace esbuild for a richer dev experience (HMR, CSS modules, TypeScript).
-- Migration path: add `vite.config.js`, update `package.json` scripts. The existing `src/main.js` entry point and module structure already work with Vite.
+- Migration path: add `vite.config.ts`, update `package.json` scripts. The existing `src/main.ts` entry point and module structure already work with Vite.
 
-### If adding TypeScript:
-- Rename `.js` → `.ts` files incrementally.
-- Define interfaces for `Sprint`, `SprintTask`, `BacklogStory`, `BacklogTask`, and `AppState` in a shared `types.ts`.
-- esbuild already supports TypeScript out of the box (type-stripping only; add `tsc --noEmit` for type checking).
+### TypeScript (Done):
+- All source files are `.ts`; interfaces defined in `types.ts`.
+- esbuild handles type-stripping; `tsc --noEmit` enforces strict type checking in CI/pre-commit.
 
 ## 10. Revision History
 
@@ -347,4 +351,5 @@ No circular dependencies. `state.js` communicates with `render.js` via a callbac
 | 2026-02-24 | 0.6 | Added sprint↔backlog re-linking on backlog import (relinkSprintTasks, findOrphanedSprintTasks); custom confirm dialogs replacing window.confirm for imports; updated io.js dependency (now imports dom.js); partially resolved TD-09 |
 | 2026-02-24 | 0.7 | Resolved TD-02: selective rendering via bitmask render hints. Updated rendering strategy section (hint table, examples). Updated design principles and performance characteristics. render.js now imports hint constants from state.js. |
 | 2026-02-26 | 0.8 | Updated getWorkingDates algorithm: now accepts optional holidays Set and workWeekends Set (F-102 complete). |
-| 2026-02-27 | 0.9 | Phase 2 features: added scopeLog to data model, scope line algorithm (section 5.5), drag-and-drop reorder (`reorderTasks` in state.js), progress % in stats. Resolved TD-03 (59 unit tests). Added test/ to file structure. |
+| 2026-02-27 | 0.9 | Phase 2 features: drag-and-drop reorder, progress % in stats. Resolved TD-03 (59 unit tests). Added test/ to file structure. |
+| 2026-03-03 | 1.0 | TypeScript migration complete (T-302 resolved): all .js → .ts, added types.ts and globals.d.ts, tsconfig.json, `npm run typecheck`. Updated data model: replaced `actual` with `worked`/`remain`/`workedLog`/`remainLog`; removed sprint-level scopeLog. Updated algorithms: actual line uses `getRemainAtDate` (log-aware), scope line uses `getWorkedAtDate + getRemainAtDate` per task per day. Updated task UX: Change/Save button, status toggle span, auto-Done on remain=0, Done Date as read-only span, Remove button hidden for non-Todo tasks. Updated chart: clickable date labels set TODAY; `updateToday` now fires H_HEADER\|H_TASKS\|H_STATS\|H_CHART. Updated all file references (.js → .ts). |

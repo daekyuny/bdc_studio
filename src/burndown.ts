@@ -1,5 +1,15 @@
 import { getWorkingDates, getNextWorkingDay } from "./utils.ts";
-import type { Sprint, BurndownData, RemainEntry, SprintTask } from "./types.ts";
+import type { Sprint, BurndownData, RemainEntry, WorkedEntry, SprintTask } from "./types.ts";
+
+const getWorkedAtDate = (task: SprintTask, date: string): number => {
+  const log = task.workedLog;
+  if (!log || log.length === 0) return task.worked ?? 0;
+  let best: WorkedEntry | undefined;
+  for (const entry of log) {
+    if (entry.date <= date && (!best || entry.date >= best.date)) best = entry;
+  }
+  return best !== undefined ? best.worked : 0;
+};
 
 const getRemainAtDate = (task: SprintTask, date: string): number => {
   if (task.doneDate && task.doneDate <= date) return 0;
@@ -39,5 +49,10 @@ export const calculateBurndown = (
     return sprint.tasks.reduce((sum, task) => sum + getRemainAtDate(task, date), 0);
   });
 
-  return { dates, totalPoints, ideal, actual, manDays, effectiveManDays, idealDailyBurn, todayIndex };
+  const scope = dates.map((date, i): number | null => {
+    if (todayIndex < 0 || i > todayIndex) return null;
+    return sprint.tasks.reduce((sum, task) => sum + getWorkedAtDate(task, date) + getRemainAtDate(task, date), 0);
+  });
+
+  return { dates, totalPoints, ideal, actual, scope, manDays, effectiveManDays, idealDailyBurn, todayIndex };
 };

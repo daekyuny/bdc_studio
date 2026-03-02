@@ -1,7 +1,7 @@
 # Burndown Studio — Project Roadmap
 
-**Version:** 0.8
-**Last updated:** 2026-02-27
+**Version:** 0.9
+**Last updated:** 2026-03-03
 **Status:** Draft — open for review
 
 ---
@@ -97,7 +97,7 @@ MVP baseline       Data Safety        Daily Usability    Insights           Mult
 | F-201 | Task drag-and-drop reordering | P1 | Medium | **Done** | Handle-only drag (`⠿`); disabled during column sort; order persisted via `reorderTasks()` |
 | F-202 | Sprint progress percentage | P1 | Small | **Done** | "X% complete" stat with visual progress bar in stats card |
 | F-203 | Sprint cloning | P2 | Small | Deferred | Clone sprint structure with statuses reset to Todo |
-| F-204 | Scope change tracking | P2 | Medium | **Done** | Per-sprint `scopeLog` records add/remove; optional orange dashed scope line on chart |
+| F-204 | Scope change tracking | P2 | Medium | **Done** | Per-task `workedLog`/`remainLog` records daily worked and remain values; scope line on chart shows sum(worked+remain) per day up to today |
 | F-205 | Keyboard shortcuts | P2 | Small | Open | e.g., `N` to add task, `Ctrl+E` to export |
 
 ### Technical Foundation
@@ -134,7 +134,7 @@ MVP baseline       Data Safety        Daily Usability    Insights           Mult
 | ID | Item | Priority | Effort | Description |
 |---|---|---|---|---|
 | T-301 | Optimize rendering | P2 | Medium | **Done** — Selective rendering via bitmask render hints (TD-02 resolved) |
-| T-302 | Migrate to TypeScript | P3 | Medium | Add type safety to the data model and calculation functions |
+| T-302 | Migrate to TypeScript | P3 | Medium | **Done** | Add type safety to the data model and calculation functions |
 
 ### Exit Criteria
 - Teams with 3+ completed sprints can see a velocity trend.
@@ -184,3 +184,4 @@ MVP baseline       Data Safety        Daily Usability    Insights           Mult
 | 2026-02-24 | 0.6 | Marked T-301 (Optimize rendering) as Done: selective rendering via bitmask render hints resolves TD-02. |
 | 2026-02-26 | 0.7 | Marked F-102 (Holiday/PTO exclusions) as Done with global scope. Updated exit criteria. Removed F-102 from remaining work. |
 | 2026-02-27 | 0.8 | Phase 2 progress: marked F-201, F-202, F-204, T-201 as Done. Deferred F-203. Added Status column to Phase 2 tables. Updated exit criteria. Phase 1 marked DONE, Phase 2 now ACTIVE. |
+| 2026-03-03 | 0.9 | Marked T-302 (TypeScript migration) as Done. Updated F-204 description: scope line uses per-task workedLog/remainLog instead of sprint-level scopeLog. |

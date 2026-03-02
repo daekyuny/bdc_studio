@@ -103,6 +103,9 @@
                     <span class="legend-item">
                       <span class="swatch actual"></span>Actual
                     </span>
+                    <span class="legend-item">
+                      <span class="swatch scope"></span>Scope
+                    </span>
                   </div>
                 </div>
                 <div class="chart-wrap">
@@ -137,7 +140,7 @@
                       <th class="col-drag"></th>
                       <th class="col-taskid sortable" data-sort-key="taskId">ID</th>
                       <th class="col-task sortable" data-sort-key="name">Task</th>
-                      <th class="col-estimate sortable" data-sort-key="estimate">Actual/Est</th>
+                      <th class="col-estimate sortable" data-sort-key="actualEst">Actual/Est</th>
                       <th class="col-worked">Worked</th>
                       <th class="col-remain">Remain</th>
                       <th class="col-status sortable" data-sort-key="status">Status</th>
@@ -357,14 +360,10 @@
           <input class="task-remain-input" type="number" min="0" step="0.5" placeholder="0" hidden />
         </td>
         <td class="col-status">
-          <select class="task-status">
-            <option value="Todo">Todo</option>
-            <option value="In Progress">In Progress</option>
-            <option value="Done">Done</option>
-          </select>
+          <span class="task-status-toggle"></span>
         </td>
         <td class="col-done">
-          <input class="task-done" type="text" readonly />
+          <span class="task-done"></span>
         </td>
         <td class="col-actions">
           <button class="btn ghost small task-remove">Remove</button>

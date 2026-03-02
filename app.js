@@ -101,7 +101,6 @@
   };
 
   // src/utils.ts
-  var statusOptions = ["Todo", "In Progress", "Done"];
   var localIso = (date) => {
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -203,7 +202,6 @@
     if (!parsed.backlog) parsed.backlog = { stories: [] };
     if (!parsed.preferences) parsed.preferences = { holidays: [], workWeekends: [], members: [] };
     for (const sprint of parsed.sprints) {
-      delete sprint.scopeLog;
       delete sprint.locked;
       delete sprint.lockedAt;
       delete sprint.lockedBaseline;
@@ -224,6 +222,7 @@
           delete task.actual;
         }
         if (!task.remainLog) task.remainLog = [];
+        if (!task.workedLog) task.workedLog = [];
       }
     }
     return parsed;
@@ -382,7 +381,8 @@
       remain: estimate,
       status: "Todo",
       doneDate: "",
-      remainLog: []
+      remainLog: [],
+      workedLog: []
     });
     save();
     onChange(H_SPRINT_TASKS);
@@ -394,7 +394,7 @@
     const clamped = date < sprint.startDate ? sprint.startDate : date > maxDate ? maxDate : date;
     sprint.today = clamped;
     save();
-    onChange(H_STATS | H_CHART);
+    onChange(H_HEADER | H_TASKS | H_STATS | H_CHART);
   };
   var replaceState = (newState) => {
     state = newState;
@@ -570,6 +570,15 @@
   };
 
   // src/burndown.ts
+  var getWorkedAtDate = (task, date) => {
+    const log = task.workedLog;
+    if (!log || log.length === 0) return task.worked ?? 0;
+    let best;
+    for (const entry of log) {
+      if (entry.date <= date && (!best || entry.date >= best.date)) best = entry;
+    }
+    return best !== void 0 ? best.worked : 0;
+  };
   var getRemainAtDate = (task, date) => {
     if (task.doneDate && task.doneDate <= date) return 0;
     const log = task.remainLog;
@@ -601,11 +610,15 @@
       if (todayIndex < 0 || i > todayIndex) return null;
       return sprint.tasks.reduce((sum, task) => sum + getRemainAtDate(task, date), 0);
     });
-    return { dates, totalPoints, ideal, actual, manDays, effectiveManDays, idealDailyBurn, todayIndex };
+    const scope = dates.map((date, i) => {
+      if (todayIndex < 0 || i > todayIndex) return null;
+      return sprint.tasks.reduce((sum, task) => sum + getWorkedAtDate(task, date) + getRemainAtDate(task, date), 0);
+    });
+    return { dates, totalPoints, ideal, actual, scope, manDays, effectiveManDays, idealDailyBurn, todayIndex };
   };
 
   // src/chart.ts
-  var drawChart = ({ dates, totalPoints, ideal, actual, todayIndex }) => {
+  var drawChart = ({ dates, totalPoints, ideal, actual, scope, todayIndex }, onDateClick) => {
     const width = 800;
     const height = 320;
     const padding = 50;
@@ -622,7 +635,8 @@
       return;
     }
     const nonNullActual = actual.filter((v) => v !== null);
-    const maxValue = Math.max(totalPoints, ...nonNullActual, 1);
+    const nonNullScope = scope.filter((v) => v !== null);
+    const maxValue = Math.max(totalPoints, ...nonNullActual, ...nonNullScope, 1);
     const minValue = Math.min(0, ...nonNullActual);
     const range = maxValue - minValue;
     const plotWidth = width - padding * 2;
@@ -697,6 +711,26 @@
       dot.setAttribute("fill", "#3b82f6");
       dom.chart.appendChild(dot);
     });
+    const scopePoints = scope.map((val, i) => val !== null ? toPoint(val, i) : null).filter((v) => v !== null);
+    if (scopePoints.length) {
+      const scopeLine = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+      scopeLine.setAttribute("fill", "none");
+      scopeLine.setAttribute("stroke", "#10b981");
+      scopeLine.setAttribute("stroke-width", "1.5");
+      scopeLine.setAttribute("stroke-dasharray", "5 3");
+      scopeLine.setAttribute("points", scopePoints.join(" "));
+      dom.chart.appendChild(scopeLine);
+      scope.forEach((val, i) => {
+        if (val === null) return;
+        const [cx, cy] = toPoint(val, i).split(",");
+        const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        dot.setAttribute("cx", cx);
+        dot.setAttribute("cy", cy);
+        dot.setAttribute("r", "3");
+        dot.setAttribute("fill", "#10b981");
+        dom.chart.appendChild(dot);
+      });
+    }
     const actualPoints = actual.map((val, i) => val !== null ? toPoint(val, i) : null).filter((v) => v !== null);
     const actualLine = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
     actualLine.setAttribute("fill", "none");
@@ -723,11 +757,18 @@
     const showDays = dom.showDayNumbers.checked;
     dates.forEach((date, index) => {
       const x = padding + plotWidth * (dates.length === 1 ? 0 : index / (dates.length - 1));
+      const isToday = index === todayIndex;
       const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
       label.setAttribute("x", String(x));
       label.setAttribute("y", String(height - 18));
       label.setAttribute("text-anchor", "middle");
+      label.setAttribute("fill", isToday ? "rgba(92, 103, 242, 0.85)" : "#6b7080");
+      if (isToday) label.setAttribute("font-weight", "bold");
       label.textContent = showDays ? `D${index}` : toShortDate(date);
+      if (onDateClick) {
+        label.style.cursor = "pointer";
+        label.addEventListener("click", () => onDateClick(date));
+      }
       labels.appendChild(label);
     });
     dom.chart.appendChild(labels);
@@ -773,7 +814,7 @@
     }
     render(H_BACKLOG);
   };
-  var NUMERIC_KEYS = /* @__PURE__ */ new Set(["estimate", "worked", "remain", "priority"]);
+  var NUMERIC_KEYS = /* @__PURE__ */ new Set(["estimate", "worked", "remain", "priority", "actualEst"]);
   var sortItems = (items, key, asc) => {
     if (!key) return items;
     const sorted = [...items].sort((a, b) => {
@@ -837,7 +878,11 @@
     const taskTable = dom.taskRows.closest("table");
     if (taskTable) applySortClasses(taskTable, taskSort);
     const isSorted = taskSort.key !== null;
-    const tasks = sortItems([...sprint.tasks], taskSort.key, taskSort.asc);
+    const tasks = sortItems(
+      sprint.tasks.map((t) => ({ ...t, actualEst: t.worked + t.remain })),
+      taskSort.key,
+      taskSort.asc
+    );
     tasks.forEach((task) => {
       const row = dom.taskRowTemplate.content.firstElementChild.cloneNode(true);
       row.dataset.taskId = task.id;
@@ -882,8 +927,8 @@
       const remainView = row.querySelector(".task-remain-view");
       const remainChangeBtn = row.querySelector(".task-remain-change");
       const remainInput = row.querySelector(".task-remain-input");
-      const statusSelect = row.querySelector(".task-status");
-      const doneInput = row.querySelector(".task-done");
+      const statusToggle = row.querySelector(".task-status-toggle");
+      const doneSpan = row.querySelector(".task-done");
       const removeBtn = row.querySelector(".task-remove");
       taskIdSpan.textContent = task.taskId || "";
       nameSpan.textContent = task.name;
@@ -902,85 +947,75 @@
       }
       if (parentStoryDesc) taskIdSpan.title = parentStoryDesc;
       nameSpan.title = currentAssigned;
-      const isInProgress = task.status === "In Progress";
       const actualEst = task.worked + task.remain;
       estimateSpan.textContent = `${actualEst} / ${task.estimate}`;
       workedView.textContent = String(task.worked);
       remainView.textContent = String(task.remain);
       workedInput.value = String(task.worked);
       remainInput.value = String(task.remain);
-      workedInput.hidden = !isInProgress;
-      workedView.hidden = isInProgress;
+      workedInput.hidden = true;
+      workedView.hidden = false;
       remainInput.hidden = true;
       remainView.hidden = false;
-      remainChangeBtn.hidden = !isInProgress;
+      remainChangeBtn.hidden = false;
+      remainChangeBtn.textContent = "Change";
       remainChangeBtn.addEventListener("click", () => {
-        remainChangeBtn.hidden = true;
-        remainView.hidden = true;
-        remainInput.hidden = false;
-        remainInput.focus();
+        if (remainChangeBtn.textContent === "Change") {
+          workedView.hidden = true;
+          workedInput.hidden = false;
+          remainView.hidden = true;
+          remainInput.hidden = false;
+          remainChangeBtn.textContent = "Save";
+          workedInput.focus();
+        } else {
+          commitSave();
+        }
       });
-      statusSelect.value = statusOptions.includes(task.status) ? task.status : "Todo";
-      doneInput.value = task.doneDate || "";
-      doneInput.disabled = statusSelect.value !== "Done";
-      if (statusSelect.value === "Done") {
-        flatpickr(doneInput, {
-          dateFormat: "Y-m-d",
-          defaultDate: task.doneDate || null,
-          minDate: sprint.startDate || null,
-          maxDate: sprint.endDate || null,
-          disableMobile: true,
-          disable: [
-            (date) => {
-              const iso = localIso(date);
-              if (holidaySet && holidaySet.has(iso)) return true;
-              const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-              if (isWeekend && workWeekendSet && workWeekendSet.has(iso)) return false;
-              return isWeekend;
-            }
-          ],
-          allowInput: false,
-          onChange: ([date]) => {
-            if (date) {
-              updateTask(task.id, { doneDate: localIso(date), status: "Done" });
-            }
-          }
+      const isClickable = task.worked === 0 && task.status !== "Done";
+      statusToggle.textContent = task.status;
+      statusToggle.classList.toggle("clickable", isClickable);
+      if (isClickable) {
+        statusToggle.addEventListener("click", () => {
+          const newStatus = task.status === "Todo" ? "In Progress" : "Todo";
+          commitStatus(newStatus);
         });
       }
+      doneSpan.textContent = task.doneDate || "";
       const logRemain = (log, date, remain) => [
         ...log.filter((e) => e.date !== date),
         { date, remain }
       ];
-      const commitWorked = () => {
+      const logWorked = (log, date, worked) => [
+        ...log.filter((e) => e.date !== date),
+        { date, worked }
+      ];
+      const commitSave = () => {
         const newWorked = Math.max(0, Number(workedInput.value) || 0);
-        const currentAE = task.worked + task.remain;
-        const newRemain = Math.max(0, currentAE - newWorked);
+        const newRemain = Math.max(0, Number(remainInput.value) || 0);
         const logDate = sprint.today || todayIso();
-        const newLog = logRemain(task.remainLog ?? [], logDate, newRemain);
-        updateTask(task.id, { worked: newWorked, remain: newRemain, remainLog: newLog });
+        const newRemainLog = logRemain(task.remainLog ?? [], logDate, newRemain);
+        const newWorkedLog = logWorked(task.workedLog ?? [], logDate, newWorked);
+        let newStatus = task.status;
+        let newDoneDate = task.doneDate;
+        if (newRemain === 0) {
+          newStatus = "Done";
+          newDoneDate = newDoneDate || logDate;
+        } else if (task.status === "Done") {
+          newStatus = "In Progress";
+          newDoneDate = "";
+        }
+        updateTask(task.id, { worked: newWorked, remain: newRemain, remainLog: newRemainLog, workedLog: newWorkedLog, status: newStatus, doneDate: newDoneDate });
       };
-      workedInput.addEventListener("change", commitWorked);
-      workedInput.addEventListener("blur", commitWorked);
       workedInput.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
-          commitWorked();
-          workedInput.blur();
+          commitSave();
         }
       });
-      const commitRemain = () => {
-        const newRemain = Math.max(0, Number(remainInput.value) || 0);
-        const logDate = sprint.today || todayIso();
-        const newLog = logRemain(task.remainLog ?? [], logDate, newRemain);
-        updateTask(task.id, { remain: newRemain, remainLog: newLog });
-      };
-      remainInput.addEventListener("change", commitRemain);
-      remainInput.addEventListener("blur", commitRemain);
       remainInput.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
-          commitRemain();
-          remainInput.blur();
+          commitSave();
         }
       });
       const commitStatus = (statusValue) => {
@@ -994,27 +1029,20 @@
             doneDate = candidate >= sprint.startDate && candidate <= sprint.endDate ? candidate : sprint.endDate;
           }
           remain = 0;
-          const newLog = logRemain(task.remainLog ?? [], doneDate, 0);
-          updateTask(task.id, { status, doneDate, worked, remain, remainLog: newLog });
+          const newRemainLog = logRemain(task.remainLog ?? [], doneDate, 0);
+          const newWorkedLog = logWorked(task.workedLog ?? [], doneDate, worked);
+          updateTask(task.id, { status, doneDate, worked, remain, remainLog: newRemainLog, workedLog: newWorkedLog });
         } else if (status === "Todo") {
           doneDate = "";
           worked = 0;
           remain = task.estimate;
-          updateTask(task.id, { status, doneDate, worked, remain, remainLog: [] });
+          updateTask(task.id, { status, doneDate, worked, remain, remainLog: [], workedLog: [] });
         } else {
           doneDate = "";
           updateTask(task.id, { status, doneDate, worked, remain });
         }
       };
-      statusSelect.addEventListener("change", (e) => commitStatus(e.target.value));
-      statusSelect.addEventListener("blur", (e) => commitStatus(e.target.value));
-      statusSelect.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          commitStatus(e.target.value);
-          statusSelect.blur();
-        }
-      });
+      removeBtn.hidden = task.status === "In Progress" || task.status === "Done";
       removeBtn.addEventListener("click", () => {
         const label = task.taskId ? `[${task.taskId}] ${task.name}` : task.name || "this task";
         dom.confirmRemoveTaskName.textContent = label;
@@ -1409,7 +1437,7 @@
       const burndown = calculateBurndown(sprint, effectiveToday, holidaySet, workWeekendSet);
       if (has(H_STATS)) renderStats(sprint, burndown);
       if (has(H_CHART)) {
-        drawChart(burndown);
+        drawChart(burndown, (date) => updateToday(date));
       }
     }
   };
@@ -1491,6 +1519,7 @@
           delete task.actual;
         }
         if (!task.remainLog) task.remainLog = [];
+        if (!task.workedLog) task.workedLog = [];
       }
     }
     return imported;

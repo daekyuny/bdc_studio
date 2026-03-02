@@ -1,7 +1,7 @@
 # Burndown Studio — Product Requirements Document
 
-**Version:** 0.7
-**Last updated:** 2026-02-27
+**Version:** 0.8
+**Last updated:** 2026-03-03
 **Author:** [Your Name]
 **Status:** Draft — open for review
 
@@ -38,7 +38,7 @@ Key pain points:
 - Needs cross-sprint velocity trends and team-level dashboards.
 - Requires multi-user access and shared data.
 
-## 4. Current Features (v0.5)
+## 4. Current Features (v0.8)
 
 ### Sprint Management
 
@@ -59,13 +59,14 @@ Key pain points:
 | Feature | Description | Status |
 |---|---|---|
 | Sprint tasks from backlog | Tasks are added to a sprint from the Product Backlog (by task ID or drag-and-drop) | Done |
-| Estimate vs Actual | `estimate` comes from backlog (read-only); `actual` is entered when task is marked Done | Done |
+| Estimate vs Actual/Est | `estimate` from backlog (read-only); `worked` and `remain` tracked daily; Actual/Est column shows `worked + remain` | Done |
 | Task ID | Tasks carry a structured ID (e.g. `0.1.1`) from the backlog; hover shows parent User Story | Done |
 | Assigned To tooltip | Assignee name shown as tooltip on hover over task name (sprint) or task description (backlog panel) | Done |
-| Auto-fill on Done | Marking a task Done pre-fills actual with estimate and focuses the actual input | Done |
-| Status transitions | Todo → In Progress → Done; clearing Done resets actual and done date | Done |
-| Done Date | Date picker constrained to sprint range; auto-set to today when status → Done | Done |
-| Remove from sprint | Tasks can be removed from a sprint without deleting them from the backlog | Done |
+| Status toggle | Click status span to toggle Todo ↔ In Progress (only when worked = 0); auto-set to Done when remain = 0 | Done |
+| Change / Save button | Worked and Remain fields are read-only by default; "Change" button reveals both inputs; becomes "Save" to commit | Done |
+| Daily worked & remain log | Every Save records `{ date, worked }` and `{ date, remain }` per task; enables accurate historical burndown and scope lines | Done |
+| Done Date | Read-only span; auto-set to today when remain reaches 0; cleared when task reverts to In Progress | Done |
+| Remove from sprint | Tasks can be removed from a sprint (only when status is Todo) without deleting them from the backlog | Done |
 
 ### Product Backlog
 
@@ -86,7 +87,7 @@ Key pain points:
 
 | Feature | Description | Status |
 |---|---|---|
-| Burndown chart | SVG ideal (blue) vs actual (red) line chart; optional scope line (orange dashed); actual clips at today; dashed today marker | Done |
+| Burndown chart | SVG ideal (blue), actual (red), and scope (green dashed) line chart; actual and scope clip at today; dashed today marker; click x-axis date label to set TODAY | Done |
 | Side-by-side layout | Sprint summary and burndown chart displayed side by side; tasks below | Done |
 | Stats dashboard | Duration, working days, total points, remaining, done tasks, available days, progress % | Done |
 | Available Days indicator | `effectiveManDays - totalPoints`, color-coded green/red | Done |
@@ -102,7 +103,8 @@ Key pain points:
 | Sprint/Backlog tab navigation | Top-level tab bar switches between Sprint view and Backlog view | Done |
 | Input commit on blur/Enter | No mid-typing recalculations | Done |
 | localStorage persistence | All data stored in browser localStorage | Done |
-| Data migration | Old `points` field auto-migrated to `estimate`/`actual` on load | Done |
+| Data migration | Old `points` field auto-migrated to `estimate` on load; `worked`/`remain` initialized for pre-migration tasks | Done |
+| TypeScript | Full codebase migrated to TypeScript; strict typing for data model and all modules | Done |
 | Graceful error recovery | Corrupt localStorage data is detected and reset to defaults | Done |
 | Modular codebase | Source split into 8 ES modules, bundled via esbuild | Done |
 
@@ -124,7 +126,7 @@ Key pain points:
 | F-201 | Task drag-and-drop reordering | P1 | **Done** | Reorder sprint tasks by dragging the ⠿ handle. Persisted order. Disabled when column sort is active. |
 | F-202 | Sprint progress percentage | P1 | **Done** | "X% complete" in the stats card with visual progress bar, based on done estimates vs total estimates. |
 | F-203 | Sprint cloning / templates | P2 | Deferred | Clone an existing sprint's task structure (names + estimates) into a new sprint with all statuses reset to Todo. |
-| F-204 | Scope change tracking | P2 | **Done** | Per-sprint scopeLog records task add/remove with timestamps. Optional orange dashed "scope line" on burndown chart (toggle). |
+| F-204 | Scope change tracking | P2 | **Done** | Per-task `workedLog`/`remainLog` records daily worked and remain values. Green dashed scope line on burndown chart shows sum(worked+remain) per day up to today. |
 
 ### 5.3 Phase 3 — Insights & History
 
@@ -178,3 +180,4 @@ Key pain points:
 | 2026-02-24 | 0.5 | Backlog Excel import now re-links sprint tasks by Task ID (refreshes name/estimate/assignedTo, preserves status/actual/doneDate); orphaned sprint tasks warned and removed; all import confirmations use custom styled dialogs instead of browser confirm(). Task ID tooltip now shows parent User Story; assignedTo tooltip added to backlog panel descriptions. |
 | 2026-02-26 | 0.6 | Marked F-102 (Holiday/PTO exclusions) as Done. Holidays are managed as a global preferences list; excluded from working-day calculations, ideal burn line, and sprint date pickers. |
 | 2026-02-27 | 0.7 | Phase 2 features: marked F-201 (drag-and-drop), F-202 (progress %), F-204 (scope tracking) as Done. Deferred F-203. Updated current features (stats dashboard, burndown chart descriptions). |
+| 2026-03-03 | 0.8 | TypeScript migration complete. Updated task tracking: Change/Save button UX, status toggle span, auto-Done on remain=0, Done Date as read-only span, daily workedLog/remainLog, Remove button hidden for non-Todo tasks. Updated chart: scope line now green dashed using per-task logs, clickable date labels to set TODAY. Updated F-204 description. |

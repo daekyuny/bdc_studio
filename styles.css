@@ -403,6 +403,10 @@ select:focus {
   background: var(--actual);
 }
 
+.swatch.scope {
+  background: #10b981;
+}
+
 .chart-wrap {
   width: 100%;
   overflow-x: auto;
@@ -798,7 +802,7 @@ h3 {
 }
 
 .task-table .col-estimate {
-  width: 70px;
+  width: 75px;
 }
 
 .task-table .col-worked {
@@ -835,13 +839,32 @@ h3 {
   font-size: 0.85rem;
 }
 
-.task-table .task-status,
-.task-table .task-done {
+.task-table .task-status-toggle {
+  display: inline-block;
   width: 100%;
   text-align: center;
-  padding: 1px 4px;
+  padding: 2px 6px;
   font-size: 0.85rem;
+  border-radius: 3px;
+  user-select: none;
+}
+
+.task-table .task-status-toggle.clickable {
+  border: 1px solid var(--stroke);
+  box-shadow: 0 1px 3px rgba(44, 47, 58, 0.12);
   cursor: pointer;
+}
+
+.task-table .task-status-toggle.clickable:hover {
+  background: var(--bg-deep);
+}
+
+.task-table .task-done {
+  display: block;
+  width: 100%;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--muted);
 }
 
 .task-table .task-name {

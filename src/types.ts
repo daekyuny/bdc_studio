@@ -5,6 +5,11 @@ export interface RemainEntry {
   remain: number;
 }
 
+export interface WorkedEntry {
+  date: string;
+  worked: number;
+}
+
 export interface SprintTask {
   id: string;
   backlogTaskId?: string;
@@ -17,6 +22,7 @@ export interface SprintTask {
   status: TaskStatus;
   doneDate: string;
   remainLog?: RemainEntry[];
+  workedLog?: WorkedEntry[];
 }
 
 export interface Sprint {
@@ -74,6 +80,7 @@ export interface BurndownData {
   totalPoints: number;
   ideal: number[];
   actual: (number | null)[];
+  scope: (number | null)[];
   manDays: number;
   effectiveManDays: number;
   idealDailyBurn: number;

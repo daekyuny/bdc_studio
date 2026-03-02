@@ -2,7 +2,10 @@ import { dom } from "./dom.ts";
 import { toShortDate } from "./utils.ts";
 import type { BurndownData } from "./types.ts";
 
-export const drawChart = ({ dates, totalPoints, ideal, actual, todayIndex }: BurndownData): void => {
+export const drawChart = (
+  { dates, totalPoints, ideal, actual, scope, todayIndex }: BurndownData,
+  onDateClick?: (date: string) => void,
+): void => {
   const width = 800;
   const height = 320;
   const padding = 50;
@@ -21,7 +24,8 @@ export const drawChart = ({ dates, totalPoints, ideal, actual, todayIndex }: Bur
   }
 
   const nonNullActual = actual.filter((v): v is number => v !== null);
-  const maxValue = Math.max(totalPoints, ...nonNullActual, 1);
+  const nonNullScope = scope.filter((v): v is number => v !== null);
+  const maxValue = Math.max(totalPoints, ...nonNullActual, ...nonNullScope, 1);
   const minValue = Math.min(0, ...nonNullActual);
   const range = maxValue - minValue;
   const plotWidth = width - padding * 2;
@@ -109,6 +113,31 @@ export const drawChart = ({ dates, totalPoints, ideal, actual, todayIndex }: Bur
     dom.chart.appendChild(dot);
   });
 
+  // Scope line — sum(worked + remain) per day, plotted up to today
+  const scopePoints = scope
+    .map((val, i) => (val !== null ? toPoint(val, i) : null))
+    .filter((v): v is string => v !== null);
+  if (scopePoints.length) {
+    const scopeLine = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+    scopeLine.setAttribute("fill", "none");
+    scopeLine.setAttribute("stroke", "#10b981");
+    scopeLine.setAttribute("stroke-width", "1.5");
+    scopeLine.setAttribute("stroke-dasharray", "5 3");
+    scopeLine.setAttribute("points", scopePoints.join(" "));
+    dom.chart.appendChild(scopeLine);
+
+    scope.forEach((val, i) => {
+      if (val === null) return;
+      const [cx, cy] = toPoint(val, i).split(",");
+      const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      dot.setAttribute("cx", cx);
+      dot.setAttribute("cy", cy);
+      dot.setAttribute("r", "3");
+      dot.setAttribute("fill", "#10b981");
+      dom.chart.appendChild(dot);
+    });
+  }
+
   const actualPoints = actual
     .map((val, i) => (val !== null ? toPoint(val, i) : null))
     .filter((v): v is string => v !== null);
@@ -141,11 +170,21 @@ export const drawChart = ({ dates, totalPoints, ideal, actual, todayIndex }: Bur
   const showDays = dom.showDayNumbers.checked;
   dates.forEach((date, index) => {
     const x = padding + plotWidth * (dates.length === 1 ? 0 : index / (dates.length - 1));
+    const isToday = index === todayIndex;
+
     const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
     label.setAttribute("x", String(x));
     label.setAttribute("y", String(height - 18));
     label.setAttribute("text-anchor", "middle");
+    label.setAttribute("fill", isToday ? "rgba(92, 103, 242, 0.85)" : "#6b7080");
+    if (isToday) label.setAttribute("font-weight", "bold");
     label.textContent = showDays ? `D${index}` : toShortDate(date);
+
+    if (onDateClick) {
+      label.style.cursor = "pointer";
+      label.addEventListener("click", () => onDateClick(date));
+    }
+
     labels.appendChild(label);
   });
   dom.chart.appendChild(labels);

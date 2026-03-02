@@ -22,7 +22,7 @@ import {
 } from "./state.ts";
 import { calculateBurndown } from "./burndown.ts";
 import { drawChart } from "./chart.ts";
-import type { Sprint, SprintTask, BacklogTask, BacklogStory, BurndownData, SortState, RemainEntry } from "./types.ts";
+import type { Sprint, SprintTask, BacklogTask, BacklogStory, BurndownData, SortState, RemainEntry, WorkedEntry } from "./types.ts";
 
 let fpToday: FlatpickrInstance | null = null;
 
@@ -61,7 +61,7 @@ export const toggleBacklogSort = (key: string): void => {
   render(H_BACKLOG);
 };
 
-const NUMERIC_KEYS = new Set(["estimate", "worked", "remain", "priority"]);
+const NUMERIC_KEYS = new Set(["estimate", "worked", "remain", "priority", "actualEst"]);
 
 const sortItems = <T extends Record<string, any>>(items: T[], key: string | null, asc: boolean): T[] => {
   if (!key) return items;
@@ -136,7 +136,11 @@ const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Se
   if (taskTable) applySortClasses(taskTable as HTMLElement, taskSort);
 
   const isSorted = taskSort.key !== null;
-  const tasks = sortItems([...sprint.tasks], taskSort.key, taskSort.asc);
+  const tasks = sortItems(
+    sprint.tasks.map(t => ({ ...t, actualEst: t.worked + t.remain })),
+    taskSort.key,
+    taskSort.asc,
+  );
   tasks.forEach((task) => {
     const row = (dom.taskRowTemplate.content.firstElementChild!.cloneNode(true)) as HTMLTableRowElement;
     row.dataset.taskId = task.id;
@@ -182,8 +186,8 @@ const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Se
     const remainView = row.querySelector(".task-remain-view") as HTMLElement;
     const remainChangeBtn = row.querySelector(".task-remain-change") as HTMLButtonElement;
     const remainInput = row.querySelector(".task-remain-input") as HTMLInputElement;
-    const statusSelect = row.querySelector(".task-status") as HTMLSelectElement;
-    const doneInput = row.querySelector(".task-done") as HTMLInputElement;
+    const statusToggle = row.querySelector(".task-status-toggle") as HTMLElement;
+    const doneSpan = row.querySelector(".task-done") as HTMLElement;
     const removeBtn = row.querySelector(".task-remove") as HTMLButtonElement;
 
     taskIdSpan.textContent = task.taskId || "";
@@ -205,7 +209,6 @@ const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Se
     if (parentStoryDesc) taskIdSpan.title = parentStoryDesc;
     nameSpan.title = currentAssigned;
 
-    const isInProgress = task.status === "In Progress";
     const actualEst = task.worked + task.remain;
     estimateSpan.textContent = `${actualEst} / ${task.estimate}`;
 
@@ -214,77 +217,71 @@ const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Se
     workedInput.value = String(task.worked);
     remainInput.value = String(task.remain);
 
-    workedInput.hidden = !isInProgress;
-    workedView.hidden = isInProgress;
+    workedInput.hidden = true;
+    workedView.hidden = false;
     remainInput.hidden = true;
     remainView.hidden = false;
-    remainChangeBtn.hidden = !isInProgress;
+    remainChangeBtn.hidden = false;
+    remainChangeBtn.textContent = "Change";
 
     remainChangeBtn.addEventListener("click", () => {
-      remainChangeBtn.hidden = true;
-      remainView.hidden = true;
-      remainInput.hidden = false;
-      remainInput.focus();
+      if (remainChangeBtn.textContent === "Change") {
+        workedView.hidden = true;
+        workedInput.hidden = false;
+        remainView.hidden = true;
+        remainInput.hidden = false;
+        remainChangeBtn.textContent = "Save";
+        workedInput.focus();
+      } else {
+        commitSave();
+      }
     });
 
-    statusSelect.value = (statusOptions as readonly string[]).includes(task.status) ? task.status : "Todo";
-    doneInput.value = task.doneDate || "";
-    doneInput.disabled = statusSelect.value !== "Done";
+    const isClickable = task.worked === 0 && task.status !== "Done";
+    statusToggle.textContent = task.status;
+    statusToggle.classList.toggle("clickable", isClickable);
 
-    if (statusSelect.value === "Done") {
-      flatpickr(doneInput, {
-        dateFormat: "Y-m-d",
-        defaultDate: task.doneDate || null,
-        minDate: sprint.startDate || null,
-        maxDate: sprint.endDate || null,
-        disableMobile: true,
-        disable: [
-          (date: Date) => {
-            const iso = localIso(date);
-            if (holidaySet && holidaySet.has(iso)) return true;
-            const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-            if (isWeekend && workWeekendSet && workWeekendSet.has(iso)) return false;
-            return isWeekend;
-          },
-        ],
-        allowInput: false,
-        onChange: ([date]: Date[]) => {
-          if (date) {
-            updateTask(task.id, { doneDate: localIso(date), status: "Done" });
-          }
-        },
+    if (isClickable) {
+      statusToggle.addEventListener("click", () => {
+        const newStatus = task.status === "Todo" ? "In Progress" : "Todo";
+        commitStatus(newStatus);
       });
     }
+
+    doneSpan.textContent = task.doneDate || "";
 
     const logRemain = (log: RemainEntry[], date: string, remain: number): RemainEntry[] => [
       ...log.filter(e => e.date !== date),
       { date, remain },
     ];
 
-    const commitWorked = (): void => {
-      const newWorked = Math.max(0, Number(workedInput.value) || 0);
-      const currentAE = task.worked + task.remain;
-      const newRemain = Math.max(0, currentAE - newWorked);
-      const logDate = sprint.today || todayIso();
-      const newLog = logRemain(task.remainLog ?? [], logDate, newRemain);
-      updateTask(task.id, { worked: newWorked, remain: newRemain, remainLog: newLog });
-    };
-    workedInput.addEventListener("change", commitWorked);
-    workedInput.addEventListener("blur", commitWorked);
-    workedInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") { e.preventDefault(); commitWorked(); workedInput.blur(); }
-    });
+    const logWorked = (log: WorkedEntry[], date: string, worked: number): WorkedEntry[] => [
+      ...log.filter(e => e.date !== date),
+      { date, worked },
+    ];
 
-    const commitRemain = (): void => {
+    const commitSave = (): void => {
+      const newWorked = Math.max(0, Number(workedInput.value) || 0);
       const newRemain = Math.max(0, Number(remainInput.value) || 0);
       const logDate = sprint.today || todayIso();
-      const newLog = logRemain(task.remainLog ?? [], logDate, newRemain);
-      updateTask(task.id, { remain: newRemain, remainLog: newLog });
+      const newRemainLog = logRemain(task.remainLog ?? [], logDate, newRemain);
+      const newWorkedLog = logWorked(task.workedLog ?? [], logDate, newWorked);
+      let newStatus = task.status;
+      let newDoneDate = task.doneDate;
+      if (newRemain === 0) {
+        newStatus = "Done";
+        newDoneDate = newDoneDate || logDate;
+      } else if (task.status === "Done") {
+        newStatus = "In Progress";
+        newDoneDate = "";
+      }
+      updateTask(task.id, { worked: newWorked, remain: newRemain, remainLog: newRemainLog, workedLog: newWorkedLog, status: newStatus, doneDate: newDoneDate });
     };
-    remainInput.addEventListener("change", commitRemain);
-    remainInput.addEventListener("blur", commitRemain);
+    workedInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); commitSave(); }
+    });
     remainInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") { e.preventDefault(); commitRemain(); remainInput.blur(); }
+      if (e.key === "Enter") { e.preventDefault(); commitSave(); }
     });
 
     const commitStatus = (statusValue: string): void => {
@@ -302,25 +299,23 @@ const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Se
               : sprint.endDate;
         }
         remain = 0;
-        const newLog = logRemain(task.remainLog ?? [], doneDate, 0);
-        updateTask(task.id, { status, doneDate, worked, remain, remainLog: newLog });
+        const newRemainLog = logRemain(task.remainLog ?? [], doneDate, 0);
+        const newWorkedLog = logWorked(task.workedLog ?? [], doneDate, worked);
+        updateTask(task.id, { status, doneDate, worked, remain, remainLog: newRemainLog, workedLog: newWorkedLog });
       } else if (status === "Todo") {
         doneDate = "";
         worked = 0;
         remain = task.estimate;
-        updateTask(task.id, { status, doneDate, worked, remain, remainLog: [] });
+        updateTask(task.id, { status, doneDate, worked, remain, remainLog: [], workedLog: [] });
       } else {
         doneDate = "";
         updateTask(task.id, { status, doneDate, worked, remain });
       }
     };
 
-    statusSelect.addEventListener("change", (e) => commitStatus((e.target as HTMLSelectElement).value));
-    statusSelect.addEventListener("blur", (e) => commitStatus((e.target as HTMLSelectElement).value));
-    statusSelect.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") { e.preventDefault(); commitStatus((e.target as HTMLSelectElement).value); statusSelect.blur(); }
-    });
 
+
+    removeBtn.hidden = task.status === "In Progress" || task.status === "Done";
 
     removeBtn.addEventListener("click", () => {
       const label = task.taskId ? `[${task.taskId}] ${task.name}` : task.name || "this task";
@@ -795,7 +790,7 @@ export const render = (hints?: number): void => {
     const burndown = calculateBurndown(sprint, effectiveToday, holidaySet, workWeekendSet);
     if (has(H_STATS)) renderStats(sprint, burndown);
     if (has(H_CHART)) {
-      drawChart(burndown);
+      drawChart(burndown, (date) => updateToday(date));
     }
   }
 };

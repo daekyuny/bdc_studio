@@ -83,6 +83,7 @@ const migrateImported = (imported: any): AppState => {
         delete task.actual;
       }
       if (!task.remainLog) task.remainLog = [];
+      if (!task.workedLog) task.workedLog = [];
     }
   }
   return imported as AppState;
