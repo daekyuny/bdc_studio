@@ -210,9 +210,20 @@
       for (const task of sprint.tasks) {
         if (task.points !== void 0 && task.estimate === void 0) {
           task.estimate = task.points;
-          task.actual = null;
           delete task.points;
         }
+        if (task.worked === void 0) {
+          const old = task.actual ?? null;
+          if (task.status === "Done") {
+            task.worked = old != null ? old : task.estimate ?? 0;
+            task.remain = 0;
+          } else {
+            task.worked = 0;
+            task.remain = task.estimate ?? 0;
+          }
+          delete task.actual;
+        }
+        if (!task.remainLog) task.remainLog = [];
       }
     }
     return parsed;
@@ -367,9 +378,11 @@
       name: foundTask.description,
       assignedTo: foundTask.assignedTo,
       estimate,
-      actual: null,
+      worked: 0,
+      remain: estimate,
       status: "Todo",
-      doneDate: ""
+      doneDate: "",
+      remainLog: []
     });
     save();
     onChange(H_SPRINT_TASKS);
@@ -557,6 +570,16 @@
   };
 
   // src/burndown.ts
+  var getRemainAtDate = (task, date) => {
+    if (task.doneDate && task.doneDate <= date) return 0;
+    const log = task.remainLog;
+    if (!log || log.length === 0) return task.remain ?? task.estimate ?? 0;
+    let best;
+    for (const entry of log) {
+      if (entry.date <= date && (!best || entry.date >= best.date)) best = entry;
+    }
+    return best !== void 0 ? best.remain : task.estimate ?? 0;
+  };
   var calculateBurndown = (sprint, today, holidays, workWeekends) => {
     const sprintDates = getWorkingDates(sprint.startDate, sprint.endDate, holidays, workWeekends);
     const extraDay = sprint.endDate ? getNextWorkingDay(sprint.endDate, holidays, workWeekends) : null;
@@ -576,11 +599,7 @@
     const todayIndex = dates.reduce((last, date, i) => date <= today ? i : last, -1);
     const actual = dates.map((date, i) => {
       if (todayIndex < 0 || i > todayIndex) return null;
-      const burned = sprint.tasks.reduce((sum, task) => {
-        if (!task.doneDate || task.doneDate > date) return sum;
-        return sum + Number(task.actual != null ? task.actual : task.estimate || 0);
-      }, 0);
-      return totalPoints - burned;
+      return sprint.tasks.reduce((sum, task) => sum + getRemainAtDate(task, date), 0);
     });
     return { dates, totalPoints, ideal, actual, manDays, effectiveManDays, idealDailyBurn, todayIndex };
   };
@@ -754,7 +773,7 @@
     }
     render(H_BACKLOG);
   };
-  var NUMERIC_KEYS = /* @__PURE__ */ new Set(["estimate", "actual", "priority"]);
+  var NUMERIC_KEYS = /* @__PURE__ */ new Set(["estimate", "worked", "remain", "priority"]);
   var sortItems = (items, key, asc) => {
     if (!key) return items;
     const sorted = [...items].sort((a, b) => {
@@ -858,7 +877,11 @@
       const taskIdSpan = row.querySelector(".task-taskid");
       const nameSpan = row.querySelector(".task-name");
       const estimateSpan = row.querySelector(".task-estimate");
-      const actualInput = row.querySelector(".task-actual");
+      const workedView = row.querySelector(".task-worked-view");
+      const workedInput = row.querySelector(".task-worked-input");
+      const remainView = row.querySelector(".task-remain-view");
+      const remainChangeBtn = row.querySelector(".task-remain-change");
+      const remainInput = row.querySelector(".task-remain-input");
       const statusSelect = row.querySelector(".task-status");
       const doneInput = row.querySelector(".task-done");
       const removeBtn = row.querySelector(".task-remove");
@@ -879,9 +902,24 @@
       }
       if (parentStoryDesc) taskIdSpan.title = parentStoryDesc;
       nameSpan.title = currentAssigned;
-      estimateSpan.textContent = String(task.estimate ?? "");
-      actualInput.value = String(task.actual ?? "");
-      actualInput.disabled = task.status !== "Done";
+      const isInProgress = task.status === "In Progress";
+      const actualEst = task.worked + task.remain;
+      estimateSpan.textContent = `${actualEst} / ${task.estimate}`;
+      workedView.textContent = String(task.worked);
+      remainView.textContent = String(task.remain);
+      workedInput.value = String(task.worked);
+      remainInput.value = String(task.remain);
+      workedInput.hidden = !isInProgress;
+      workedView.hidden = isInProgress;
+      remainInput.hidden = true;
+      remainView.hidden = false;
+      remainChangeBtn.hidden = !isInProgress;
+      remainChangeBtn.addEventListener("click", () => {
+        remainChangeBtn.hidden = true;
+        remainView.hidden = true;
+        remainInput.hidden = false;
+        remainInput.focus();
+      });
       statusSelect.value = statusOptions.includes(task.status) ? task.status : "Todo";
       doneInput.value = task.doneDate || "";
       doneInput.disabled = statusSelect.value !== "Done";
@@ -909,41 +947,63 @@
           }
         });
       }
-      const commitActual = () => {
-        const val = actualInput.value;
-        updateTask(task.id, { actual: val === "" ? null : Number(val) });
+      const logRemain = (log, date, remain) => [
+        ...log.filter((e) => e.date !== date),
+        { date, remain }
+      ];
+      const commitWorked = () => {
+        const newWorked = Math.max(0, Number(workedInput.value) || 0);
+        const currentAE = task.worked + task.remain;
+        const newRemain = Math.max(0, currentAE - newWorked);
+        const logDate = sprint.today || todayIso();
+        const newLog = logRemain(task.remainLog ?? [], logDate, newRemain);
+        updateTask(task.id, { worked: newWorked, remain: newRemain, remainLog: newLog });
       };
-      actualInput.addEventListener("change", commitActual);
-      actualInput.addEventListener("blur", commitActual);
-      actualInput.addEventListener("keydown", (e) => {
+      workedInput.addEventListener("change", commitWorked);
+      workedInput.addEventListener("blur", commitWorked);
+      workedInput.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
-          commitActual();
-          actualInput.blur();
+          commitWorked();
+          workedInput.blur();
+        }
+      });
+      const commitRemain = () => {
+        const newRemain = Math.max(0, Number(remainInput.value) || 0);
+        const logDate = sprint.today || todayIso();
+        const newLog = logRemain(task.remainLog ?? [], logDate, newRemain);
+        updateTask(task.id, { remain: newRemain, remainLog: newLog });
+      };
+      remainInput.addEventListener("change", commitRemain);
+      remainInput.addEventListener("blur", commitRemain);
+      remainInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commitRemain();
+          remainInput.blur();
         }
       });
       const commitStatus = (statusValue) => {
         const status = statusValue;
         let doneDate = task.doneDate;
-        let actual = task.actual;
-        if (status === "Done" && !doneDate) {
-          const candidate = sprint.today || todayIso();
-          doneDate = candidate >= sprint.startDate && candidate <= sprint.endDate ? candidate : sprint.endDate;
-        }
-        if (status === "Done" && (actual === null || actual === void 0)) {
-          actual = task.estimate;
-        }
-        if (status !== "Done") {
-          doneDate = "";
-          actual = null;
-        }
-        updateTask(task.id, { status, doneDate, actual });
+        let worked = task.worked;
+        let remain = task.remain;
         if (status === "Done") {
-          const tid = task.id;
-          setTimeout(() => {
-            const found = dom.taskRows.querySelector(`[data-task-id="${tid}"]`);
-            found?.querySelector(".task-actual")?.focus();
-          }, 0);
+          if (!doneDate) {
+            const candidate = sprint.today || todayIso();
+            doneDate = candidate >= sprint.startDate && candidate <= sprint.endDate ? candidate : sprint.endDate;
+          }
+          remain = 0;
+          const newLog = logRemain(task.remainLog ?? [], doneDate, 0);
+          updateTask(task.id, { status, doneDate, worked, remain, remainLog: newLog });
+        } else if (status === "Todo") {
+          doneDate = "";
+          worked = 0;
+          remain = task.estimate;
+          updateTask(task.id, { status, doneDate, worked, remain, remainLog: [] });
+        } else {
+          doneDate = "";
+          updateTask(task.id, { status, doneDate, worked, remain });
         }
       };
       statusSelect.addEventListener("change", (e) => commitStatus(e.target.value));
@@ -1394,8 +1454,17 @@
     const state2 = getState();
     const sprintNumber = state2.sprints.findIndex((s) => s.id === sprint.id) + 1;
     const aoa = [
-      ["Task ID", "Task", "Estimate", "Actual", "Status", "Done Date"],
-      ...sprint.tasks.map((t) => [t.taskId || "", t.name, t.estimate ?? "", t.actual ?? "", t.status, t.doneDate || ""])
+      ["Task ID", "Task", "Estimate", "Worked", "Remain", "Actual/Est", "Status", "Done Date"],
+      ...sprint.tasks.map((t) => [
+        t.taskId || "",
+        t.name,
+        t.estimate ?? "",
+        t.worked ?? 0,
+        t.remain ?? t.estimate ?? 0,
+        (t.worked ?? 0) + (t.remain ?? t.estimate ?? 0),
+        t.status,
+        t.doneDate || ""
+      ])
     ];
     const ws = XLSX.utils.aoa_to_sheet(aoa);
     const wb = XLSX.utils.book_new();
@@ -1408,9 +1477,20 @@
       for (const task of sprint.tasks) {
         if (task.points !== void 0 && task.estimate === void 0) {
           task.estimate = task.points;
-          task.actual = null;
           delete task.points;
         }
+        if (task.worked === void 0) {
+          const old = task.actual ?? null;
+          if (task.status === "Done") {
+            task.worked = old != null ? old : task.estimate ?? 0;
+            task.remain = 0;
+          } else {
+            task.worked = 0;
+            task.remain = task.estimate ?? 0;
+          }
+          delete task.actual;
+        }
+        if (!task.remainLog) task.remainLog = [];
       }
     }
     return imported;

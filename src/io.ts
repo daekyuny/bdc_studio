@@ -49,8 +49,13 @@ export const exportSprintExcel = (): void => {
   const sprintNumber = state.sprints.findIndex((s) => s.id === sprint.id) + 1;
 
   const aoa: unknown[][] = [
-    ["Task ID", "Task", "Estimate", "Actual", "Status", "Done Date"],
-    ...sprint.tasks.map((t) => [t.taskId || "", t.name, t.estimate ?? "", t.actual ?? "", t.status, t.doneDate || ""]),
+    ["Task ID", "Task", "Estimate", "Worked", "Remain", "Actual/Est", "Status", "Done Date"],
+    ...sprint.tasks.map((t) => [
+      t.taskId || "", t.name, t.estimate ?? "",
+      t.worked ?? 0, t.remain ?? t.estimate ?? 0,
+      (t.worked ?? 0) + (t.remain ?? t.estimate ?? 0),
+      t.status, t.doneDate || "",
+    ]),
   ];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   const wb = XLSX.utils.book_new();
@@ -64,9 +69,20 @@ const migrateImported = (imported: any): AppState => {
     for (const task of sprint.tasks) {
       if (task.points !== undefined && task.estimate === undefined) {
         task.estimate = task.points;
-        task.actual = null;
         delete task.points;
       }
+      if (task.worked === undefined) {
+        const old = task.actual ?? null;
+        if (task.status === 'Done') {
+          task.worked = old != null ? old : (task.estimate ?? 0);
+          task.remain = 0;
+        } else {
+          task.worked = 0;
+          task.remain = task.estimate ?? 0;
+        }
+        delete task.actual;
+      }
+      if (!task.remainLog) task.remainLog = [];
     }
   }
   return imported as AppState;

@@ -798,11 +798,20 @@ h3 {
 }
 
 .task-table .col-estimate {
-  width: 40px;
+  width: 70px;
 }
 
-.task-table .col-actual {
-  width: 80px;
+.task-table .col-worked {
+  width: 60px;
+}
+
+.task-table .col-remain {
+  width: 100px;
+  white-space: nowrap;
+}
+
+.task-table .task-remain-change {
+  float: right;
 }
 
 .task-table .col-status {
@@ -818,7 +827,8 @@ h3 {
   text-align: right;
 }
 
-.task-table .task-actual {
+.task-table .task-worked-input,
+.task-table .task-remain-input {
   width: 50px;
   text-align: right;
   padding: 1px 4px;

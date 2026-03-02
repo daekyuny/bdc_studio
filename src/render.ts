@@ -22,7 +22,7 @@ import {
 } from "./state.ts";
 import { calculateBurndown } from "./burndown.ts";
 import { drawChart } from "./chart.ts";
-import type { Sprint, SprintTask, BacklogTask, BacklogStory, BurndownData, SortState } from "./types.ts";
+import type { Sprint, SprintTask, BacklogTask, BacklogStory, BurndownData, SortState, RemainEntry } from "./types.ts";
 
 let fpToday: FlatpickrInstance | null = null;
 
@@ -61,7 +61,7 @@ export const toggleBacklogSort = (key: string): void => {
   render(H_BACKLOG);
 };
 
-const NUMERIC_KEYS = new Set(["estimate", "actual", "priority"]);
+const NUMERIC_KEYS = new Set(["estimate", "worked", "remain", "priority"]);
 
 const sortItems = <T extends Record<string, any>>(items: T[], key: string | null, asc: boolean): T[] => {
   if (!key) return items;
@@ -177,7 +177,11 @@ const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Se
     const taskIdSpan = row.querySelector(".task-taskid") as HTMLElement;
     const nameSpan = row.querySelector(".task-name") as HTMLElement;
     const estimateSpan = row.querySelector(".task-estimate") as HTMLElement;
-    const actualInput = row.querySelector(".task-actual") as HTMLInputElement;
+    const workedView = row.querySelector(".task-worked-view") as HTMLElement;
+    const workedInput = row.querySelector(".task-worked-input") as HTMLInputElement;
+    const remainView = row.querySelector(".task-remain-view") as HTMLElement;
+    const remainChangeBtn = row.querySelector(".task-remain-change") as HTMLButtonElement;
+    const remainInput = row.querySelector(".task-remain-input") as HTMLInputElement;
     const statusSelect = row.querySelector(".task-status") as HTMLSelectElement;
     const doneInput = row.querySelector(".task-done") as HTMLInputElement;
     const removeBtn = row.querySelector(".task-remove") as HTMLButtonElement;
@@ -200,10 +204,28 @@ const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Se
     }
     if (parentStoryDesc) taskIdSpan.title = parentStoryDesc;
     nameSpan.title = currentAssigned;
-    estimateSpan.textContent = String(task.estimate ?? "");
 
-    actualInput.value = String(task.actual ?? "");
-    actualInput.disabled = task.status !== "Done";
+    const isInProgress = task.status === "In Progress";
+    const actualEst = task.worked + task.remain;
+    estimateSpan.textContent = `${actualEst} / ${task.estimate}`;
+
+    workedView.textContent = String(task.worked);
+    remainView.textContent = String(task.remain);
+    workedInput.value = String(task.worked);
+    remainInput.value = String(task.remain);
+
+    workedInput.hidden = !isInProgress;
+    workedView.hidden = isInProgress;
+    remainInput.hidden = true;
+    remainView.hidden = false;
+    remainChangeBtn.hidden = !isInProgress;
+
+    remainChangeBtn.addEventListener("click", () => {
+      remainChangeBtn.hidden = true;
+      remainView.hidden = true;
+      remainInput.hidden = false;
+      remainInput.focus();
+    });
 
     statusSelect.value = (statusOptions as readonly string[]).includes(task.status) ? task.status : "Todo";
     doneInput.value = task.doneDate || "";
@@ -234,41 +256,62 @@ const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Se
       });
     }
 
-    const commitActual = (): void => {
-      const val = actualInput.value;
-      updateTask(task.id, { actual: val === "" ? null : Number(val) });
+    const logRemain = (log: RemainEntry[], date: string, remain: number): RemainEntry[] => [
+      ...log.filter(e => e.date !== date),
+      { date, remain },
+    ];
+
+    const commitWorked = (): void => {
+      const newWorked = Math.max(0, Number(workedInput.value) || 0);
+      const currentAE = task.worked + task.remain;
+      const newRemain = Math.max(0, currentAE - newWorked);
+      const logDate = sprint.today || todayIso();
+      const newLog = logRemain(task.remainLog ?? [], logDate, newRemain);
+      updateTask(task.id, { worked: newWorked, remain: newRemain, remainLog: newLog });
     };
-    actualInput.addEventListener("change", commitActual);
-    actualInput.addEventListener("blur", commitActual);
-    actualInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") { e.preventDefault(); commitActual(); actualInput.blur(); }
+    workedInput.addEventListener("change", commitWorked);
+    workedInput.addEventListener("blur", commitWorked);
+    workedInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); commitWorked(); workedInput.blur(); }
+    });
+
+    const commitRemain = (): void => {
+      const newRemain = Math.max(0, Number(remainInput.value) || 0);
+      const logDate = sprint.today || todayIso();
+      const newLog = logRemain(task.remainLog ?? [], logDate, newRemain);
+      updateTask(task.id, { remain: newRemain, remainLog: newLog });
+    };
+    remainInput.addEventListener("change", commitRemain);
+    remainInput.addEventListener("blur", commitRemain);
+    remainInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); commitRemain(); remainInput.blur(); }
     });
 
     const commitStatus = (statusValue: string): void => {
-      const status = statusValue;
+      const status = statusValue as SprintTask["status"];
       let doneDate = task.doneDate;
-      let actual = task.actual;
-      if (status === "Done" && !doneDate) {
-        const candidate = sprint.today || todayIso();
-        doneDate =
-          candidate >= sprint.startDate && candidate <= sprint.endDate
-            ? candidate
-            : sprint.endDate;
-      }
-      if (status === "Done" && (actual === null || actual === undefined)) {
-        actual = task.estimate;
-      }
-      if (status !== "Done") {
-        doneDate = "";
-        actual = null;
-      }
-      updateTask(task.id, { status: status as SprintTask["status"], doneDate, actual });
+      let worked = task.worked;
+      let remain = task.remain;
+
       if (status === "Done") {
-        const tid = task.id;
-        setTimeout(() => {
-          const found = dom.taskRows.querySelector(`[data-task-id="${tid}"]`);
-          (found?.querySelector(".task-actual") as HTMLElement | null)?.focus();
-        }, 0);
+        if (!doneDate) {
+          const candidate = sprint.today || todayIso();
+          doneDate =
+            candidate >= sprint.startDate && candidate <= sprint.endDate
+              ? candidate
+              : sprint.endDate;
+        }
+        remain = 0;
+        const newLog = logRemain(task.remainLog ?? [], doneDate, 0);
+        updateTask(task.id, { status, doneDate, worked, remain, remainLog: newLog });
+      } else if (status === "Todo") {
+        doneDate = "";
+        worked = 0;
+        remain = task.estimate;
+        updateTask(task.id, { status, doneDate, worked, remain, remainLog: [] });
+      } else {
+        doneDate = "";
+        updateTask(task.id, { status, doneDate, worked, remain });
       }
     };
 

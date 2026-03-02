@@ -361,9 +361,9 @@ describe("calculateBurndown", () => {
 
   it("ideal line decreases linearly from totalPoints to near zero", () => {
     const tasks = [
-      { id: "1", name: "a", estimate: 5, actual: null, status: "Todo" as const, doneDate: "" },
-      { id: "2", name: "b", estimate: 3, actual: null, status: "Todo" as const, doneDate: "" },
-      { id: "3", name: "c", estimate: 2, actual: null, status: "Todo" as const, doneDate: "" },
+      { id: "1", name: "a", estimate: 5, worked: 0, remain: 5, status: "Todo" as const, doneDate: "" },
+      { id: "2", name: "b", estimate: 3, worked: 0, remain: 3, status: "Todo" as const, doneDate: "" },
+      { id: "3", name: "c", estimate: 2, worked: 0, remain: 2, status: "Todo" as const, doneDate: "" },
     ];
     const sprint = makeSprint({ tasks, developers: 2, efficiency: 1 });
     const result = calculateBurndown(sprint, "2026-01-05");
@@ -379,35 +379,37 @@ describe("calculateBurndown", () => {
     }
   });
 
-  it("actual line reflects done tasks by their doneDate", () => {
+  it("actual line sums remain of undone tasks at each date", () => {
     const tasks = [
-      { id: "1", name: "a", estimate: 5, actual: null, status: "Done" as const, doneDate: "2026-01-05" },
-      { id: "2", name: "b", estimate: 3, actual: null, status: "Done" as const, doneDate: "2026-01-07" },
-      { id: "3", name: "c", estimate: 2, actual: null, status: "Todo" as const, doneDate: "" },
+      { id: "1", name: "a", estimate: 5, worked: 5, remain: 0, status: "Done" as const, doneDate: "2026-01-05" },
+      { id: "2", name: "b", estimate: 3, worked: 3, remain: 0, status: "Done" as const, doneDate: "2026-01-07" },
+      { id: "3", name: "c", estimate: 2, worked: 0, remain: 2, status: "Todo" as const, doneDate: "" },
     ];
     const sprint = makeSprint({ tasks });
     const result = calculateBurndown(sprint, "2026-01-09");
     assert.equal(result.totalPoints, 10);
-    assert.equal(result.actual[0], 5);
-    assert.equal(result.actual[1], 5);
+    // done tasks have remain=0, only task3's remain=2 is counted for undone tasks
+    assert.equal(result.actual[0], 2);
+    assert.equal(result.actual[1], 2);
     assert.equal(result.actual[2], 2);
     assert.equal(result.actual[3], 2);
     assert.equal(result.actual[4], 2);
   });
 
-  it("actual line uses task.actual when available instead of estimate", () => {
+  it("actual line uses task.remain for in-progress tasks", () => {
     const tasks = [
-      { id: "1", name: "a", estimate: 5, actual: 3, status: "Done" as const, doneDate: "2026-01-05" },
+      { id: "1", name: "a", estimate: 5, worked: 3, remain: 2, status: "In Progress" as const, doneDate: "" },
     ];
     const sprint = makeSprint({ tasks });
     const result = calculateBurndown(sprint, "2026-01-09");
     assert.equal(result.totalPoints, 5);
+    // remain=2 is the actual remaining work
     assert.equal(result.actual[0], 2);
   });
 
   it("actual line is null for days after today", () => {
     const sprint = makeSprint({
-      tasks: [{ id: "1", name: "a", estimate: 5, actual: null, status: "Todo" as const, doneDate: "" }],
+      tasks: [{ id: "1", name: "a", estimate: 5, worked: 0, remain: 5, status: "Todo" as const, doneDate: "" }],
     });
     const result = calculateBurndown(sprint, "2026-01-07");
     assert.equal(result.todayIndex, 2);
@@ -421,7 +423,7 @@ describe("calculateBurndown", () => {
 
   it("todayIndex is -1 when today is before sprint start", () => {
     const sprint = makeSprint({
-      tasks: [{ id: "1", name: "a", estimate: 5, actual: null, status: "Todo" as const, doneDate: "" }],
+      tasks: [{ id: "1", name: "a", estimate: 5, worked: 0, remain: 5, status: "Todo" as const, doneDate: "" }],
     });
     const result = calculateBurndown(sprint, "2026-01-02");
     assert.equal(result.todayIndex, -1);
@@ -430,8 +432,8 @@ describe("calculateBurndown", () => {
 
   it("all tasks done results in actual reaching zero", () => {
     const tasks = [
-      { id: "1", name: "a", estimate: 3, actual: null, status: "Done" as const, doneDate: "2026-01-05" },
-      { id: "2", name: "b", estimate: 7, actual: null, status: "Done" as const, doneDate: "2026-01-06" },
+      { id: "1", name: "a", estimate: 3, worked: 3, remain: 0, status: "Done" as const, doneDate: "2026-01-05" },
+      { id: "2", name: "b", estimate: 7, worked: 7, remain: 0, status: "Done" as const, doneDate: "2026-01-06" },
     ];
     const sprint = makeSprint({ tasks });
     const result = calculateBurndown(sprint, "2026-01-09");
@@ -442,7 +444,7 @@ describe("calculateBurndown", () => {
   it("handles zero developers", () => {
     const sprint = makeSprint({
       developers: 0,
-      tasks: [{ id: "1", name: "a", estimate: 5, actual: null, status: "Todo" as const, doneDate: "" }],
+      tasks: [{ id: "1", name: "a", estimate: 5, worked: 0, remain: 5, status: "Todo" as const, doneDate: "" }],
     });
     const result = calculateBurndown(sprint, "2026-01-07");
     assert.equal(result.manDays, 0);
@@ -463,7 +465,7 @@ describe("calculateBurndown", () => {
   it("respects holidays parameter", () => {
     const holidays = new Set(["2026-01-07", "2026-01-08"]);
     const sprint = makeSprint({
-      tasks: [{ id: "1", name: "a", estimate: 6, actual: null, status: "Todo" as const, doneDate: "" }],
+      tasks: [{ id: "1", name: "a", estimate: 6, worked: 0, remain: 6, status: "Todo" as const, doneDate: "" }],
     });
     const result = calculateBurndown(sprint, "2026-01-09", holidays);
     assert.equal(result.dates.length, 4);

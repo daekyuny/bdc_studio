@@ -1,5 +1,10 @@
 export type TaskStatus = "Todo" | "In Progress" | "Done";
 
+export interface RemainEntry {
+  date: string;
+  remain: number;
+}
+
 export interface SprintTask {
   id: string;
   backlogTaskId?: string;
@@ -7,9 +12,11 @@ export interface SprintTask {
   name: string;
   assignedTo?: string;
   estimate: number;
-  actual: number | null;
+  worked: number;
+  remain: number;
   status: TaskStatus;
   doneDate: string;
+  remainLog?: RemainEntry[];
 }
 
 export interface Sprint {

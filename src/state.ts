@@ -37,9 +37,21 @@ const migrateState = (parsed: any): AppState => {
     for (const task of sprint.tasks) {
       if (task.points !== undefined && task.estimate === undefined) {
         task.estimate = task.points;
-        task.actual = null;
         delete task.points;
       }
+      // migrate old actual → worked/remain
+      if ((task as any).worked === undefined) {
+        const old = (task as any).actual ?? null;
+        if (task.status === 'Done') {
+          task.worked = old != null ? old : (task.estimate ?? 0);
+          task.remain = 0;
+        } else {
+          task.worked = 0;
+          task.remain = task.estimate ?? 0;
+        }
+        delete (task as any).actual;
+      }
+      if (!task.remainLog) task.remainLog = [];
     }
   }
   return parsed as AppState;
@@ -212,7 +224,10 @@ export const addTaskFromBacklog = (backlogTaskId: string): void => {
     name: foundTask.description,
     assignedTo: foundTask.assignedTo,
     estimate,
-    actual: null, status: "Todo", doneDate: "",
+    worked: 0,
+    remain: estimate,
+    status: "Todo", doneDate: "",
+    remainLog: [],
   });
   save(); onChange(H_SPRINT_TASKS);
 };

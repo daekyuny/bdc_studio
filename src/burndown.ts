@@ -1,5 +1,16 @@
 import { getWorkingDates, getNextWorkingDay } from "./utils.ts";
-import type { Sprint, BurndownData } from "./types.ts";
+import type { Sprint, BurndownData, RemainEntry, SprintTask } from "./types.ts";
+
+const getRemainAtDate = (task: SprintTask, date: string): number => {
+  if (task.doneDate && task.doneDate <= date) return 0;
+  const log = task.remainLog;
+  if (!log || log.length === 0) return task.remain ?? task.estimate ?? 0;
+  let best: RemainEntry | undefined;
+  for (const entry of log) {
+    if (entry.date <= date && (!best || entry.date >= best.date)) best = entry;
+  }
+  return best !== undefined ? best.remain : (task.estimate ?? 0);
+};
 
 export const calculateBurndown = (
   sprint: Sprint,
@@ -25,11 +36,7 @@ export const calculateBurndown = (
   const todayIndex = dates.reduce((last, date, i) => (date <= today ? i : last), -1);
   const actual = dates.map((date, i): number | null => {
     if (todayIndex < 0 || i > todayIndex) return null;
-    const burned = sprint.tasks.reduce((sum, task) => {
-      if (!task.doneDate || task.doneDate > date) return sum;
-      return sum + Number(task.actual != null ? task.actual : task.estimate || 0);
-    }, 0);
-    return totalPoints - burned;
+    return sprint.tasks.reduce((sum, task) => sum + getRemainAtDate(task, date), 0);
   });
 
   return { dates, totalPoints, ideal, actual, manDays, effectiveManDays, idealDailyBurn, todayIndex };

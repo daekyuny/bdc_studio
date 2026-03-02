@@ -137,8 +137,9 @@
                       <th class="col-drag"></th>
                       <th class="col-taskid sortable" data-sort-key="taskId">ID</th>
                       <th class="col-task sortable" data-sort-key="name">Task</th>
-                      <th class="col-estimate sortable" data-sort-key="estimate">Est.</th>
-                      <th class="col-actual sortable" data-sort-key="actual">Actual</th>
+                      <th class="col-estimate sortable" data-sort-key="estimate">Actual/Est</th>
+                      <th class="col-worked">Worked</th>
+                      <th class="col-remain">Remain</th>
                       <th class="col-status sortable" data-sort-key="status">Status</th>
                       <th class="col-done sortable" data-sort-key="doneDate">Done Date</th>
                       <th class="col-actions"></th>
@@ -346,8 +347,14 @@
         <td class="col-estimate">
           <span class="task-estimate"></span>
         </td>
-        <td class="col-actual">
-          <input class="task-actual" type="number" min="0" step="0.5" placeholder="0" />
+        <td class="col-worked">
+          <span class="task-worked-view"></span>
+          <input class="task-worked-input" type="number" min="0" step="0.5" placeholder="0" hidden />
+        </td>
+        <td class="col-remain">
+          <span class="task-remain-view"></span>
+          <button class="btn ghost small task-remain-change" hidden>Change</button>
+          <input class="task-remain-input" type="number" min="0" step="0.5" placeholder="0" hidden />
         </td>
         <td class="col-status">
           <select class="task-status">
