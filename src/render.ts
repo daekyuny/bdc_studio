@@ -222,10 +222,10 @@ const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Se
     remainInput.hidden = true;
     remainView.hidden = false;
     remainChangeBtn.hidden = false;
-    remainChangeBtn.textContent = "Change";
+    remainChangeBtn.textContent = "Update";
 
     remainChangeBtn.addEventListener("click", () => {
-      if (remainChangeBtn.textContent === "Change") {
+      if (remainChangeBtn.textContent === "Update") {
         workedView.hidden = true;
         workedInput.hidden = false;
         remainView.hidden = true;
@@ -237,16 +237,9 @@ const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Se
       }
     });
 
-    const isClickable = task.worked === 0 && task.status !== "Done";
-    statusToggle.textContent = task.status;
-    statusToggle.classList.toggle("clickable", isClickable);
-
-    if (isClickable) {
-      statusToggle.addEventListener("click", () => {
-        const newStatus = task.status === "Todo" ? "In Progress" : "Todo";
-        commitStatus(newStatus);
-      });
-    }
+    const derivedStatus = task.remain === 0 ? "Done" : task.worked === 0 ? "Todo" : "In Progress";
+    statusToggle.textContent = derivedStatus;
+    statusToggle.classList.remove("clickable");
 
     doneSpan.textContent = task.doneDate || "";
 
@@ -266,12 +259,15 @@ const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Se
       const logDate = sprint.today || todayIso();
       const newRemainLog = logRemain(task.remainLog ?? [], logDate, newRemain);
       const newWorkedLog = logWorked(task.workedLog ?? [], logDate, newWorked);
-      let newStatus = task.status;
-      let newDoneDate = task.doneDate;
+      let newStatus: SprintTask["status"];
+      let newDoneDate: string;
       if (newRemain === 0) {
         newStatus = "Done";
-        newDoneDate = newDoneDate || logDate;
-      } else if (task.status === "Done") {
+        newDoneDate = task.doneDate || logDate;
+      } else if (newWorked === 0) {
+        newStatus = "Todo";
+        newDoneDate = "";
+      } else {
         newStatus = "In Progress";
         newDoneDate = "";
       }
@@ -284,34 +280,6 @@ const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Se
       if (e.key === "Enter") { e.preventDefault(); commitSave(); }
     });
 
-    const commitStatus = (statusValue: string): void => {
-      const status = statusValue as SprintTask["status"];
-      let doneDate = task.doneDate;
-      let worked = task.worked;
-      let remain = task.remain;
-
-      if (status === "Done") {
-        if (!doneDate) {
-          const candidate = sprint.today || todayIso();
-          doneDate =
-            candidate >= sprint.startDate && candidate <= sprint.endDate
-              ? candidate
-              : sprint.endDate;
-        }
-        remain = 0;
-        const newRemainLog = logRemain(task.remainLog ?? [], doneDate, 0);
-        const newWorkedLog = logWorked(task.workedLog ?? [], doneDate, worked);
-        updateTask(task.id, { status, doneDate, worked, remain, remainLog: newRemainLog, workedLog: newWorkedLog });
-      } else if (status === "Todo") {
-        doneDate = "";
-        worked = 0;
-        remain = task.estimate;
-        updateTask(task.id, { status, doneDate, worked, remain, remainLog: [], workedLog: [] });
-      } else {
-        doneDate = "";
-        updateTask(task.id, { status, doneDate, worked, remain });
-      }
-    };
 
 
 
@@ -382,7 +350,7 @@ const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Se
   });
 };
 
-const renderBacklogPanel = (sprint: Sprint): void => {
+const renderBacklogPanel = (_sprint: Sprint): void => {
   const backlog = getBacklog();
   if (!backlog || !dom.backlogPanelRows) return;
 
@@ -677,7 +645,8 @@ const renderBacklog = (): void => {
 };
 
 const renderStats = (sprint: Sprint, burndown: BurndownData): void => {
-  const doneTasks = sprint.tasks.filter((t) => t.status === "Done").length;
+  const effectiveToday = burndown.todayIndex >= 0 ? burndown.dates[burndown.todayIndex] : "";
+  const doneTasks = sprint.tasks.filter((t) => t.status === "Done" && t.doneDate && t.doneDate <= effectiveToday).length;
   const availableDays = burndown.effectiveManDays - burndown.totalPoints;
 
   dom.summaryDuration.textContent = formatSprintRange(sprint);
@@ -695,12 +664,13 @@ const renderStats = (sprint: Sprint, burndown: BurndownData): void => {
     dom.availableDays.classList.add("ok");
   }
 
-  const donePoints = sprint.tasks
-    .filter((t) => t.status === "Done")
-    .reduce((sum, t) => sum + Number(t.estimate || 0), 0);
-  const progressPct = burndown.totalPoints > 0
-    ? Math.round((donePoints / burndown.totalPoints) * 100)
-    : 0;
+  const ti = burndown.todayIndex;
+  const scopeToday = ti >= 0 ? (burndown.scope[ti] ?? 0) : 0;
+  const remainToday = ti >= 0 ? (burndown.actual[ti] ?? 0) : 0;
+  const workedToday = scopeToday - remainToday;
+  const progressPct = scopeToday > 0
+    ? ((workedToday / scopeToday) * 100).toFixed(2)
+    : "0.00";
   dom.progressPercent.textContent = `${progressPct}%`;
   dom.progressBarFill.style.width = `${progressPct}%`;
 

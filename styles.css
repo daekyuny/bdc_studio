@@ -792,6 +792,16 @@ h3 {
   color: var(--ink);
 }
 
+/* --- Task table alignment --- */
+.task-table th,
+.task-table td {
+  text-align: center;
+}
+
+.task-table .col-task {
+  text-align: left;
+}
+
 /* --- Updated task table column widths (7-col) --- */
 .task-table .col-taskid {
   width: 60px;
@@ -810,16 +820,17 @@ h3 {
 }
 
 .task-table .col-remain {
-  width: 100px;
+  width: 60px;
   white-space: nowrap;
 }
 
-.task-table .task-remain-change {
-  float: right;
+.task-table .col-update {
+  width: 60px;
+  white-space: nowrap;
 }
 
 .task-table .col-status {
-  width: 100px;
+  width: 80px;
 }
 
 .task-table .col-done {
@@ -828,7 +839,10 @@ h3 {
 
 .task-table .col-actions {
   width: 80px;
-  text-align: right;
+}
+
+.task-table .btn {
+  font-size: 0.7rem;
 }
 
 .task-table .task-worked-input,
@@ -849,15 +863,7 @@ h3 {
   user-select: none;
 }
 
-.task-table .task-status-toggle.clickable {
-  border: 1px solid var(--stroke);
-  box-shadow: 0 1px 3px rgba(44, 47, 58, 0.12);
-  cursor: pointer;
-}
 
-.task-table .task-status-toggle.clickable:hover {
-  background: var(--bg-deep);
-}
 
 .task-table .task-done {
   display: block;
