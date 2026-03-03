@@ -85,9 +85,45 @@ p {
 .sprint-toolbar {
   display: flex;
   gap: 4px;
+  align-items: center;
   flex-wrap: wrap;
   margin-top: 8px;
   margin-bottom: 8px;
+}
+
+.project-today-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px 0 8px;
+  margin-right: 6px;
+  border-right: 1px solid var(--stroke);
+}
+
+.project-today-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.project-today-input {
+  width: 108px;
+  padding: 4px 8px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  border: 1px solid var(--stroke);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.project-today-input:focus {
+  outline: none;
+  border-color: var(--accent);
 }
 
 .layout {
@@ -292,6 +328,15 @@ select:focus {
 .btn:hover {
   transform: translateY(-1px);
   box-shadow: 0 12px 24px rgba(92, 103, 242, 0.25);
+}
+
+.btn:disabled,
+.btn:disabled:hover {
+  opacity: 0.38;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+  pointer-events: auto;
 }
 
 .btn.ghost {
@@ -891,6 +936,12 @@ h3 {
   background: rgba(92, 103, 242, 0.10);
 }
 
+/* Task added after the currently viewed date — greyed out, not editable */
+.task-row-before-added {
+  opacity: 0.38;
+  pointer-events: none;
+}
+
 /* Drag-and-drop: backlog drag-to-add highlight */
 .task-table tbody tr.drag-over td {
   background: rgba(92, 103, 242, 0.08);
@@ -1160,19 +1211,19 @@ h3 {
   overflow-wrap: break-word;
 }
 
-/* Edit button / Add Task: hover-reveal on non-editing rows */
+/* Edit / Add Task buttons: always visible */
 .bl-story-row:not(.row-editing) .story-edit-btn,
 .bl-story-row:not(.row-editing) .story-add-task-btn,
 .bl-task-row:not(.row-editing) .task-edit-btn {
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.15s;
-}
-.bl-story-row:not(.row-editing):hover .story-edit-btn,
-.bl-story-row:not(.row-editing):hover .story-add-task-btn,
-.bl-task-row:not(.row-editing):hover .task-edit-btn {
   opacity: 1;
   pointer-events: auto;
+}
+
+/* Assigned task: grey out edit button — task is locked in a sprint */
+.bl-task-row.assigned:not(.row-editing) .task-edit-btn {
+  opacity: 0.25;
+  pointer-events: none;
+  cursor: default;
 }
 
 /* Expand toggle button */
@@ -1314,6 +1365,234 @@ th.sortable.sort-desc::after {
 .backlog-panel-header .bp-actions-col {
   width: 48px;
   flex-shrink: 0;
+}
+
+/* --- Sprint Planning Modal --- */
+.sprint-plan-modal {
+  width: 92vw;
+  max-width: 980px;
+  height: 78vh;
+  min-width: 620px;
+  min-height: 440px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+  border: 2px solid rgba(92, 103, 242, 0.25);
+  resize: both;
+}
+
+/* Accent header */
+.sprint-plan-header {
+  background: linear-gradient(135deg, #5c67f2 0%, #7c3aed 100%);
+  padding: 18px 24px;
+  border-radius: 14px 14px 0 0;
+  margin: 0;
+  align-items: center;
+}
+
+.sprint-plan-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sprint-plan-badge {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+  padding: 3px 8px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.sprint-plan-header h3 {
+  color: #fff;
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.sprint-plan-close {
+  color: rgba(255, 255, 255, 0.8) !important;
+  font-size: 1.5rem !important;
+}
+.sprint-plan-close:hover { color: #fff !important; }
+
+/* Stats bar */
+.sprint-plan-stats {
+  display: flex;
+  background: rgba(92, 103, 242, 0.05);
+  border-bottom: 1px solid rgba(92, 103, 242, 0.15);
+  flex-shrink: 0;
+}
+
+.plan-stat {
+  flex: 1;
+  padding: 12px 20px;
+  border-right: 1px solid rgba(92, 103, 242, 0.12);
+}
+.plan-stat:last-child { border-right: none; }
+
+.plan-stat-label {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(92, 103, 242, 0.7);
+  margin-bottom: 4px;
+}
+
+.plan-stat-value {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+.plan-stat-value.available-green { color: #10b981; }
+.plan-stat-value.available-red   { color: #ef4444; }
+
+/* Body — two columns */
+.sprint-plan-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.sprint-plan-section-title {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--accent);
+  padding: 8px 16px 6px;
+  border-bottom: 2px solid rgba(92, 103, 242, 0.15);
+  margin-bottom: 4px;
+  background: rgba(92, 103, 242, 0.03);
+}
+
+.sprint-plan-task-section {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sprint-plan-backlog-section {
+  width: 300px;
+  flex-shrink: 0;
+  border-left: 2px solid rgba(92, 103, 242, 0.15);
+  background: rgba(92, 103, 242, 0.02);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sprint-plan-scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* Plan task table */
+.plan-task-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.plan-task-table th {
+  text-align: left;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 6px 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--stroke);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.plan-task-row td {
+  padding: 6px 12px;
+  border-bottom: 1px solid rgba(44, 47, 58, 0.06);
+  vertical-align: middle;
+  font-size: 0.875rem;
+}
+.plan-task-row:hover td { background: rgba(92, 103, 242, 0.03); }
+
+.plan-col-drag     { width: 28px; }
+.plan-col-taskid   { width: 72px; color: var(--muted); font-size: 0.8rem; }
+.plan-col-estimate { width: 60px; text-align: right; color: var(--muted); }
+.plan-col-actions  { width: 36px; text-align: center; }
+
+/* Plan backlog panel */
+.plan-backlog-header,
+.plan-backlog-row {
+  display: grid;
+  grid-template-columns: 60px 1fr 36px 32px;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+}
+
+.plan-backlog-header {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--stroke);
+  background: var(--bg);
+  position: sticky;
+  top: 0;
+}
+
+.plan-backlog-header .sortable {
+  cursor: pointer;
+  user-select: none;
+}
+.plan-backlog-header .sortable:hover { color: var(--ink); }
+.plan-backlog-header .sortable::after {
+  content: "";
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 0.6rem;
+  opacity: 0;
+}
+.plan-backlog-header .sortable:hover::after { content: "▲"; opacity: 0.3; }
+.plan-backlog-header .sortable.sort-asc::after  { content: "▲"; opacity: 1; }
+.plan-backlog-header .sortable.sort-desc::after { content: "▼"; opacity: 1; }
+
+.plan-backlog-row {
+  border-bottom: 1px solid rgba(44, 47, 58, 0.05);
+  cursor: grab;
+}
+.plan-backlog-row:hover { background: rgba(92, 103, 242, 0.06); }
+.plan-backlog-row.dragging { opacity: 0.4; }
+
+.plan-bl-taskid { color: var(--muted); font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plan-bl-desc   { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plan-bl-est    { text-align: right; color: var(--muted); font-size: 0.85rem; }
+
+.plan-backlog-empty {
+  color: var(--muted);
+  font-size: 0.875rem;
+  padding: 20px 12px;
+  text-align: center;
+}
+
+/* Footer padding for plan modal */
+.sprint-plan-modal .modal-footer {
+  border-top: 1px solid var(--stroke);
+  padding: 14px 24px;
+  background: var(--panel);
 }
 
 /* --- Preferences modal --- */

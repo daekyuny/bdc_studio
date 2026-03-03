@@ -1,5 +1,5 @@
 import { todayIso, addWorkingDays, createId, getNextWorkingDay } from "./utils.ts";
-import type { AppState, Sprint, SprintTask, Backlog, BacklogStory, BacklogTask, Preferences } from "./types.ts";
+import type { AppState, Sprint, SprintTask, Backlog, BacklogStory, BacklogTask, Preferences, ScopeDrop } from "./types.ts";
 
 // --- Render hint bitmask constants ---
 export const H_SIDEBAR = 1;
@@ -29,6 +29,7 @@ const sortSprints = (): void => {
 const migrateState = (parsed: any): AppState => {
   if (!parsed.backlog) parsed.backlog = { stories: [] };
   if (!parsed.preferences) parsed.preferences = { holidays: [], workWeekends: [], members: [] };
+  if (!parsed.projectToday) parsed.projectToday = todayIso();
   for (const sprint of parsed.sprints) {
     delete sprint.locked;
     delete sprint.lockedAt;
@@ -52,7 +53,28 @@ const migrateState = (parsed: any): AppState => {
       }
       if (!task.remainLog) task.remainLog = [];
       if (!task.workedLog) task.workedLog = [];
+      // migrate soft-deleted tasks (removedDate) to new scopeDrops model
+      if ((task as any).removedDate) {
+        const removedDate = (task as any).removedDate as string;
+        if (task.worked === 0) {
+          if (!task.addedDate || task.addedDate < sprint.startDate) {
+            if (!sprint.scopeDrops) sprint.scopeDrops = [];
+            sprint.scopeDrops.push({
+              addedDate: task.addedDate || sprint.startDate,
+              removedDate,
+              estimate: task.estimate ?? 0,
+              taskId: task.taskId,
+              name: task.name,
+            });
+            (task as any)._delete = true;
+          } else {
+            (task as any)._delete = true;
+          }
+        }
+        delete (task as any).removedDate;
+      }
     }
+    sprint.tasks = sprint.tasks.filter((t: any) => !t._delete);
   }
   return parsed as AppState;
 };
@@ -63,6 +85,7 @@ const defaultState = (): AppState => {
   const sprintId = createId();
   return {
     activeSprintId: sprintId,
+    projectToday: todayIso(),
     backlog: { stories: [] },
     preferences: { holidays: [], workWeekends: [], members: [] },
     sprints: [
@@ -86,7 +109,22 @@ const loadState = (): AppState => {
   try {
     const parsed = JSON.parse(raw);
     if (!parsed || !Array.isArray(parsed.sprints)) return defaultState();
-    return migrateState(parsed);
+    const appState = migrateState(parsed);
+    // Always reset project TODAY to real system date on every load
+    const today = todayIso();
+    appState.projectToday = today;
+    const holidaySet = new Set(appState.preferences.holidays.map((h: any) => h.date));
+    const workWeekendSet = new Set(appState.preferences.workWeekends);
+    for (const sprint of appState.sprints) {
+      if (sprint.endDate < today) {
+        sprint.today = getNextWorkingDay(sprint.endDate, holidaySet, workWeekendSet);
+      } else if (sprint.startDate > today) {
+        sprint.today = sprint.startDate;
+      } else {
+        sprint.today = today;
+      }
+    }
+    return appState;
   } catch {
     console.warn("Burndown Studio: corrupt localStorage data, resetting to defaults.");
     localStorage.removeItem(STORAGE_KEY);
@@ -144,13 +182,21 @@ export const updateSprintById = (id: string, updates: Partial<Sprint>): void => 
   onChange(H_SIDEBAR | H_HEADER | H_STATS | H_CHART);
 };
 
+export const resetActiveSprint = (): void => {
+  const sprint = getActiveSprint();
+  if (!sprint) return;
+  sprint.tasks = sprint.tasks
+    .map(t => ({ ...t, worked: 0, remain: t.estimate, status: "Todo" as const, doneDate: "", remainLog: [], workedLog: [] }));
+  sprint.scopeDrops = [];
+  sprint.today = getProjectToday();
+  save();
+  onChange(H_ALL);
+};
+
 export const deleteActiveSprint = (): void => {
   const sprint = getActiveSprint();
   if (!sprint) return;
   const sortedIndex = state.sprints.findIndex((s) => s.id === sprint.id) + 1;
-  const label = sprint.description || `Sprint ${sortedIndex}`;
-  if (!window.confirm(`Delete "${label}"? This cannot be undone.`)) return;
-
   state.sprints = state.sprints.filter((s) => s.id !== sprint.id);
   if (state.sprints.length === 0) {
     const start = todayIso();
@@ -200,7 +246,21 @@ export const updateTask = (taskId: string, updates: Partial<SprintTask>): void =
 export const removeTaskFromSprint = (taskId: string): void => {
   const sprint = getActiveSprint();
   if (!sprint) return;
-  sprint.tasks = sprint.tasks.filter((task) => task.id !== taskId);
+  const task = sprint.tasks.find((t) => t.id === taskId);
+  if (!task || task.worked > 0) return;
+  const removedDate = getProjectToday();
+  const isPlanned = !task.addedDate || task.addedDate < sprint.startDate;
+  if (isPlanned) {
+    if (!sprint.scopeDrops) sprint.scopeDrops = [];
+    sprint.scopeDrops.push({
+      addedDate: task.addedDate || sprint.startDate,
+      removedDate,
+      estimate: task.estimate ?? 0,
+      taskId: task.taskId,
+      name: task.name,
+    } as ScopeDrop);
+  }
+  sprint.tasks = sprint.tasks.filter((t) => t.id !== taskId);
   save();
   onChange(H_SPRINT_TASKS);
 };
@@ -217,6 +277,21 @@ export const addTaskFromBacklog = (backlogTaskId: string): void => {
   }
   if (!foundTask) return;
   if (sprint.tasks.some(t => t.backlogTaskId === backlogTaskId)) return;
+
+  // If this task was previously removed (matching ScopeDrop exists), cancel the drop
+  // and restore its original addedDate — net effect is as if nothing happened.
+  const drops = sprint.scopeDrops ?? [];
+  let dropIdx = -1;
+  for (let i = drops.length - 1; i >= 0; i--) {
+    const d = drops[i];
+    if ((foundTask.taskId && d.taskId === foundTask.taskId) || d.name === foundTask.description) {
+      dropIdx = i;
+      break;
+    }
+  }
+  const addedDate = dropIdx >= 0 ? drops[dropIdx].addedDate : getProjectToday();
+  if (dropIdx >= 0) sprint.scopeDrops!.splice(dropIdx, 1);
+
   const estimate = Number(foundTask.estimate) || 0;
   sprint.tasks.push({
     id: createId(), backlogTaskId,
@@ -229,6 +304,7 @@ export const addTaskFromBacklog = (backlogTaskId: string): void => {
     status: "Todo", doneDate: "",
     remainLog: [],
     workedLog: [],
+    addedDate,
   });
   save(); onChange(H_SPRINT_TASKS);
 };
@@ -243,6 +319,34 @@ export const updateToday = (date: string): void => {
   sprint.today = clamped;
   save();
   onChange(H_HEADER | H_TASKS | H_STATS | H_CHART);
+};
+
+export const getProjectToday = (): string => state.projectToday || todayIso();
+
+export const finalizeSprintPlan = (): void => {
+  const sprint = getActiveSprint();
+  if (!sprint) return;
+  sprint.plannedPoints = sprint.tasks.reduce((sum, t) => sum + Number(t.estimate || 0), 0);
+  save();
+  onChange(H_CHART);
+};
+
+export const setProjectToday = (date: string): void => {
+  if (!date) return;
+  state.projectToday = date;
+  const holidaySet = new Set(state.preferences.holidays.map(h => h.date));
+  const workWeekendSet = new Set(state.preferences.workWeekends);
+  for (const sprint of state.sprints) {
+    if (sprint.endDate < date) {
+      sprint.today = getNextWorkingDay(sprint.endDate, holidaySet, workWeekendSet);
+    } else if (sprint.startDate > date) {
+      sprint.today = sprint.startDate;
+    } else {
+      sprint.today = date;
+    }
+  }
+  save();
+  onChange(H_ALL);
 };
 
 export const replaceState = (newState: AppState): void => {
@@ -287,7 +391,7 @@ export const updateStory = (id: string, updates: Partial<BacklogStory>): void =>
   const story = state.backlog.stories.find((s) => s.id === id);
   if (!story) return;
   Object.assign(story, updates);
-  save(); onChange(H_BACKLOG_DATA);
+  save(); onChange(H_BACKLOG_DATA | H_TASKS);
 };
 
 export const deleteStory = (id: string): void => {

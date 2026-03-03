@@ -3,8 +3,10 @@ import { toShortDate } from "./utils.ts";
 import type { BurndownData } from "./types.ts";
 
 export const drawChart = (
-  { dates, totalPoints, ideal, actual, scope, todayIndex }: BurndownData,
+  { dates, totalPoints, ideal, actual, scope, scopeDropMarkers, todayIndex }: BurndownData,
   onDateClick?: (date: string) => void,
+  browseIndex?: number,
+  showTodayLabel?: boolean,
 ): void => {
   const width = 800;
   const height = 320;
@@ -73,6 +75,21 @@ export const drawChart = (
     dom.chart.appendChild(zeroLine);
   }
 
+  // Browse marker — shown when browsing a date other than project TODAY
+  const effectiveBrowseIndex = browseIndex !== undefined ? browseIndex : todayIndex;
+  if (effectiveBrowseIndex >= 0 && effectiveBrowseIndex !== todayIndex) {
+    const bx = padding + plotWidth * (dates.length === 1 ? 0 : effectiveBrowseIndex / (dates.length - 1));
+    const browseLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    browseLine.setAttribute("x1", String(bx));
+    browseLine.setAttribute("x2", String(bx));
+    browseLine.setAttribute("y1", String(padding));
+    browseLine.setAttribute("y2", String(height - padding));
+    browseLine.setAttribute("stroke", "rgba(107, 114, 128, 0.5)");
+    browseLine.setAttribute("stroke-width", "1.5");
+    browseLine.setAttribute("stroke-dasharray", "4 3");
+    dom.chart.appendChild(browseLine);
+  }
+
   // Today marker
   if (todayIndex >= 0) {
     const tx = padding + plotWidth * (dates.length === 1 ? 0 : todayIndex / (dates.length - 1));
@@ -86,13 +103,15 @@ export const drawChart = (
     todayLine.setAttribute("stroke-dasharray", "4 3");
     dom.chart.appendChild(todayLine);
 
-    const todayLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    todayLabel.setAttribute("x", String(tx + 4));
-    todayLabel.setAttribute("y", String(padding + 12));
-    todayLabel.setAttribute("fill", "rgba(92, 103, 242, 0.65)");
-    todayLabel.setAttribute("font-size", "10");
-    todayLabel.textContent = "Today";
-    dom.chart.appendChild(todayLabel);
+    if (showTodayLabel) {
+      const todayLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      todayLabel.setAttribute("x", String(tx + 4));
+      todayLabel.setAttribute("y", String(padding + 12));
+      todayLabel.setAttribute("fill", "rgba(92, 103, 242, 0.65)");
+      todayLabel.setAttribute("font-size", "10");
+      todayLabel.textContent = "Today";
+      dom.chart.appendChild(todayLabel);
+    }
   }
 
   const idealLine = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
@@ -126,8 +145,10 @@ export const drawChart = (
     scopeLine.setAttribute("points", scopePoints.join(" "));
     dom.chart.appendChild(scopeLine);
 
+    const dropDateIndices = new Set(scopeDropMarkers.map(m => m.dateIndex));
     scope.forEach((val, i) => {
       if (val === null) return;
+      if (dropDateIndices.has(i)) return; // triangle marker drawn below
       const [cx, cy] = toPoint(val, i).split(",");
       const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
       dot.setAttribute("cx", cx);
@@ -136,6 +157,24 @@ export const drawChart = (
       dot.setAttribute("fill", "#10b981");
       dom.chart.appendChild(dot);
     });
+
+    // Scope drop markers — downward triangle with tooltip
+    for (const marker of scopeDropMarkers) {
+      const val = scope[marker.dateIndex];
+      if (val === null) continue;
+      const [cxStr, cyStr] = toPoint(val, marker.dateIndex).split(",");
+      const cx = Number(cxStr);
+      const cy = Number(cyStr);
+      const tri = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+      tri.setAttribute("points", `${cx - 6},${cy - 4} ${cx + 6},${cy - 4} ${cx},${cy + 5}`);
+      tri.setAttribute("fill", "#f59e0b");
+      tri.setAttribute("stroke", "white");
+      tri.setAttribute("stroke-width", "1");
+      const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+      title.textContent = `Scope drop:\n${marker.label}`;
+      tri.appendChild(title);
+      dom.chart.appendChild(tri);
+    }
   }
 
   const actualPoints = actual
@@ -171,13 +210,15 @@ export const drawChart = (
   dates.forEach((date, index) => {
     const x = padding + plotWidth * (dates.length === 1 ? 0 : index / (dates.length - 1));
     const isToday = index === todayIndex;
+    const isBrowse = index === effectiveBrowseIndex && effectiveBrowseIndex !== todayIndex;
 
     const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
     label.setAttribute("x", String(x));
     label.setAttribute("y", String(height - 18));
     label.setAttribute("text-anchor", "middle");
-    label.setAttribute("fill", isToday ? "rgba(92, 103, 242, 0.85)" : "#6b7080");
+    label.setAttribute("fill", isToday ? "rgba(92, 103, 242, 0.85)" : isBrowse ? "rgba(107, 114, 128, 0.9)" : "#6b7080");
     if (isToday) label.setAttribute("font-weight", "bold");
+    if (isBrowse) label.setAttribute("font-weight", "600");
     label.textContent = showDays ? `D${index}` : toShortDate(date);
 
     if (onDateClick) {

@@ -6,12 +6,13 @@
     mainLayout: $("mainLayout"),
     sprintSubHeader: $("sprintSubHeader"),
     sprintList: $("sprintList"),
+    projectTodayInput: $("projectTodayInput"),
     newSprintBtn: $("newSprintBtn"),
+    resetSprintBtn: $("resetSprintBtn"),
     deleteSprintBtn: $("deleteSprintBtn"),
     sprintTitleText: $("sprintTitleText"),
     editSprintBtn: $("editSprintBtn"),
     summaryDuration: $("summaryDuration"),
-    sprintToday: $("sprintToday"),
     efficiencyDisplay: $("efficiencyDisplay"),
     taskRows: $("taskRows"),
     totalPoints: $("totalPoints"),
@@ -33,6 +34,7 @@
     modalDescription: $("modalDescription"),
     modalStartDate: $("modalStartDate"),
     modalWorkingDays: $("modalWorkingDays"),
+    modalManDays: $("modalManDays"),
     modalEndDate: $("modalEndDate"),
     modalDevelopers: $("modalDevelopers"),
     modalEfficiency: $("modalEfficiency"),
@@ -66,6 +68,28 @@
     backlogTableBody: $("backlogTableBody"),
     backlogStoryRowTemplate: $("backlogStoryRowTemplate"),
     backlogTaskRowTemplate: $("backlogTaskRowTemplate"),
+    // Sprint Planning Modal
+    sprintPlanModal: $("sprintPlanModal"),
+    sprintPlanTitle: $("sprintPlanTitle"),
+    sprintPlanClose: $("sprintPlanClose"),
+    sprintPlanDone: $("sprintPlanDone"),
+    planStatDuration: $("planStatDuration"),
+    planStatWorkingDays: $("planStatWorkingDays"),
+    planStatTotalPoints: $("planStatTotalPoints"),
+    planStatAvailableDays: $("planStatAvailableDays"),
+    planTaskRows: $("planTaskRows"),
+    planBacklogRows: $("planBacklogRows"),
+    planTaskRowTemplate: $("planTaskRowTemplate"),
+    // Delete Sprint confirm dialog
+    confirmDeleteSprintModal: $("confirmDeleteSprintModal"),
+    confirmDeleteSprintName: $("confirmDeleteSprintName"),
+    confirmDeleteSprintCancel: $("confirmDeleteSprintCancel"),
+    confirmDeleteSprintConfirm: $("confirmDeleteSprintConfirm"),
+    // Reset Sprint confirm dialog
+    confirmResetSprintModal: $("confirmResetSprintModal"),
+    confirmResetSprintName: $("confirmResetSprintName"),
+    confirmResetSprintCancel: $("confirmResetSprintCancel"),
+    confirmResetSprintConfirm: $("confirmResetSprintConfirm"),
     // Backlog "Clear All" confirm dialog
     confirmDeleteBacklogModal: $("confirmDeleteBacklogModal"),
     confirmDeleteBacklogCancel: $("confirmDeleteBacklogCancel"),
@@ -166,7 +190,6 @@
     }
     return localIso(d);
   };
-  var sprintsOverlap = (a, b) => a.startDate <= b.endDate && a.endDate >= b.startDate;
   var findGaps = (sprints) => {
     const gaps = [];
     for (let i = 0; i < sprints.length - 1; i++) {
@@ -201,6 +224,7 @@
   var migrateState = (parsed) => {
     if (!parsed.backlog) parsed.backlog = { stories: [] };
     if (!parsed.preferences) parsed.preferences = { holidays: [], workWeekends: [], members: [] };
+    if (!parsed.projectToday) parsed.projectToday = todayIso();
     for (const sprint of parsed.sprints) {
       delete sprint.locked;
       delete sprint.lockedAt;
@@ -223,7 +247,27 @@
         }
         if (!task.remainLog) task.remainLog = [];
         if (!task.workedLog) task.workedLog = [];
+        if (task.removedDate) {
+          const removedDate = task.removedDate;
+          if (task.worked === 0) {
+            if (!task.addedDate || task.addedDate < sprint.startDate) {
+              if (!sprint.scopeDrops) sprint.scopeDrops = [];
+              sprint.scopeDrops.push({
+                addedDate: task.addedDate || sprint.startDate,
+                removedDate,
+                estimate: task.estimate ?? 0,
+                taskId: task.taskId,
+                name: task.name
+              });
+              task._delete = true;
+            } else {
+              task._delete = true;
+            }
+          }
+          delete task.removedDate;
+        }
       }
+      sprint.tasks = sprint.tasks.filter((t) => !t._delete);
     }
     return parsed;
   };
@@ -233,6 +277,7 @@
     const sprintId = createId();
     return {
       activeSprintId: sprintId,
+      projectToday: todayIso(),
       backlog: { stories: [] },
       preferences: { holidays: [], workWeekends: [], members: [] },
       sprints: [
@@ -255,7 +300,21 @@
     try {
       const parsed = JSON.parse(raw);
       if (!parsed || !Array.isArray(parsed.sprints)) return defaultState();
-      return migrateState(parsed);
+      const appState = migrateState(parsed);
+      const today = todayIso();
+      appState.projectToday = today;
+      const holidaySet = new Set(appState.preferences.holidays.map((h) => h.date));
+      const workWeekendSet = new Set(appState.preferences.workWeekends);
+      for (const sprint of appState.sprints) {
+        if (sprint.endDate < today) {
+          sprint.today = getNextWorkingDay(sprint.endDate, holidaySet, workWeekendSet);
+        } else if (sprint.startDate > today) {
+          sprint.today = sprint.startDate;
+        } else {
+          sprint.today = today;
+        }
+      }
+      return appState;
     } catch {
       console.warn("Burndown Studio: corrupt localStorage data, resetting to defaults.");
       localStorage.removeItem(STORAGE_KEY);
@@ -298,12 +357,19 @@
     save();
     onChange(H_SIDEBAR | H_HEADER | H_STATS | H_CHART);
   };
+  var resetActiveSprint = () => {
+    const sprint = getActiveSprint();
+    if (!sprint) return;
+    sprint.tasks = sprint.tasks.map((t) => ({ ...t, worked: 0, remain: t.estimate, status: "Todo", doneDate: "", remainLog: [], workedLog: [] }));
+    sprint.scopeDrops = [];
+    sprint.today = getProjectToday();
+    save();
+    onChange(H_ALL);
+  };
   var deleteActiveSprint = () => {
     const sprint = getActiveSprint();
     if (!sprint) return;
     const sortedIndex = state.sprints.findIndex((s) => s.id === sprint.id) + 1;
-    const label = sprint.description || `Sprint ${sortedIndex}`;
-    if (!window.confirm(`Delete "${label}"? This cannot be undone.`)) return;
     state.sprints = state.sprints.filter((s) => s.id !== sprint.id);
     if (state.sprints.length === 0) {
       const start = todayIso();
@@ -350,7 +416,21 @@
   var removeTaskFromSprint = (taskId) => {
     const sprint = getActiveSprint();
     if (!sprint) return;
-    sprint.tasks = sprint.tasks.filter((task) => task.id !== taskId);
+    const task = sprint.tasks.find((t) => t.id === taskId);
+    if (!task || task.worked > 0) return;
+    const removedDate = getProjectToday();
+    const isPlanned = !task.addedDate || task.addedDate < sprint.startDate;
+    if (isPlanned) {
+      if (!sprint.scopeDrops) sprint.scopeDrops = [];
+      sprint.scopeDrops.push({
+        addedDate: task.addedDate || sprint.startDate,
+        removedDate,
+        estimate: task.estimate ?? 0,
+        taskId: task.taskId,
+        name: task.name
+      });
+    }
+    sprint.tasks = sprint.tasks.filter((t) => t.id !== taskId);
     save();
     onChange(H_SPRINT_TASKS);
   };
@@ -369,6 +449,17 @@
     }
     if (!foundTask) return;
     if (sprint.tasks.some((t) => t.backlogTaskId === backlogTaskId)) return;
+    const drops = sprint.scopeDrops ?? [];
+    let dropIdx = -1;
+    for (let i = drops.length - 1; i >= 0; i--) {
+      const d = drops[i];
+      if (foundTask.taskId && d.taskId === foundTask.taskId || d.name === foundTask.description) {
+        dropIdx = i;
+        break;
+      }
+    }
+    const addedDate = dropIdx >= 0 ? drops[dropIdx].addedDate : getProjectToday();
+    if (dropIdx >= 0) sprint.scopeDrops.splice(dropIdx, 1);
     const estimate = Number(foundTask.estimate) || 0;
     sprint.tasks.push({
       id: createId(),
@@ -382,7 +473,8 @@
       status: "Todo",
       doneDate: "",
       remainLog: [],
-      workedLog: []
+      workedLog: [],
+      addedDate
     });
     save();
     onChange(H_SPRINT_TASKS);
@@ -395,6 +487,31 @@
     sprint.today = clamped;
     save();
     onChange(H_HEADER | H_TASKS | H_STATS | H_CHART);
+  };
+  var getProjectToday = () => state.projectToday || todayIso();
+  var finalizeSprintPlan = () => {
+    const sprint = getActiveSprint();
+    if (!sprint) return;
+    sprint.plannedPoints = sprint.tasks.reduce((sum, t) => sum + Number(t.estimate || 0), 0);
+    save();
+    onChange(H_CHART);
+  };
+  var setProjectToday = (date) => {
+    if (!date) return;
+    state.projectToday = date;
+    const holidaySet = new Set(state.preferences.holidays.map((h) => h.date));
+    const workWeekendSet = new Set(state.preferences.workWeekends);
+    for (const sprint of state.sprints) {
+      if (sprint.endDate < date) {
+        sprint.today = getNextWorkingDay(sprint.endDate, holidaySet, workWeekendSet);
+      } else if (sprint.startDate > date) {
+        sprint.today = sprint.startDate;
+      } else {
+        sprint.today = date;
+      }
+    }
+    save();
+    onChange(H_ALL);
   };
   var replaceState = (newState) => {
     state = newState;
@@ -434,7 +551,7 @@
     if (!story) return;
     Object.assign(story, updates);
     save();
-    onChange(H_BACKLOG_DATA);
+    onChange(H_BACKLOG_DATA | H_TASKS);
   };
   var deleteStory = (id) => {
     state.backlog.stories = state.backlog.stories.filter((s) => s.id !== id);
@@ -590,35 +707,47 @@
     return best !== void 0 ? best.remain : task.estimate ?? 0;
   };
   var calculateBurndown = (sprint, today, holidays, workWeekends) => {
-    const sprintDates = getWorkingDates(sprint.startDate, sprint.endDate, holidays, workWeekends);
-    const extraDay = sprint.endDate ? getNextWorkingDay(sprint.endDate, holidays, workWeekends) : null;
-    const dates = extraDay ? [...sprintDates, extraDay] : sprintDates;
+    const dates = getWorkingDates(sprint.startDate, sprint.endDate, holidays, workWeekends);
     const totalPoints = sprint.tasks.reduce((sum, task) => sum + Number(task.estimate || 0), 0);
-    const workingDays = sprintDates.length || 0;
+    const plannedPoints = sprint.plannedPoints ?? totalPoints;
+    const workingDays = dates.length || 0;
     const developers = Math.max(0, Number(sprint.developers || 0));
     const efficiency = Math.min(1, Math.max(0, Number(sprint.efficiency || 0)));
     const manDays = developers * workingDays;
     const effectiveManDays = manDays * efficiency;
     const idealDailyBurn = workingDays > 0 ? effectiveManDays / workingDays : 0;
     const ideal = dates.map((_, index) => {
-      if (dates.length <= 1) return totalPoints;
-      const remaining = totalPoints - idealDailyBurn * index;
+      if (dates.length <= 1) return plannedPoints;
+      const remaining = plannedPoints - idealDailyBurn * index;
       return Math.round(Math.max(remaining, 0) * 100) / 100;
     });
     const todayIndex = dates.reduce((last, date, i) => date <= today ? i : last, -1);
+    const taskActiveAt = (task, date) => !task.addedDate || task.addedDate <= date;
+    const scopeDropContribAt = (date) => (sprint.scopeDrops ?? []).filter((d) => d.addedDate <= date && d.removedDate > date).reduce((sum, d) => sum + d.estimate, 0);
     const actual = dates.map((date, i) => {
       if (todayIndex < 0 || i > todayIndex) return null;
-      return sprint.tasks.reduce((sum, task) => sum + getRemainAtDate(task, date), 0);
+      const taskPart = sprint.tasks.filter((t) => taskActiveAt(t, date)).reduce((sum, task) => sum + getRemainAtDate(task, date), 0);
+      return taskPart + scopeDropContribAt(date);
     });
     const scope = dates.map((date, i) => {
       if (todayIndex < 0 || i > todayIndex) return null;
-      return sprint.tasks.reduce((sum, task) => sum + getWorkedAtDate(task, date) + getRemainAtDate(task, date), 0);
+      const taskPart = sprint.tasks.filter((t) => taskActiveAt(t, date)).reduce((sum, task) => sum + getWorkedAtDate(task, date) + getRemainAtDate(task, date), 0);
+      return taskPart + scopeDropContribAt(date);
     });
-    return { dates, totalPoints, ideal, actual, scope, manDays, effectiveManDays, idealDailyBurn, todayIndex };
+    const markerMap = /* @__PURE__ */ new Map();
+    for (const drop of sprint.scopeDrops ?? []) {
+      const idx = dates.indexOf(drop.removedDate);
+      if (idx < 0 || idx > todayIndex) continue;
+      const label = `${drop.taskId ? `[${drop.taskId}] ` : ""}${drop.name} (\u2212${drop.estimate})`;
+      if (!markerMap.has(idx)) markerMap.set(idx, []);
+      markerMap.get(idx).push(label);
+    }
+    const scopeDropMarkers = Array.from(markerMap.entries()).map(([dateIndex, labels]) => ({ dateIndex, label: labels.join("\n") }));
+    return { dates, totalPoints, ideal, actual, scope, scopeDropMarkers, manDays, effectiveManDays, idealDailyBurn, todayIndex };
   };
 
   // src/chart.ts
-  var drawChart = ({ dates, totalPoints, ideal, actual, scope, todayIndex }, onDateClick) => {
+  var drawChart = ({ dates, totalPoints, ideal, actual, scope, scopeDropMarkers, todayIndex }, onDateClick, browseIndex, showTodayLabel) => {
     const width = 800;
     const height = 320;
     const padding = 50;
@@ -677,6 +806,19 @@
       zeroLine.setAttribute("stroke-dasharray", "4 3");
       dom.chart.appendChild(zeroLine);
     }
+    const effectiveBrowseIndex = browseIndex !== void 0 ? browseIndex : todayIndex;
+    if (effectiveBrowseIndex >= 0 && effectiveBrowseIndex !== todayIndex) {
+      const bx = padding + plotWidth * (dates.length === 1 ? 0 : effectiveBrowseIndex / (dates.length - 1));
+      const browseLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      browseLine.setAttribute("x1", String(bx));
+      browseLine.setAttribute("x2", String(bx));
+      browseLine.setAttribute("y1", String(padding));
+      browseLine.setAttribute("y2", String(height - padding));
+      browseLine.setAttribute("stroke", "rgba(107, 114, 128, 0.5)");
+      browseLine.setAttribute("stroke-width", "1.5");
+      browseLine.setAttribute("stroke-dasharray", "4 3");
+      dom.chart.appendChild(browseLine);
+    }
     if (todayIndex >= 0) {
       const tx = padding + plotWidth * (dates.length === 1 ? 0 : todayIndex / (dates.length - 1));
       const todayLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
@@ -688,13 +830,15 @@
       todayLine.setAttribute("stroke-width", "1.5");
       todayLine.setAttribute("stroke-dasharray", "4 3");
       dom.chart.appendChild(todayLine);
-      const todayLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      todayLabel.setAttribute("x", String(tx + 4));
-      todayLabel.setAttribute("y", String(padding + 12));
-      todayLabel.setAttribute("fill", "rgba(92, 103, 242, 0.65)");
-      todayLabel.setAttribute("font-size", "10");
-      todayLabel.textContent = "Today";
-      dom.chart.appendChild(todayLabel);
+      if (showTodayLabel) {
+        const todayLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        todayLabel.setAttribute("x", String(tx + 4));
+        todayLabel.setAttribute("y", String(padding + 12));
+        todayLabel.setAttribute("fill", "rgba(92, 103, 242, 0.65)");
+        todayLabel.setAttribute("font-size", "10");
+        todayLabel.textContent = "Today";
+        dom.chart.appendChild(todayLabel);
+      }
     }
     const idealLine = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
     idealLine.setAttribute("fill", "none");
@@ -720,8 +864,10 @@
       scopeLine.setAttribute("stroke-dasharray", "5 3");
       scopeLine.setAttribute("points", scopePoints.join(" "));
       dom.chart.appendChild(scopeLine);
+      const dropDateIndices = new Set(scopeDropMarkers.map((m) => m.dateIndex));
       scope.forEach((val, i) => {
         if (val === null) return;
+        if (dropDateIndices.has(i)) return;
         const [cx, cy] = toPoint(val, i).split(",");
         const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
         dot.setAttribute("cx", cx);
@@ -730,6 +876,23 @@
         dot.setAttribute("fill", "#10b981");
         dom.chart.appendChild(dot);
       });
+      for (const marker of scopeDropMarkers) {
+        const val = scope[marker.dateIndex];
+        if (val === null) continue;
+        const [cxStr, cyStr] = toPoint(val, marker.dateIndex).split(",");
+        const cx = Number(cxStr);
+        const cy = Number(cyStr);
+        const tri = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+        tri.setAttribute("points", `${cx - 6},${cy - 4} ${cx + 6},${cy - 4} ${cx},${cy + 5}`);
+        tri.setAttribute("fill", "#f59e0b");
+        tri.setAttribute("stroke", "white");
+        tri.setAttribute("stroke-width", "1");
+        const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+        title.textContent = `Scope drop:
+${marker.label}`;
+        tri.appendChild(title);
+        dom.chart.appendChild(tri);
+      }
     }
     const actualPoints = actual.map((val, i) => val !== null ? toPoint(val, i) : null).filter((v) => v !== null);
     const actualLine = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
@@ -758,12 +921,14 @@
     dates.forEach((date, index) => {
       const x = padding + plotWidth * (dates.length === 1 ? 0 : index / (dates.length - 1));
       const isToday = index === todayIndex;
+      const isBrowse = index === effectiveBrowseIndex && effectiveBrowseIndex !== todayIndex;
       const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
       label.setAttribute("x", String(x));
       label.setAttribute("y", String(height - 18));
       label.setAttribute("text-anchor", "middle");
-      label.setAttribute("fill", isToday ? "rgba(92, 103, 242, 0.85)" : "#6b7080");
+      label.setAttribute("fill", isToday ? "rgba(92, 103, 242, 0.85)" : isBrowse ? "rgba(107, 114, 128, 0.9)" : "#6b7080");
       if (isToday) label.setAttribute("font-weight", "bold");
+      if (isBrowse) label.setAttribute("font-weight", "600");
       label.textContent = showDays ? `D${index}` : toShortDate(date);
       if (onDateClick) {
         label.style.cursor = "pointer";
@@ -775,7 +940,7 @@
   };
 
   // src/render.ts
-  var fpToday = null;
+  var fpProjectToday = null;
   var activeTab = "sprint";
   var setActiveTab = (tab) => {
     activeTab = tab;
@@ -787,6 +952,8 @@
   var taskSort = { key: null, asc: true };
   var backlogPanelSort = { key: null, asc: true };
   var backlogSort = { key: null, asc: true };
+  var planTaskSort = { key: null, asc: true };
+  var planBacklogSort = { key: null, asc: true };
   var setHighlightBacklogTaskId = (id) => {
     highlightBacklogTaskId = id;
   };
@@ -813,6 +980,22 @@
       backlogSort.asc = true;
     }
     render(H_BACKLOG);
+  };
+  var togglePlanTaskSort = (key) => {
+    if (planTaskSort.key === key) planTaskSort.asc = !planTaskSort.asc;
+    else {
+      planTaskSort.key = key;
+      planTaskSort.asc = true;
+    }
+    render(H_TASKS);
+  };
+  var togglePlanBacklogSort = (key) => {
+    if (planBacklogSort.key === key) planBacklogSort.asc = !planBacklogSort.asc;
+    else {
+      planBacklogSort.key = key;
+      planBacklogSort.asc = true;
+    }
+    render(H_PANEL);
   };
   var NUMERIC_KEYS = /* @__PURE__ */ new Set(["estimate", "worked", "remain", "priority", "actualEst"]);
   var sortItems = (items, key, asc) => {
@@ -873,13 +1056,27 @@
       }
     });
   };
-  var renderTasks = (sprint, holidaySet, workWeekendSet) => {
+  var getLogValueAt = (log, date, key, defaultVal) => {
+    const entries = log.filter((e) => e.date <= date);
+    if (!entries.length) return defaultVal;
+    const latest = entries.reduce((a, b) => a.date >= b.date ? a : b);
+    return latest[key];
+  };
+  var renderTasks = (sprint, holidaySet, workWeekendSet, isSprintActive) => {
     dom.taskRows.innerHTML = "";
     const taskTable = dom.taskRows.closest("table");
     if (taskTable) applySortClasses(taskTable, taskSort);
+    const viewDate = sprint.today || todayIso();
+    const projectTodayNow = getProjectToday();
     const isSorted = taskSort.key !== null;
     const tasks = sortItems(
-      sprint.tasks.map((t) => ({ ...t, actualEst: t.worked + t.remain })),
+      sprint.tasks.map((t) => {
+        const isBeforeAdded = t.addedDate ? t.addedDate > viewDate : false;
+        const histWorked = isBeforeAdded ? 0 : getLogValueAt(t.workedLog ?? [], viewDate, "worked", 0);
+        const histRemain = isBeforeAdded ? t.estimate : getLogValueAt(t.remainLog ?? [], viewDate, "remain", t.estimate);
+        const existsNow = !t.addedDate || t.addedDate <= projectTodayNow;
+        return { ...t, actualEst: histWorked + histRemain, histWorked, histRemain, isBeforeAdded, existsNow };
+      }),
       taskSort.key,
       taskSort.asc
     );
@@ -919,6 +1116,9 @@
       if (highlightBacklogTaskId && task.backlogTaskId === highlightBacklogTaskId) {
         row.classList.add("task-row-highlight");
       }
+      if (task.isBeforeAdded) {
+        row.classList.add("task-row-before-added");
+      }
       const taskIdSpan = row.querySelector(".task-taskid");
       const nameSpan = row.querySelector(".task-name");
       const estimateSpan = row.querySelector(".task-estimate");
@@ -947,34 +1147,36 @@
       }
       if (parentStoryDesc) taskIdSpan.title = parentStoryDesc;
       nameSpan.title = currentAssigned;
-      const actualEst = task.worked + task.remain;
-      estimateSpan.textContent = `${actualEst} / ${task.estimate}`;
-      workedView.textContent = String(task.worked);
-      remainView.textContent = String(task.remain);
-      workedInput.value = String(task.worked);
-      remainInput.value = String(task.remain);
+      estimateSpan.textContent = `${task.histWorked + task.histRemain} / ${task.estimate}`;
+      workedView.textContent = String(task.histWorked);
+      remainView.textContent = String(task.histRemain);
+      workedInput.value = String(task.histWorked);
+      remainInput.value = String(task.histRemain);
       workedInput.hidden = true;
       workedView.hidden = false;
       remainInput.hidden = true;
       remainView.hidden = false;
-      remainChangeBtn.hidden = false;
+      remainChangeBtn.hidden = !isSprintActive || !task.existsNow;
       remainChangeBtn.textContent = "Update";
-      remainChangeBtn.addEventListener("click", () => {
-        if (remainChangeBtn.textContent === "Update") {
-          workedView.hidden = true;
-          workedInput.hidden = false;
-          remainView.hidden = true;
-          remainInput.hidden = false;
-          remainChangeBtn.textContent = "Save";
-          workedInput.focus();
-        } else {
-          commitSave();
-        }
-      });
-      const derivedStatus = task.remain === 0 ? "Done" : task.worked === 0 ? "Todo" : "In Progress";
-      statusToggle.textContent = derivedStatus;
+      if (!task.isBeforeAdded && isSprintActive) {
+        remainChangeBtn.addEventListener("click", () => {
+          if (remainChangeBtn.textContent === "Update") {
+            workedView.hidden = true;
+            workedInput.hidden = false;
+            remainView.hidden = true;
+            remainInput.hidden = false;
+            remainChangeBtn.textContent = "Save";
+            workedInput.focus();
+          } else {
+            commitSave();
+          }
+        });
+      }
+      const histStatus = task.histRemain === 0 ? "Done" : task.histWorked === 0 ? "Todo" : "In Progress";
+      statusToggle.textContent = histStatus;
       statusToggle.classList.remove("clickable");
-      doneSpan.textContent = task.doneDate || "";
+      const histDoneDate = task.doneDate && task.doneDate <= viewDate ? task.doneDate : "";
+      doneSpan.textContent = histDoneDate;
       const logRemain = (log, date, remain) => [
         ...log.filter((e) => e.date !== date),
         { date, remain }
@@ -986,22 +1188,24 @@
       const commitSave = () => {
         const newWorked = Math.max(0, Number(workedInput.value) || 0);
         const newRemain = Math.max(0, Number(remainInput.value) || 0);
-        const logDate = sprint.today || todayIso();
+        const logDate = getProjectToday();
         const newRemainLog = logRemain(task.remainLog ?? [], logDate, newRemain);
         const newWorkedLog = logWorked(task.workedLog ?? [], logDate, newWorked);
+        const latestWorked = newWorkedLog.reduce((a, b) => a.date >= b.date ? a : b).worked;
+        const latestRemain = newRemainLog.reduce((a, b) => a.date >= b.date ? a : b).remain;
         let newStatus;
         let newDoneDate;
-        if (newRemain === 0) {
+        if (latestRemain === 0) {
           newStatus = "Done";
           newDoneDate = task.doneDate || logDate;
-        } else if (newWorked === 0) {
+        } else if (latestWorked === 0) {
           newStatus = "Todo";
           newDoneDate = "";
         } else {
           newStatus = "In Progress";
           newDoneDate = "";
         }
-        updateTask(task.id, { worked: newWorked, remain: newRemain, remainLog: newRemainLog, workedLog: newWorkedLog, status: newStatus, doneDate: newDoneDate });
+        updateTask(task.id, { worked: latestWorked, remain: latestRemain, remainLog: newRemainLog, workedLog: newWorkedLog, status: newStatus, doneDate: newDoneDate });
       };
       workedInput.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
@@ -1015,7 +1219,7 @@
           commitSave();
         }
       });
-      removeBtn.hidden = task.status === "In Progress" || task.status === "Done";
+      removeBtn.hidden = !isSprintActive || !task.existsNow || task.worked > 0;
       removeBtn.addEventListener("click", () => {
         const label = task.taskId ? `[${task.taskId}] ${task.name}` : task.name || "this task";
         dom.confirmRemoveTaskName.textContent = label;
@@ -1056,6 +1260,7 @@
         row.classList.remove("drag-over", "drag-over-above", "drag-over-below");
         const backlogTaskId = e.dataTransfer.getData("backlogTaskId");
         if (backlogTaskId) {
+          if (!isSprintActive) return;
           highlightBacklogTaskId = backlogTaskId;
           addTaskFromBacklog(backlogTaskId);
           return;
@@ -1074,7 +1279,7 @@
       dom.taskRows.appendChild(row);
     });
   };
-  var renderBacklogPanel = (_sprint) => {
+  var renderBacklogPanel = (sprint, isSprintActive) => {
     const backlog = getBacklog();
     if (!backlog || !dom.backlogPanelRows) return;
     const allSprints = getState().sprints;
@@ -1114,10 +1319,16 @@
       bpDesc.textContent = task.description;
       if (task.assignedTo) bpDesc.title = task.assignedTo;
       row.querySelector(".bp-estimate").textContent = String(task.estimate ?? "");
-      row.addEventListener("dragstart", (e) => {
-        e.dataTransfer.setData("backlogTaskId", task.id);
-      });
+      if (!isSprintActive) {
+        row.draggable = false;
+        row.querySelector(".bp-add-btn").disabled = true;
+      } else {
+        row.addEventListener("dragstart", (e) => {
+          e.dataTransfer.setData("backlogTaskId", task.id);
+        });
+      }
       row.querySelector(".bp-add-btn").addEventListener("click", () => {
+        if (!isSprintActive) return;
         highlightBacklogTaskId = task.id;
         const focusIdx = idx;
         addTaskFromBacklog(task.id);
@@ -1134,8 +1345,9 @@
   var renderBacklog = () => {
     const backlog = getBacklog();
     if (!backlog) return;
-    const sprint = getActiveSprint();
-    const assignedIds = new Set(sprint?.tasks.map((t) => t.backlogTaskId).filter((id) => Boolean(id)) || []);
+    const assignedIds = new Set(
+      getState().sprints.flatMap((s) => s.tasks.map((t) => t.backlogTaskId).filter((id) => Boolean(id)))
+    );
     dom.backlogTableBody.innerHTML = "";
     const blTable = dom.backlogTableBody.closest("table");
     if (blTable) applySortClasses(blTable, backlogSort);
@@ -1323,6 +1535,146 @@
       }
     }
   };
+  var renderPlanTasks = (sprint) => {
+    dom.planTaskRows.innerHTML = "";
+    let dragStartedFromHandle = false;
+    const planTable = dom.planTaskRows.closest("table");
+    if (planTable) applySortClasses(planTable, planTaskSort);
+    const tasks = sortItems(sprint.tasks, planTaskSort.key, planTaskSort.asc);
+    tasks.forEach((task) => {
+      const row = dom.planTaskRowTemplate.content.firstElementChild.cloneNode(true);
+      row.dataset.taskId = task.id;
+      const handle = row.querySelector(".drag-handle");
+      handle.addEventListener("mousedown", () => {
+        dragStartedFromHandle = true;
+      });
+      row.addEventListener("dragstart", (e) => {
+        if (!dragStartedFromHandle) {
+          e.preventDefault();
+          return;
+        }
+        dragStartedFromHandle = false;
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", task.id);
+        row.classList.add("dragging");
+      });
+      row.addEventListener("dragend", () => {
+        row.classList.remove("dragging");
+        dragStartedFromHandle = false;
+        dom.planTaskRows.querySelectorAll(".drag-over-above, .drag-over-below").forEach((el) => el.classList.remove("drag-over-above", "drag-over-below"));
+      });
+      row.querySelector(".plan-col-taskid").textContent = task.taskId || "";
+      row.querySelector(".plan-col-name").textContent = task.name;
+      row.querySelector(".plan-col-estimate").textContent = String(task.estimate);
+      const removeBtn = row.querySelector(".plan-remove-btn");
+      removeBtn.addEventListener("click", () => removeTaskFromSprint(task.id));
+      row.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        const mid = row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2;
+        row.classList.remove("drag-over-above", "drag-over-below");
+        row.classList.add(e.clientY < mid ? "drag-over-above" : "drag-over-below");
+      });
+      row.addEventListener("dragleave", () => row.classList.remove("drag-over-above", "drag-over-below"));
+      row.addEventListener("drop", (e) => {
+        e.preventDefault();
+        row.classList.remove("drag-over-above", "drag-over-below");
+        const backlogTaskId = e.dataTransfer.getData("backlogTaskId");
+        if (backlogTaskId) {
+          addTaskFromBacklog(backlogTaskId);
+          return;
+        }
+        const draggedId = e.dataTransfer.getData("text/plain");
+        if (!draggedId || draggedId === task.id) return;
+        const ids = Array.from(dom.planTaskRows.querySelectorAll("tr[data-task-id]")).map((tr) => tr.dataset.taskId);
+        const filtered = ids.filter((id) => id !== draggedId);
+        const targetIdx = filtered.indexOf(task.id);
+        const mid = row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2;
+        filtered.splice(e.clientY < mid ? targetIdx : targetIdx + 1, 0, draggedId);
+        reorderTasks(filtered);
+      });
+      dom.planTaskRows.appendChild(row);
+    });
+    dom.planTaskRows.addEventListener("dragover", (e) => e.preventDefault(), { once: false });
+    dom.planTaskRows.addEventListener("drop", (e) => {
+      const target = e.target;
+      if (target.closest("tr[data-task-id]")) return;
+      const backlogTaskId = e.dataTransfer.getData("backlogTaskId");
+      if (backlogTaskId) {
+        e.preventDefault();
+        addTaskFromBacklog(backlogTaskId);
+      }
+    });
+  };
+  var renderPlanBacklog = (sprint) => {
+    dom.planBacklogRows.innerHTML = "";
+    const backlog = getBacklog();
+    if (!backlog) return;
+    const assignedIds = new Set(
+      getState().sprints.flatMap((s) => s.tasks.map((t) => t.backlogTaskId).filter((id) => Boolean(id)))
+    );
+    const unassigned = [];
+    for (const story of backlog.stories)
+      for (const task of story.tasks)
+        if (!assignedIds.has(task.id)) unassigned.push(task);
+    if (unassigned.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "plan-backlog-empty";
+      empty.textContent = "All backlog tasks are assigned.";
+      dom.planBacklogRows.appendChild(empty);
+      return;
+    }
+    const sortedUnassigned = sortItems(unassigned, planBacklogSort.key, planBacklogSort.asc);
+    const header = document.createElement("div");
+    header.className = "plan-backlog-header";
+    header.innerHTML = `<span class="plan-bl-hdr-taskid sortable" data-sort-key="taskId">Task ID</span><span class="plan-bl-hdr-desc sortable" data-sort-key="description">Description</span><span class="plan-bl-hdr-est sortable" data-sort-key="estimate">Est</span><span></span>`;
+    header.querySelectorAll(".sortable").forEach((el) => {
+      const htmlEl = el;
+      if (htmlEl.dataset.sortKey === planBacklogSort.key) {
+        htmlEl.classList.add(planBacklogSort.asc ? "sort-asc" : "sort-desc");
+      }
+      htmlEl.addEventListener("click", () => togglePlanBacklogSort(htmlEl.dataset.sortKey));
+    });
+    dom.planBacklogRows.appendChild(header);
+    sortedUnassigned.forEach((task) => {
+      const row = document.createElement("div");
+      row.className = "plan-backlog-row";
+      row.draggable = true;
+      row.title = "Drag to add to sprint";
+      row.innerHTML = `
+      <span class="plan-bl-taskid">${task.taskId || ""}</span>
+      <span class="plan-bl-desc">${task.description || ""}</span>
+      <span class="plan-bl-est">${task.estimate ?? ""}</span>
+      <span><button class="btn ghost small plan-bl-add-btn">+</button></span>
+    `;
+      row.addEventListener("dragstart", (e) => {
+        e.dataTransfer.effectAllowed = "copy";
+        e.dataTransfer.setData("backlogTaskId", task.id);
+        row.classList.add("dragging");
+      });
+      row.addEventListener("dragend", () => row.classList.remove("dragging"));
+      row.querySelector(".plan-bl-add-btn").addEventListener("click", () => {
+        addTaskFromBacklog(task.id);
+      });
+      dom.planBacklogRows.appendChild(row);
+    });
+  };
+  var renderPlanningModal = (sprint, holidaySet, workWeekendSet) => {
+    if (dom.sprintPlanModal.hidden) return;
+    const sprintNumber = getState().sprints.findIndex((s) => s.id === sprint.id) + 1;
+    dom.sprintPlanTitle.textContent = sprint.description ? `Sprint ${sprintNumber} \u2014 ${sprint.description}` : `Sprint ${sprintNumber}`;
+    const workingDays = getWorkingDates(sprint.startDate, sprint.endDate, holidaySet, workWeekendSet).length;
+    const totalPoints = sprint.tasks.reduce((sum, t) => sum + Number(t.estimate || 0), 0);
+    const developers = Math.max(0, Number(sprint.developers || 0));
+    const efficiency = Math.min(1, Math.max(0, Number(sprint.efficiency || 0)));
+    const availableDays = developers * workingDays * efficiency - totalPoints;
+    dom.planStatDuration.textContent = formatSprintRange(sprint);
+    dom.planStatWorkingDays.textContent = String(workingDays);
+    dom.planStatTotalPoints.textContent = totalPoints.toFixed(1).replace(/\.0$/, "");
+    dom.planStatAvailableDays.textContent = availableDays.toFixed(1).replace(/\.0$/, "");
+    dom.planStatAvailableDays.className = "plan-stat-value" + (availableDays < -1.5 ? " available-red" : availableDays <= 1.5 ? " available-green" : "");
+    renderPlanTasks(sprint);
+    renderPlanBacklog(sprint);
+  };
   var renderStats = (sprint, burndown) => {
     const effectiveToday = burndown.todayIndex >= 0 ? burndown.dates[burndown.todayIndex] : "";
     const doneTasks = sprint.tasks.filter((t) => t.status === "Done" && t.doneDate && t.doneDate <= effectiveToday).length;
@@ -1367,6 +1719,27 @@
     dom.backlogView.hidden = activeTab !== "backlog";
     dom.sprintSubHeader.hidden = activeTab === "backlog";
     if (has(H_SIDEBAR)) renderSprintList();
+    const prefs = getPreferences();
+    const holidaySet = new Set(prefs.holidays.map((h) => h.date));
+    const workWeekendSet = new Set(prefs.workWeekends);
+    if (fpProjectToday) fpProjectToday.destroy();
+    fpProjectToday = flatpickr(dom.projectTodayInput, {
+      dateFormat: "Y-m-d",
+      disableMobile: true,
+      disable: [
+        (date) => {
+          const iso = localIso(date);
+          if (holidaySet.has(iso)) return true;
+          const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+          if (isWeekend && workWeekendSet.has(iso)) return false;
+          return isWeekend;
+        }
+      ],
+      onChange: ([date]) => {
+        if (date) setProjectToday(localIso(date));
+      }
+    });
+    fpProjectToday.setDate(getProjectToday(), false);
     if (activeTab === "backlog") {
       if (has(H_BACKLOG)) renderBacklog();
       return;
@@ -1374,49 +1747,42 @@
     const sprint = getActiveSprint();
     if (!sprint) return;
     patchActiveSprint({ developers: 0, efficiency: 1 });
-    const prefs = getPreferences();
-    const holidaySet = new Set(prefs.holidays.map((h) => h.date));
-    const workWeekendSet = new Set(prefs.workWeekends);
     const maxToday = sprint.endDate ? getNextWorkingDay(sprint.endDate, holidaySet, workWeekendSet) : sprint.endDate;
     const real = todayIso();
     const defaultToday = real >= sprint.startDate && real <= maxToday ? real : real < sprint.startDate ? sprint.startDate : maxToday;
     patchActiveSprint({ today: defaultToday });
     const effectiveToday = sprint.today < sprint.startDate ? sprint.startDate : sprint.today > maxToday ? maxToday : sprint.today;
+    const projectToday = getProjectToday();
+    const isSprintActive = projectToday >= sprint.startDate && projectToday <= sprint.endDate;
     if (has(H_HEADER)) {
       const state2 = getState();
       const sprintNumber = state2.sprints.findIndex((s) => s.id === sprint.id) + 1;
       dom.sprintTitleText.textContent = sprint.description || `Sprint ${sprintNumber}`;
+      dom.resetSprintBtn.textContent = `Reset Sprint ${sprintNumber}`;
       dom.deleteSprintBtn.textContent = `Delete Sprint ${sprintNumber}`;
-      if (fpToday) fpToday.destroy();
-      fpToday = flatpickr(dom.sprintToday, {
-        dateFormat: "Y-m-d",
-        defaultDate: effectiveToday,
-        minDate: sprint.startDate || null,
-        maxDate: maxToday || null,
-        disableMobile: true,
-        disable: [
-          (date) => {
-            const iso = localIso(date);
-            if (holidaySet.has(iso)) return true;
-            const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-            if (isWeekend && workWeekendSet.has(iso)) return false;
-            return isWeekend;
-          }
-        ],
-        onChange: ([date]) => {
-          if (date) updateToday(localIso(date));
-        }
-      });
+      dom.editSprintBtn.disabled = sprint.endDate < projectToday;
+      dom.addByIdInput.disabled = !isSprintActive;
+      dom.addByIdBtn.disabled = !isSprintActive;
     }
-    if (has(H_TASKS)) renderTasks(sprint, holidaySet, workWeekendSet);
-    if (has(H_PANEL)) renderBacklogPanel(sprint);
+    if (has(H_TASKS)) renderTasks(sprint, holidaySet, workWeekendSet, isSprintActive);
+    if (has(H_PANEL)) renderBacklogPanel(sprint, isSprintActive);
     if (has(H_STATS) || has(H_CHART)) {
-      const burndown = calculateBurndown(sprint, effectiveToday, holidaySet, workWeekendSet);
+      const chartToday = projectToday < sprint.startDate ? sprint.startDate : projectToday > maxToday ? maxToday : projectToday;
+      const burndown = calculateBurndown(sprint, chartToday, holidaySet, workWeekendSet);
+      const browseIndex = burndown.dates.reduce((last, date, i) => date <= effectiveToday ? i : last, -1);
       if (has(H_STATS)) renderStats(sprint, burndown);
       if (has(H_CHART)) {
-        drawChart(burndown, (date) => updateToday(date));
+        drawChart(burndown, (date) => {
+          if (isSprintActive) {
+            setProjectToday(date);
+          } else {
+            if (date === effectiveToday && date !== chartToday) updateToday(chartToday);
+            else updateToday(date);
+          }
+        }, browseIndex >= 0 ? browseIndex : void 0, chartToday === projectToday);
       }
     }
+    if (has(H_TASKS | H_PANEL | H_STATS)) renderPlanningModal(sprint, holidaySet, workWeekendSet);
   };
 
   // src/io.ts
@@ -1667,8 +2033,29 @@
       const workWeekendSet = new Set(prefs.workWeekends);
       const count = getWorkingDates(startIso, endIso, holidaySet, workWeekendSet).length;
       dom.modalWorkingDays.textContent = `${count} working days`;
+      const developers = Number(dom.modalDevelopers.value) || 0;
+      const efficiency = Math.min(1, Math.max(0, Number(dom.modalEfficiency.value) || 0));
+      const manDays = developers * count * efficiency;
+      dom.modalManDays.textContent = `${manDays.toFixed(1).replace(/\.0$/, "")} man-days`;
     } else {
       dom.modalWorkingDays.textContent = "";
+      dom.modalManDays.textContent = "";
+    }
+  };
+  var isoAddDays = (iso, n) => {
+    const d = /* @__PURE__ */ new Date(iso + "T12:00:00");
+    d.setDate(d.getDate() + n);
+    return d.toISOString().slice(0, 10);
+  };
+  var updateGapBounds = (excludeId, startIso, endIso) => {
+    const others = getState().sprints.filter((s) => s.id !== excludeId).sort((a, b) => a.startDate.localeCompare(b.startDate));
+    if (startIso && fpEnd) {
+      const next = others.find((s) => s.startDate > startIso);
+      fpEnd.set("maxDate", next ? isoAddDays(next.startDate, -1) : null);
+    }
+    if (endIso && fpStart) {
+      const prev = [...others].reverse().find((s) => s.endDate < endIso);
+      fpStart.set("minDate", prev ? isoAddDays(prev.endDate, 1) : null);
     }
   };
   var initDatePickers = (excludeId, defaultStart, defaultEnd) => {
@@ -1679,19 +2066,41 @@
       dateFormat: "Y-m-d",
       disableMobile: true,
       disable: disabled,
-      onOpen: (_, __, instance) => fixCalendarPosition(instance),
-      onChange: () => updateWorkingDaysChip()
+      onOpen: (_, __, instance) => fixCalendarPosition(instance)
     };
-    fpStart = flatpickr(dom.modalStartDate, { ...base, defaultDate: defaultStart || null });
-    fpEnd = flatpickr(dom.modalEndDate, { ...base, defaultDate: defaultEnd || null });
+    fpStart = flatpickr(dom.modalStartDate, {
+      ...base,
+      defaultDate: defaultStart || null,
+      onChange: ([date]) => {
+        const iso = date ? localIso(date) : null;
+        if (fpEnd) fpEnd.set("minDate", iso);
+        updateGapBounds(excludeId, iso, fpEnd?.selectedDates[0] ? localIso(fpEnd.selectedDates[0]) : null);
+        updateWorkingDaysChip();
+      }
+    });
+    fpEnd = flatpickr(dom.modalEndDate, {
+      ...base,
+      defaultDate: defaultEnd || null,
+      minDate: defaultStart || null,
+      onChange: ([date]) => {
+        const iso = date ? localIso(date) : null;
+        if (fpStart) fpStart.set("maxDate", iso);
+        updateGapBounds(excludeId, fpStart?.selectedDates[0] ? localIso(fpStart.selectedDates[0]) : null, iso);
+        updateWorkingDaysChip();
+      }
+    });
+    updateGapBounds(excludeId, defaultStart || null, defaultEnd || null);
     updateWorkingDaysChip();
   };
+  dom.modalDevelopers.addEventListener("input", updateWorkingDaysChip);
+  dom.modalEfficiency.addEventListener("input", updateWorkingDaysChip);
   var modalMode = "edit";
   var modalSprintId = null;
   var openModal = (mode, sprint) => {
     modalMode = mode;
     modalSprintId = sprint.id ?? null;
     dom.modalTitle.textContent = mode === "create" ? "New Sprint" : "Edit Sprint";
+    dom.modalSave.textContent = mode === "create" ? "Save & Add Tasks" : mode === "plan-edit" ? "Add/Remove Tasks" : "Save";
     dom.modalDescription.value = sprint.description || "";
     dom.modalDevelopers.value = String(sprint.developers ?? 4);
     dom.modalEfficiency.value = String(sprint.efficiency ?? 0.8);
@@ -1721,44 +2130,80 @@
     const endDate = dom.modalEndDate.value;
     const developers = Number(dom.modalDevelopers.value);
     const efficiency = Number(dom.modalEfficiency.value);
-    if (!startDate || !endDate || startDate > endDate) {
-      dom.modalError.textContent = "Please select a valid start and end date.";
-      dom.modalError.hidden = false;
-      return;
-    }
-    const state2 = getState();
-    const otherSprints = state2.sprints.filter((s) => s.id !== modalSprintId);
-    const conflicting = otherSprints.find((s) => sprintsOverlap({ startDate, endDate }, s));
-    if (conflicting) {
-      const conflictNum = state2.sprints.indexOf(conflicting) + 1;
-      dom.modalError.textContent = `Date range overlaps with Sprint ${conflictNum}. Please choose different dates.`;
-      dom.modalError.hidden = false;
-      return;
-    }
+    if (!startDate || !endDate) return;
     const updates = { description, startDate, endDate, developers, efficiency };
     if (modalMode === "create") {
       createSprint(updates);
+      closeModal();
+      dom.sprintPlanModal.hidden = false;
+      render();
+    } else if (modalMode === "plan-edit") {
+      updateSprintById(modalSprintId, updates);
+      closeModal();
+      dom.sprintPlanModal.hidden = false;
+      render();
     } else {
       updateSprintById(modalSprintId, updates);
+      closeModal();
     }
-    closeModal();
     const gaps = findGaps(getState().sprints);
     if (gaps.length > 0) {
       alert("Note: There is a gap of working days between some sprints. You can close the gap by editing the sprint dates.");
     }
   });
   dom.newSprintBtn.addEventListener("click", () => {
-    const sprints = getState().sprints;
-    const latestEnd = sprints.length > 0 ? sprints[sprints.length - 1].endDate : "";
+    const state2 = getState();
+    const sprints = state2.sprints;
+    const latestSprint = sprints.length > 0 ? sprints[sprints.length - 1] : null;
+    const latestEnd = latestSprint ? latestSprint.endDate : "";
     const start = latestEnd ? getNextWorkingDay(latestEnd) : todayIso();
     const end = addWorkingDays(start, 10);
-    openModal("create", { description: "", startDate: start, endDate: end, developers: 0, efficiency: 1 });
+    const defaultDevelopers = latestSprint ? latestSprint.developers : state2.preferences.members.length || 4;
+    openModal("create", { description: "", startDate: start, endDate: end, developers: defaultDevelopers, efficiency: 1 });
   });
   dom.editSprintBtn.addEventListener("click", () => {
     const sprint = getActiveSprint();
-    if (sprint) openModal("edit", sprint);
+    if (!sprint) return;
+    const mode = sprint.startDate > getProjectToday() ? "plan-edit" : "edit";
+    openModal(mode, sprint);
   });
-  dom.deleteSprintBtn.addEventListener("click", deleteActiveSprint);
+  var closePlanModal = () => {
+    dom.sprintPlanModal.hidden = true;
+    finalizeSprintPlan();
+  };
+  dom.sprintPlanClose.addEventListener("click", closePlanModal);
+  dom.sprintPlanDone.addEventListener("click", closePlanModal);
+  dom.sprintPlanModal.addEventListener("click", (e) => {
+    if (e.target === dom.sprintPlanModal) closePlanModal();
+  });
+  dom.resetSprintBtn.addEventListener("click", () => {
+    const sprint = getActiveSprint();
+    if (!sprint) return;
+    const idx = getState().sprints.findIndex((s) => s.id === sprint.id) + 1;
+    dom.confirmResetSprintName.textContent = sprint.description || `Sprint ${idx}`;
+    dom.confirmResetSprintModal.hidden = false;
+  });
+  dom.confirmResetSprintCancel.addEventListener("click", () => {
+    dom.confirmResetSprintModal.hidden = true;
+  });
+  dom.confirmResetSprintConfirm.addEventListener("click", () => {
+    dom.confirmResetSprintModal.hidden = true;
+    resetActiveSprint();
+  });
+  dom.deleteSprintBtn.addEventListener("click", () => {
+    const sprint = getActiveSprint();
+    if (!sprint) return;
+    const idx = getState().sprints.findIndex((s) => s.id === sprint.id) + 1;
+    dom.confirmDeleteSprintName.textContent = sprint.description || `Sprint ${idx}`;
+    dom.confirmDeleteSprintModal.hidden = false;
+  });
+  dom.confirmDeleteSprintCancel.addEventListener("click", () => {
+    dom.confirmDeleteSprintModal.hidden = true;
+  });
+  dom.confirmDeleteSprintConfirm.addEventListener("click", () => {
+    dom.confirmDeleteSprintModal.hidden = true;
+    deleteActiveSprint();
+  });
   if (dom.exportCsvBtn) dom.exportCsvBtn.addEventListener("click", exportSprintExcel);
   dom.exportBtn.addEventListener("click", exportData);
   dom.importBtn.addEventListener("click", () => dom.importFile.click());
@@ -1848,6 +2293,9 @@
       if (e.target.classList.contains("col-resizer")) return;
       toggleBacklogSort(th.dataset.sortKey);
     });
+  });
+  document.querySelectorAll(".plan-task-table thead th.sortable").forEach((th) => {
+    th.addEventListener("click", () => togglePlanTaskSort(th.dataset.sortKey));
   });
   (function initBacklogResize() {
     const table = document.querySelector(".backlog-table");

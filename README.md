@@ -9,7 +9,7 @@ Open `index.html` in a browser — it works directly, no server needed.
 For development with a local server:
 
 ```bash
-python3 -m http.server 5173
+npm run dev        # start static server on http://localhost:5173
 ```
 
 Then visit `http://localhost:5173`.
@@ -28,37 +28,76 @@ npm run dev        # start static server on http://localhost:5173
 
 ## Current Features
 
+### Project TODAY
+
+The **project TODAY** field (leftmost in the sprint toolbar) is the authoritative date for the entire project. It always resets to the real system date on every page load and can be changed manually during the session.
+
+- **Current sprint** = the sprint whose date range contains project TODAY (`startDate ≤ projectToday ≤ endDate`)
+- In the **current sprint**, clicking any x-axis date label on the burndown chart **updates project TODAY** and all sprint browse dates
+- In **past/future sprints**, clicking a date label **toggles a gray browse line** — click the same date again to clear it; no effect on project TODAY
+- All data recording (Worked/Remain logs) always uses project TODAY as the log date, regardless of the browse date
+
 ### Sprint Management
+
 - Multiple sprints, auto-sorted by start date
-- Sprint setup: description, start/end dates (weekends skipped, holidays excluded), developers, efficiency
-- Overlap validation and gap warning between sprints
-- TODAY override per sprint — set via the header picker or by clicking any date label on the chart
+- Sprint setup: description, start/end dates (weekends/holidays excluded), developers, efficiency
+- **New sprint defaults**: developer count inherited from the previous sprint; first sprint defaults to team member count
+- Date pickers enforce non-overlapping ranges; gap warning shown if working days exist between sprints
+- **Edit Sprint** button: disabled for past sprints; opens planning modal for future sprints
+- **Planning mode** (future sprints): "Edit Sprint" becomes "Add/Remove Tasks" — closes to lock `plannedPoints`
 
 ### Task Tracking
+
 - Tasks sourced from the Product Backlog (Story → Task hierarchy)
-- **Estimate** (from backlog, read-only) vs **Worked + Remain** (updated daily via Change/Save button)
-- **Status toggle**: click to switch Todo ↔ In Progress (only when Worked = 0); auto-set to Done when Remain = 0
-- **Done Date**: auto-set when Remain reaches 0; cleared when task reverts to In Progress
-- **Remove** button only shown for Todo tasks
-- Drag-and-drop task reordering (disabled when column sort is active)
-- Sort by any column; Actual/Est column sorts by Worked + Remain
+- **Estimate** (from backlog, read-only) vs **Worked + Remain** (updated via Update/Save in the current sprint only)
+- **Update** button visible only in the current sprint for tasks that exist as of project TODAY (i.e. `addedDate ≤ projectToday`)
+- Clicking Update reveals editable Worked and Remain fields; clicking Save commits both as a log entry at project TODAY
+- **Status**: auto-determined — Todo (worked=0), In Progress (worked>0, remain>0), Done (remain=0)
+- **Done Date**: auto-set when Remain first reaches 0
+- **Remove** button shown only for tasks with no work logged, in the current sprint
+- Adding and then removing the same task (or vice versa) within the same sprint cancels out — no scope history is recorded
+- Tasks added in the current sprint that are browsed before their `addedDate` are shown greyed out
+- Drag-and-drop task reordering (drag handle; disabled when column sort is active)
+- Sort by any column; Actual/Est sorts by Worked + Remain
+
+### Unassigned Backlog Panel
+
+- Collapsible panel below the task table listing all unassigned backlog tasks
+- Add tasks to the sprint by clicking **+** or dragging a row onto the task table (current sprint only)
+- Add task by Task ID via the input at the top-right of the Tasks card (current sprint only)
 
 ### Burndown Chart
-- **Ideal line** (blue) — based on effective man-days (developers × efficiency)
-- **Actual line** (red) — remaining work per day, reconstructed from per-task `remainLog`
-- **Scope line** (green dashed) — sum of Worked + Remain per day, reconstructed from per-task `workedLog`/`remainLog`
-- Actual and scope lines clip at TODAY; dashed vertical TODAY marker
-- Click any x-axis date label to set TODAY
+
+- **Ideal line** (blue) — based on `plannedPoints` locked when the planning modal is closed; never changes mid-sprint regardless of task additions or removals
+- **Actual line** (red) — remaining work per working day up to project TODAY, reconstructed from per-task `remainLog`
+- **Scope line** (green dashed) — Worked + Remain per working day up to project TODAY; reflects mid-sprint scope changes
+- **Scope drop markers** (amber triangle) — annotate dates when planned tasks were removed from scope
+- **Today marker** (indigo vertical line + "Today" label) — drawn only when project TODAY falls within the sprint
+- **Browse marker** (gray vertical line) — shown in past/future sprints when a date is clicked; same date click removes it
+- Show day numbers toggle (D0/D1/… vs mm/dd labels on x-axis); unchecked by default
 
 ### Stats & Capacity
+
 - Duration, working days, total points, remaining, done tasks, progress %
-- Available Days indicator: `effectiveManDays − totalPoints` (green/red)
+- **Available Days**: `effectiveManDays − totalPoints` (green if within ±1.5 days, red if over by >1.5)
+- **Efficiency**: actual (pointsBurned / (developers × daysElapsed)) vs ideal
+- Man-days chip in New/Edit Sprint dialog updates live as dates, developers, and efficiency change
+
+### Sprint Reset
+
+Resets all progress (Worked, Remain, status, doneDate, workedLog, remainLog) back to initial state while **keeping all tasks**. Clears scope drop history. Browse date returns to project TODAY.
+
+### Preferences
+
+- **Holidays**: date + optional name; excluded from working-day counts and date pickers
+- **Work weekends**: specific weekend dates that count as working days
+- **Team members**: used to populate the assignee selector in the backlog and as the default developer count for the first sprint
 
 ### Data & Export
-- JSON export/import (full state backup)
+
+- JSON export/import (full state backup/restore with confirmation dialog)
 - Sprint task export to Excel (.xlsx)
-- Backlog Excel import/export
-- Show day numbers toggle (D1/D2 vs mm/dd on chart x-axis)
+- Backlog Excel import/export; backlog re-import re-links sprint tasks by Task ID
 - Graceful recovery from corrupt localStorage data
 
 ## Project Structure
@@ -69,22 +108,22 @@ bdc/
 ├── app.js              # Bundled output (built from src/, committed to git)
 ├── styles.css          # Layout, theming, animations
 ├── src/
-│   ├── main.ts         # Entry point — event wiring, init
+│   ├── main.ts         # Entry point — event wiring, modal logic, init
 │   ├── dom.ts          # DOM element references
-│   ├── state.ts        # State management — load, save, CRUD
+│   ├── state.ts        # State management — load, save, CRUD, migrations
 │   ├── types.ts        # Shared TypeScript interfaces
 │   ├── burndown.ts     # Pure burndown calculation functions
 │   ├── chart.ts        # SVG chart rendering
-│   ├── render.ts       # DOM rendering (sprint list, tasks, stats)
+│   ├── render.ts       # DOM rendering (sprint list, tasks, backlog, stats, chart)
 │   ├── io.ts           # JSON/Excel export and import
 │   ├── utils.ts        # Shared helpers (dates, IDs, formatting)
-│   └── globals.d.ts    # Ambient declarations for CDN globals
+│   └── globals.d.ts    # Ambient declarations for CDN globals (flatpickr, XLSX)
 ├── test/
 │   └── calculations.test.ts  # Unit tests (Node built-in test runner via tsx)
 ├── docs/
-│   ├── PRD.md          # Product requirements
-│   ├── TECHNICAL_DESIGN.md
-│   └── ROADMAP.md
+│   ├── PRD.md                # Product requirements
+│   ├── TECHNICAL_DESIGN.md   # Architecture, data model, algorithms
+│   └── ROADMAP.md            # Phased delivery plan
 ├── tsconfig.json       # TypeScript compiler configuration
 ├── package.json        # Build scripts and dev dependencies
 └── .gitignore
@@ -95,6 +134,31 @@ bdc/
 ```json
 {
   "activeSprintId": "uuid",
+  "projectToday": "YYYY-MM-DD",
+  "backlog": {
+    "stories": [
+      {
+        "id": "uuid",
+        "storyId": "0.1",
+        "description": "...",
+        "priority": 100,
+        "tasks": [
+          {
+            "id": "uuid",
+            "taskId": "0.1.1",
+            "description": "...",
+            "estimate": 3,
+            "assignedTo": "..."
+          }
+        ]
+      }
+    ]
+  },
+  "preferences": {
+    "holidays": [{ "date": "YYYY-MM-DD", "name": "..." }],
+    "workWeekends": ["YYYY-MM-DD"],
+    "members": ["Alice", "Bob"]
+  },
   "sprints": [
     {
       "id": "uuid",
@@ -104,25 +168,36 @@ bdc/
       "today": "YYYY-MM-DD",
       "developers": 4,
       "efficiency": 0.8,
+      "plannedPoints": 30,
+      "createdAt": "ISO timestamp",
       "tasks": [
         {
           "id": "uuid",
-          "taskId": "1.2.3",
+          "backlogTaskId": "uuid",
+          "taskId": "0.1.1",
           "name": "...",
+          "assignedTo": "...",
           "estimate": 3,
           "worked": 1,
           "remain": 2,
           "status": "Todo | In Progress | Done",
           "doneDate": "YYYY-MM-DD",
+          "addedDate": "YYYY-MM-DD",
           "workedLog": [{ "date": "YYYY-MM-DD", "worked": 1 }],
           "remainLog": [{ "date": "YYYY-MM-DD", "remain": 2 }]
         }
       ],
-      "createdAt": "ISO timestamp"
+      "scopeDrops": [
+        {
+          "addedDate": "YYYY-MM-DD",
+          "removedDate": "YYYY-MM-DD",
+          "estimate": 3,
+          "taskId": "0.1.1",
+          "name": "..."
+        }
+      ]
     }
-  ],
-  "backlog": { "stories": [] },
-  "preferences": { "holidays": [], "workWeekends": [], "members": [] }
+  ]
 }
 ```
 
@@ -141,10 +216,13 @@ See `docs/` for detailed project documents:
 | 2026-02-19 | Sprint delete + layout/input polish |
 | 2026-02-19 | Capacity inputs + Available Days |
 | 2026-02-20 | JSON export/import, show day numbers toggle, localStorage error handling |
-| 2026-02-20 | Refactored into ES modules under src/; esbuild bundling |
+| 2026-02-20 | Refactored into ES modules under `src/`; esbuild bundling |
 | 2026-02-20 | Project docs: PRD, Technical Design, Roadmap |
 | 2026-02-23 | Sprint Excel export; Product Backlog (Story→Task hierarchy, Excel import/export) |
 | 2026-02-24 | Backlog re-links sprint tasks on re-import; custom confirm dialogs |
-| 2026-02-26 | Holiday/PTO exclusions in preferences |
-| 2026-02-27 | Drag-and-drop task reorder; progress %; scope tracking; 59 unit tests |
-| 2026-03-03 | TypeScript migration; Change/Save button UX; status toggle; auto-Done on remain=0; daily workedLog/remainLog; scope line; clickable chart dates to set TODAY; remove button hidden for non-Todo tasks |
+| 2026-02-26 | Holiday/PTO exclusions + work weekends in preferences |
+| 2026-02-27 | Drag-and-drop task reorder; progress %; scope line; 59 unit tests |
+| 2026-03-03 | TypeScript migration; Update/Save UX; auto-status (Todo/In Progress/Done); auto-Done on remain=0; daily workedLog/remainLog; scope line; clickable chart dates |
+| 2026-03-04 | Sprint planning modal; project TODAY field; current-sprint controls; ideal line locked to plannedPoints; custom delete/reset dialogs; man-days chip; disabled button styles; sort on planning modal |
+| 2026-03-04 | Burndown fixes: remove extra day; chart Today marker and actual line use project TODAY; data recording always uses project TODAY |
+| 2026-03-05 | Browse date toggle on past/future sprint charts; clicking chart date in current sprint updates project TODAY; project TODAY resets to real date on page load; sprint reset keeps all tasks; add/remove same task cancels scope history |

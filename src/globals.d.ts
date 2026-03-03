@@ -3,6 +3,8 @@
 interface FlatpickrInstance {
   destroy(): void;
   clear(): void;
+  setDate(date: string | Date, triggerChange?: boolean): void;
+  set(option: string, value: unknown): void;
   selectedDates: Date[];
   input: HTMLInputElement;
   calendarContainer: HTMLDivElement;

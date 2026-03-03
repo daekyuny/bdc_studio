@@ -23,6 +23,20 @@ export interface SprintTask {
   doneDate: string;
   remainLog?: RemainEntry[];
   workedLog?: WorkedEntry[];
+  addedDate?: string;
+}
+
+export interface ScopeDrop {
+  addedDate: string;
+  removedDate: string;
+  estimate: number;
+  taskId?: string;
+  name: string;
+}
+
+export interface ScopeDropMarker {
+  dateIndex: number;
+  label: string;
 }
 
 export interface Sprint {
@@ -33,7 +47,9 @@ export interface Sprint {
   today?: string;
   developers: number;
   efficiency: number;
+  plannedPoints?: number;
   tasks: SprintTask[];
+  scopeDrops?: ScopeDrop[];
   createdAt: string;
 }
 
@@ -70,6 +86,7 @@ export interface Preferences {
 
 export interface AppState {
   activeSprintId: string;
+  projectToday?: string;
   backlog: Backlog;
   preferences: Preferences;
   sprints: Sprint[];
@@ -81,6 +98,7 @@ export interface BurndownData {
   ideal: number[];
   actual: (number | null)[];
   scope: (number | null)[];
+  scopeDropMarkers: ScopeDropMarker[];
   manDays: number;
   effectiveManDays: number;
   idealDailyBurn: number;

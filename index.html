@@ -32,10 +32,15 @@
       <!-- Sprint sub-header: toolbar + sprint bookmark tabs (visible only on Sprint tab) -->
       <div id="sprintSubHeader">
         <div class="sprint-toolbar">
+          <div class="project-today-field">
+            <label class="project-today-label" for="projectTodayInput">Today</label>
+            <input type="text" id="projectTodayInput" class="project-today-input" placeholder="YYYY-MM-DD" readonly />
+          </div>
           <button class="btn small" id="newSprintBtn">Add Sprint</button>
           <button class="btn ghost small" id="importBtn">Import Sprints</button>
           <input type="file" id="importFile" accept=".json" hidden />
           <button class="btn ghost small" id="exportBtn">Export Sprints</button>
+          <button class="btn ghost small" id="resetSprintBtn">Reset Sprint #</button>
           <button class="btn ghost small danger" id="deleteSprintBtn">Delete Sprint</button>
         </div>
       </div>
@@ -93,7 +98,7 @@
                 <div class="card-header">
                   <h2>Burndown</h2>
                   <div class="toggle">
-                    <input type="checkbox" id="showDayNumbers" checked />
+                    <input type="checkbox" id="showDayNumbers" />
                     <label for="showDayNumbers">Show day numbers</label>
                   </div>
                   <div class="legend">
@@ -118,11 +123,6 @@
               <div class="card-header task-card-header">
                 <h2>Tasks</h2>
                 <div class="today-efficiency-group">
-                  <div class="today-field">
-                    <label for="sprintToday">Today</label>
-                    <input type="text" id="sprintToday" readonly />
-                  </div>
-                  <span class="group-separator"></span>
                   <div class="efficiency-field">
                     <span class="efficiency-label">Efficiency (Actual:Ideal)</span>
                     <span class="efficiency-value" id="efficiencyDisplay">—</span>
@@ -196,6 +196,44 @@
           </div>
         </section>
       </main>
+    </div>
+
+    <!-- Delete Sprint confirm dialog -->
+    <div class="modal-overlay" id="confirmDeleteSprintModal" hidden>
+      <div class="modal confirm-dialog">
+        <div class="modal-header">
+          <h3 class="confirm-dialog-title">&#9888; Delete Sprint</h3>
+        </div>
+        <div class="modal-body">
+          <p class="confirm-dialog-warning">
+            Delete <strong id="confirmDeleteSprintName"></strong>? This cannot be undone.
+          </p>
+          <p class="confirm-dialog-subtext">All tasks and progress data for this sprint will be permanently removed.</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn ghost" id="confirmDeleteSprintCancel">Cancel</button>
+          <button class="btn danger-solid" id="confirmDeleteSprintConfirm">Delete Sprint</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reset Sprint confirm dialog -->
+    <div class="modal-overlay" id="confirmResetSprintModal" hidden>
+      <div class="modal confirm-dialog">
+        <div class="modal-header">
+          <h3 class="confirm-dialog-title">&#9888; Reset Sprint</h3>
+        </div>
+        <div class="modal-body">
+          <p class="confirm-dialog-warning">
+            Reset <strong id="confirmResetSprintName"></strong>? All progress, worked/remain logs, and mid-sprint task history will be cleared.
+          </p>
+          <p class="confirm-dialog-subtext">Initially planned tasks will remain with no progress. TODAY will be set to the first day of the sprint.</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn ghost" id="confirmResetSprintCancel">Cancel</button>
+          <button class="btn danger-solid" id="confirmResetSprintConfirm">Reset Sprint</button>
+        </div>
+      </div>
     </div>
 
     <!-- Backlog "Clear All" confirm dialog -->
@@ -316,7 +354,7 @@
             <input type="date" id="modalEndDate" />
           </label>
           <label>
-            Developers
+            <span class="label-row">Developers <span id="modalManDays" class="working-days-chip"></span></span>
             <input type="number" id="modalDevelopers" min="1" step="1" />
           </label>
           <label>
@@ -330,6 +368,73 @@
         </div>
       </div>
     </div>
+
+    <!-- Sprint Planning Modal -->
+    <div class="modal-overlay" id="sprintPlanModal" hidden>
+      <div class="modal sprint-plan-modal">
+        <div class="modal-header sprint-plan-header">
+          <div class="sprint-plan-header-left">
+            <span class="sprint-plan-badge">Planning</span>
+            <h3 id="sprintPlanTitle">Sprint Planning</h3>
+          </div>
+          <button class="modal-close sprint-plan-close" id="sprintPlanClose">&times;</button>
+        </div>
+        <div class="sprint-plan-stats">
+          <div class="plan-stat">
+            <div class="plan-stat-label">Duration</div>
+            <div class="plan-stat-value" id="planStatDuration">—</div>
+          </div>
+          <div class="plan-stat">
+            <div class="plan-stat-label">Working Days</div>
+            <div class="plan-stat-value" id="planStatWorkingDays">—</div>
+          </div>
+          <div class="plan-stat">
+            <div class="plan-stat-label">Total Points</div>
+            <div class="plan-stat-value" id="planStatTotalPoints">—</div>
+          </div>
+          <div class="plan-stat">
+            <div class="plan-stat-label">Available Days</div>
+            <div class="plan-stat-value" id="planStatAvailableDays">—</div>
+          </div>
+        </div>
+        <div class="sprint-plan-body">
+          <div class="sprint-plan-task-section">
+            <div class="sprint-plan-section-title">Sprint Tasks</div>
+            <div class="sprint-plan-scroll-area">
+              <table class="plan-task-table">
+                <thead>
+                  <tr>
+                    <th class="plan-col-drag"></th>
+                    <th class="plan-col-taskid sortable" data-sort-key="taskId">ID</th>
+                    <th class="plan-col-name sortable" data-sort-key="name">Task</th>
+                    <th class="plan-col-estimate sortable" data-sort-key="estimate">Est</th>
+                    <th class="plan-col-actions"></th>
+                  </tr>
+                </thead>
+                <tbody id="planTaskRows"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="sprint-plan-backlog-section">
+            <div class="sprint-plan-section-title">Unassigned Tasks</div>
+            <div id="planBacklogRows" class="sprint-plan-scroll-area"></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" id="sprintPlanDone">Done</button>
+        </div>
+      </div>
+    </div>
+
+    <template id="planTaskRowTemplate">
+      <tr class="plan-task-row" draggable="true">
+        <td class="plan-col-drag"><span class="drag-handle">⠿</span></td>
+        <td class="plan-col-taskid"></td>
+        <td class="plan-col-name"></td>
+        <td class="plan-col-estimate"></td>
+        <td class="plan-col-actions"><button class="btn ghost small plan-remove-btn">&times;</button></td>
+      </tr>
+    </template>
 
     <template id="sprintItemTemplate">
       <button class="sprint-item">

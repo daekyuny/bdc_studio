@@ -1,5 +1,5 @@
 import { dom } from "./dom.ts";
-import { statusOptions, todayIso, localIso, formatSprintRange, getNextWorkingDay } from "./utils.ts";
+import { statusOptions, todayIso, localIso, formatSprintRange, getNextWorkingDay, getWorkingDates } from "./utils.ts";
 import {
   getState,
   getActiveSprint,
@@ -18,13 +18,15 @@ import {
   deleteBacklogTask,
   getPreferences,
   getMembers,
+  getProjectToday,
+  setProjectToday,
   H_SIDEBAR, H_HEADER, H_TASKS, H_PANEL, H_STATS, H_CHART, H_BACKLOG, H_ALL,
 } from "./state.ts";
 import { calculateBurndown } from "./burndown.ts";
 import { drawChart } from "./chart.ts";
 import type { Sprint, SprintTask, BacklogTask, BacklogStory, BurndownData, SortState, RemainEntry, WorkedEntry } from "./types.ts";
 
-let fpToday: FlatpickrInstance | null = null;
+let fpProjectToday: FlatpickrInstance | null = null;
 
 let activeTab: "sprint" | "backlog" = "sprint";
 export const setActiveTab = (tab: "sprint" | "backlog"): void => { activeTab = tab; render(); };
@@ -40,6 +42,8 @@ let highlightBacklogTaskId: string | null = null;
 let taskSort: SortState = { key: null, asc: true };
 let backlogPanelSort: SortState = { key: null, asc: true };
 let backlogSort: SortState = { key: null, asc: true };
+let planTaskSort: SortState = { key: null, asc: true };
+let planBacklogSort: SortState = { key: null, asc: true };
 
 export const setHighlightBacklogTaskId = (id: string | null): void => { highlightBacklogTaskId = id; };
 
@@ -59,6 +63,18 @@ export const toggleBacklogSort = (key: string): void => {
   if (backlogSort.key === key) backlogSort.asc = !backlogSort.asc;
   else { backlogSort.key = key; backlogSort.asc = true; }
   render(H_BACKLOG);
+};
+
+export const togglePlanTaskSort = (key: string): void => {
+  if (planTaskSort.key === key) planTaskSort.asc = !planTaskSort.asc;
+  else { planTaskSort.key = key; planTaskSort.asc = true; }
+  render(H_TASKS);
+};
+
+export const togglePlanBacklogSort = (key: string): void => {
+  if (planBacklogSort.key === key) planBacklogSort.asc = !planBacklogSort.asc;
+  else { planBacklogSort.key = key; planBacklogSort.asc = true; }
+  render(H_PANEL);
 };
 
 const NUMERIC_KEYS = new Set(["estimate", "worked", "remain", "priority", "actualEst"]);
@@ -129,15 +145,33 @@ const applySortClasses = (container: HTMLElement, sortState: SortState): void =>
   });
 };
 
-const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Set<string>): void => {
+const getLogValueAt = <T extends { date: string }>(log: T[], date: string, key: keyof T, defaultVal: number): number => {
+  const entries = log.filter(e => e.date <= date);
+  if (!entries.length) return defaultVal;
+  const latest = entries.reduce((a, b) => a.date >= b.date ? a : b);
+  return latest[key] as number;
+};
+
+const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Set<string>, isSprintActive: boolean): void => {
   dom.taskRows.innerHTML = "";
 
   const taskTable = dom.taskRows.closest("table");
   if (taskTable) applySortClasses(taskTable as HTMLElement, taskSort);
 
+  const viewDate = sprint.today || todayIso();
+  const projectTodayNow = getProjectToday();
+
   const isSorted = taskSort.key !== null;
   const tasks = sortItems(
-    sprint.tasks.map(t => ({ ...t, actualEst: t.worked + t.remain })),
+    sprint.tasks
+      .map(t => {
+        const isBeforeAdded = t.addedDate ? t.addedDate > viewDate : false;
+        const histWorked = isBeforeAdded ? 0 : getLogValueAt(t.workedLog ?? [], viewDate, "worked", 0);
+        const histRemain = isBeforeAdded ? t.estimate : getLogValueAt(t.remainLog ?? [], viewDate, "remain", t.estimate);
+        // Whether the task exists as of project TODAY (controls button visibility, not display)
+        const existsNow = !t.addedDate || t.addedDate <= projectTodayNow;
+        return { ...t, actualEst: histWorked + histRemain, histWorked, histRemain, isBeforeAdded, existsNow };
+      }),
     taskSort.key,
     taskSort.asc,
   );
@@ -178,6 +212,10 @@ const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Se
       row.classList.add("task-row-highlight");
     }
 
+    if (task.isBeforeAdded) {
+      row.classList.add("task-row-before-added");
+    }
+
     const taskIdSpan = row.querySelector(".task-taskid") as HTMLElement;
     const nameSpan = row.querySelector(".task-name") as HTMLElement;
     const estimateSpan = row.querySelector(".task-estimate") as HTMLElement;
@@ -209,39 +247,41 @@ const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Se
     if (parentStoryDesc) taskIdSpan.title = parentStoryDesc;
     nameSpan.title = currentAssigned;
 
-    const actualEst = task.worked + task.remain;
-    estimateSpan.textContent = `${actualEst} / ${task.estimate}`;
+    estimateSpan.textContent = `${task.histWorked + task.histRemain} / ${task.estimate}`;
 
-    workedView.textContent = String(task.worked);
-    remainView.textContent = String(task.remain);
-    workedInput.value = String(task.worked);
-    remainInput.value = String(task.remain);
+    workedView.textContent = String(task.histWorked);
+    remainView.textContent = String(task.histRemain);
+    workedInput.value = String(task.histWorked);
+    remainInput.value = String(task.histRemain);
 
     workedInput.hidden = true;
     workedView.hidden = false;
     remainInput.hidden = true;
     remainView.hidden = false;
-    remainChangeBtn.hidden = false;
+    remainChangeBtn.hidden = !isSprintActive || !task.existsNow;
     remainChangeBtn.textContent = "Update";
 
-    remainChangeBtn.addEventListener("click", () => {
-      if (remainChangeBtn.textContent === "Update") {
-        workedView.hidden = true;
-        workedInput.hidden = false;
-        remainView.hidden = true;
-        remainInput.hidden = false;
-        remainChangeBtn.textContent = "Save";
-        workedInput.focus();
-      } else {
-        commitSave();
-      }
-    });
+    if (!task.isBeforeAdded && isSprintActive) {
+      remainChangeBtn.addEventListener("click", () => {
+        if (remainChangeBtn.textContent === "Update") {
+          workedView.hidden = true;
+          workedInput.hidden = false;
+          remainView.hidden = true;
+          remainInput.hidden = false;
+          remainChangeBtn.textContent = "Save";
+          workedInput.focus();
+        } else {
+          commitSave();
+        }
+      });
+    }
 
-    const derivedStatus = task.remain === 0 ? "Done" : task.worked === 0 ? "Todo" : "In Progress";
-    statusToggle.textContent = derivedStatus;
+    const histStatus = task.histRemain === 0 ? "Done" : task.histWorked === 0 ? "Todo" : "In Progress";
+    statusToggle.textContent = histStatus;
     statusToggle.classList.remove("clickable");
 
-    doneSpan.textContent = task.doneDate || "";
+    const histDoneDate = task.doneDate && task.doneDate <= viewDate ? task.doneDate : "";
+    doneSpan.textContent = histDoneDate;
 
     const logRemain = (log: RemainEntry[], date: string, remain: number): RemainEntry[] => [
       ...log.filter(e => e.date !== date),
@@ -256,22 +296,25 @@ const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Se
     const commitSave = (): void => {
       const newWorked = Math.max(0, Number(workedInput.value) || 0);
       const newRemain = Math.max(0, Number(remainInput.value) || 0);
-      const logDate = sprint.today || todayIso();
+      const logDate = getProjectToday();
       const newRemainLog = logRemain(task.remainLog ?? [], logDate, newRemain);
       const newWorkedLog = logWorked(task.workedLog ?? [], logDate, newWorked);
+      // Top-level worked/remain reflect the LATEST log entries across all dates
+      const latestWorked = newWorkedLog.reduce((a, b) => a.date >= b.date ? a : b).worked;
+      const latestRemain = newRemainLog.reduce((a, b) => a.date >= b.date ? a : b).remain;
       let newStatus: SprintTask["status"];
       let newDoneDate: string;
-      if (newRemain === 0) {
+      if (latestRemain === 0) {
         newStatus = "Done";
         newDoneDate = task.doneDate || logDate;
-      } else if (newWorked === 0) {
+      } else if (latestWorked === 0) {
         newStatus = "Todo";
         newDoneDate = "";
       } else {
         newStatus = "In Progress";
         newDoneDate = "";
       }
-      updateTask(task.id, { worked: newWorked, remain: newRemain, remainLog: newRemainLog, workedLog: newWorkedLog, status: newStatus, doneDate: newDoneDate });
+      updateTask(task.id, { worked: latestWorked, remain: latestRemain, remainLog: newRemainLog, workedLog: newWorkedLog, status: newStatus, doneDate: newDoneDate });
     };
     workedInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") { e.preventDefault(); commitSave(); }
@@ -283,7 +326,7 @@ const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Se
 
 
 
-    removeBtn.hidden = task.status === "In Progress" || task.status === "Done";
+    removeBtn.hidden = !isSprintActive || !task.existsNow || task.worked > 0;
 
     removeBtn.addEventListener("click", () => {
       const label = task.taskId ? `[${task.taskId}] ${task.name}` : task.name || "this task";
@@ -327,6 +370,7 @@ const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Se
 
       const backlogTaskId = e.dataTransfer!.getData("backlogTaskId");
       if (backlogTaskId) {
+        if (!isSprintActive) return;
         highlightBacklogTaskId = backlogTaskId;
         addTaskFromBacklog(backlogTaskId);
         return;
@@ -350,7 +394,7 @@ const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Se
   });
 };
 
-const renderBacklogPanel = (_sprint: Sprint): void => {
+const renderBacklogPanel = (sprint: Sprint, isSprintActive: boolean): void => {
   const backlog = getBacklog();
   if (!backlog || !dom.backlogPanelRows) return;
 
@@ -397,11 +441,17 @@ const renderBacklogPanel = (_sprint: Sprint): void => {
     if (task.assignedTo) bpDesc.title = task.assignedTo;
     (row.querySelector(".bp-estimate") as HTMLElement).textContent = String(task.estimate ?? "");
 
-    row.addEventListener("dragstart", (e) => {
-      (e as DragEvent).dataTransfer!.setData("backlogTaskId", task.id);
-    });
+    if (!isSprintActive) {
+      row.draggable = false;
+      (row.querySelector(".bp-add-btn") as HTMLButtonElement).disabled = true;
+    } else {
+      row.addEventListener("dragstart", (e) => {
+        (e as DragEvent).dataTransfer!.setData("backlogTaskId", task.id);
+      });
+    }
 
     (row.querySelector(".bp-add-btn") as HTMLButtonElement).addEventListener("click", () => {
+      if (!isSprintActive) return;
       highlightBacklogTaskId = task.id;
       const focusIdx = idx;
       addTaskFromBacklog(task.id);
@@ -422,8 +472,9 @@ const renderBacklog = (): void => {
   const backlog = getBacklog();
   if (!backlog) return;
 
-  const sprint = getActiveSprint();
-  const assignedIds = new Set<string>(sprint?.tasks.map(t => t.backlogTaskId).filter((id): id is string => Boolean(id)) || []);
+  const assignedIds = new Set<string>(
+    getState().sprints.flatMap(s => s.tasks.map(t => t.backlogTaskId).filter((id): id is string => Boolean(id)))
+  );
 
   dom.backlogTableBody.innerHTML = "";
 
@@ -644,6 +695,167 @@ const renderBacklog = (): void => {
   }
 };
 
+// ─── Sprint Planning Modal ────────────────────────────────────────────────────
+
+const renderPlanTasks = (sprint: Sprint): void => {
+  dom.planTaskRows.innerHTML = "";
+  let dragStartedFromHandle = false;
+
+  const planTable = dom.planTaskRows.closest("table");
+  if (planTable) applySortClasses(planTable as HTMLElement, planTaskSort);
+
+  const tasks = sortItems(sprint.tasks, planTaskSort.key, planTaskSort.asc);
+
+  tasks.forEach((task) => {
+    const row = dom.planTaskRowTemplate.content.firstElementChild!.cloneNode(true) as HTMLTableRowElement;
+    row.dataset.taskId = task.id;
+
+    const handle = row.querySelector(".drag-handle") as HTMLElement;
+    handle.addEventListener("mousedown", () => { dragStartedFromHandle = true; });
+    row.addEventListener("dragstart", (e) => {
+      if (!dragStartedFromHandle) { e.preventDefault(); return; }
+      dragStartedFromHandle = false;
+      e.dataTransfer!.effectAllowed = "move";
+      e.dataTransfer!.setData("text/plain", task.id);
+      row.classList.add("dragging");
+    });
+    row.addEventListener("dragend", () => {
+      row.classList.remove("dragging");
+      dragStartedFromHandle = false;
+      dom.planTaskRows.querySelectorAll(".drag-over-above, .drag-over-below")
+        .forEach(el => el.classList.remove("drag-over-above", "drag-over-below"));
+    });
+
+    (row.querySelector(".plan-col-taskid") as HTMLElement).textContent = task.taskId || "";
+    (row.querySelector(".plan-col-name") as HTMLElement).textContent = task.name;
+    (row.querySelector(".plan-col-estimate") as HTMLElement).textContent = String(task.estimate);
+
+    const removeBtn = row.querySelector(".plan-remove-btn") as HTMLButtonElement;
+    removeBtn.addEventListener("click", () => removeTaskFromSprint(task.id));
+
+    row.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      const mid = row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2;
+      row.classList.remove("drag-over-above", "drag-over-below");
+      row.classList.add(e.clientY < mid ? "drag-over-above" : "drag-over-below");
+    });
+    row.addEventListener("dragleave", () => row.classList.remove("drag-over-above", "drag-over-below"));
+    row.addEventListener("drop", (e) => {
+      e.preventDefault();
+      row.classList.remove("drag-over-above", "drag-over-below");
+      const backlogTaskId = e.dataTransfer!.getData("backlogTaskId");
+      if (backlogTaskId) { addTaskFromBacklog(backlogTaskId); return; }
+      const draggedId = e.dataTransfer!.getData("text/plain");
+      if (!draggedId || draggedId === task.id) return;
+      const ids = Array.from(dom.planTaskRows.querySelectorAll("tr[data-task-id]"))
+        .map(tr => (tr as HTMLElement).dataset.taskId!);
+      const filtered = ids.filter(id => id !== draggedId);
+      const targetIdx = filtered.indexOf(task.id);
+      const mid = row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2;
+      filtered.splice(e.clientY < mid ? targetIdx : targetIdx + 1, 0, draggedId);
+      reorderTasks(filtered);
+    });
+
+    dom.planTaskRows.appendChild(row);
+  });
+
+  // Drop zone: allow dragging from backlog onto the empty table area
+  dom.planTaskRows.addEventListener("dragover", (e) => e.preventDefault(), { once: false });
+  dom.planTaskRows.addEventListener("drop", (e) => {
+    const target = e.target as HTMLElement;
+    if (target.closest("tr[data-task-id]")) return; // handled by row
+    const backlogTaskId = (e as DragEvent).dataTransfer!.getData("backlogTaskId");
+    if (backlogTaskId) { e.preventDefault(); addTaskFromBacklog(backlogTaskId); }
+  });
+};
+
+const renderPlanBacklog = (sprint: Sprint): void => {
+  dom.planBacklogRows.innerHTML = "";
+  const backlog = getBacklog();
+  if (!backlog) return;
+
+  const assignedIds = new Set<string>(
+    getState().sprints.flatMap(s => s.tasks.map(t => t.backlogTaskId).filter((id): id is string => Boolean(id)))
+  );
+
+  const unassigned: BacklogTask[] = [];
+  for (const story of backlog.stories)
+    for (const task of story.tasks)
+      if (!assignedIds.has(task.id)) unassigned.push(task);
+
+  if (unassigned.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "plan-backlog-empty";
+    empty.textContent = "All backlog tasks are assigned.";
+    dom.planBacklogRows.appendChild(empty);
+    return;
+  }
+
+  const sortedUnassigned = sortItems(unassigned, planBacklogSort.key, planBacklogSort.asc);
+
+  const header = document.createElement("div");
+  header.className = "plan-backlog-header";
+  header.innerHTML = `<span class="plan-bl-hdr-taskid sortable" data-sort-key="taskId">Task ID</span><span class="plan-bl-hdr-desc sortable" data-sort-key="description">Description</span><span class="plan-bl-hdr-est sortable" data-sort-key="estimate">Est</span><span></span>`;
+  header.querySelectorAll(".sortable").forEach((el) => {
+    const htmlEl = el as HTMLElement;
+    if (htmlEl.dataset.sortKey === planBacklogSort.key) {
+      htmlEl.classList.add(planBacklogSort.asc ? "sort-asc" : "sort-desc");
+    }
+    htmlEl.addEventListener("click", () => togglePlanBacklogSort(htmlEl.dataset.sortKey!));
+  });
+  dom.planBacklogRows.appendChild(header);
+
+  sortedUnassigned.forEach((task) => {
+    const row = document.createElement("div");
+    row.className = "plan-backlog-row";
+    row.draggable = true;
+    row.title = "Drag to add to sprint";
+    row.innerHTML = `
+      <span class="plan-bl-taskid">${task.taskId || ""}</span>
+      <span class="plan-bl-desc">${task.description || ""}</span>
+      <span class="plan-bl-est">${task.estimate ?? ""}</span>
+      <span><button class="btn ghost small plan-bl-add-btn">+</button></span>
+    `;
+    row.addEventListener("dragstart", (e) => {
+      (e as DragEvent).dataTransfer!.effectAllowed = "copy";
+      (e as DragEvent).dataTransfer!.setData("backlogTaskId", task.id);
+      row.classList.add("dragging");
+    });
+    row.addEventListener("dragend", () => row.classList.remove("dragging"));
+    (row.querySelector(".plan-bl-add-btn") as HTMLButtonElement).addEventListener("click", () => {
+      addTaskFromBacklog(task.id);
+    });
+    dom.planBacklogRows.appendChild(row);
+  });
+};
+
+const renderPlanningModal = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Set<string>): void => {
+  if (dom.sprintPlanModal.hidden) return;
+
+  const sprintNumber = getState().sprints.findIndex(s => s.id === sprint.id) + 1;
+  dom.sprintPlanTitle.textContent = sprint.description
+    ? `Sprint ${sprintNumber} — ${sprint.description}`
+    : `Sprint ${sprintNumber}`;
+
+  const workingDays = getWorkingDates(sprint.startDate, sprint.endDate, holidaySet, workWeekendSet).length;
+  const totalPoints = sprint.tasks.reduce((sum, t) => sum + Number(t.estimate || 0), 0);
+  const developers = Math.max(0, Number(sprint.developers || 0));
+  const efficiency = Math.min(1, Math.max(0, Number(sprint.efficiency || 0)));
+  const availableDays = developers * workingDays * efficiency - totalPoints;
+
+  dom.planStatDuration.textContent = formatSprintRange(sprint);
+  dom.planStatWorkingDays.textContent = String(workingDays);
+  dom.planStatTotalPoints.textContent = totalPoints.toFixed(1).replace(/\.0$/, "");
+  dom.planStatAvailableDays.textContent = availableDays.toFixed(1).replace(/\.0$/, "");
+  dom.planStatAvailableDays.className = "plan-stat-value" +
+    (availableDays < -1.5 ? " available-red" : availableDays <= 1.5 ? " available-green" : "");
+
+  renderPlanTasks(sprint);
+  renderPlanBacklog(sprint);
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 const renderStats = (sprint: Sprint, burndown: BurndownData): void => {
   const effectiveToday = burndown.todayIndex >= 0 ? burndown.dates[burndown.todayIndex] : "";
   const doneTasks = sprint.tasks.filter((t) => t.status === "Done" && t.doneDate && t.doneDate <= effectiveToday).length;
@@ -699,6 +911,30 @@ export const render = (hints?: number): void => {
 
   if (has(H_SIDEBAR)) renderSprintList();
 
+  const prefs = getPreferences();
+  const holidaySet = new Set(prefs.holidays.map((h) => h.date));
+  const workWeekendSet = new Set(prefs.workWeekends);
+
+  // Project TODAY picker — reinit on every render so holidays/weekends stay current
+  if (fpProjectToday) fpProjectToday.destroy();
+  fpProjectToday = flatpickr(dom.projectTodayInput, {
+    dateFormat: "Y-m-d",
+    disableMobile: true,
+    disable: [
+      (date: Date) => {
+        const iso = localIso(date);
+        if (holidaySet.has(iso)) return true;
+        const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+        if (isWeekend && workWeekendSet.has(iso)) return false;
+        return isWeekend;
+      },
+    ],
+    onChange: ([date]: Date[]) => {
+      if (date) setProjectToday(localIso(date));
+    },
+  });
+  fpProjectToday.setDate(getProjectToday(), false);
+
   if (activeTab === "backlog") {
     if (has(H_BACKLOG)) renderBacklog();
     return;
@@ -708,10 +944,6 @@ export const render = (hints?: number): void => {
   if (!sprint) return;
 
   patchActiveSprint({ developers: 0, efficiency: 1 });
-
-  const prefs = getPreferences();
-  const holidaySet = new Set(prefs.holidays.map((h) => h.date));
-  const workWeekendSet = new Set(prefs.workWeekends);
 
   const maxToday = sprint.endDate ? getNextWorkingDay(sprint.endDate, holidaySet, workWeekendSet) : sprint.endDate;
   const real = todayIso();
@@ -725,42 +957,47 @@ export const render = (hints?: number): void => {
     sprint.today! > maxToday ? maxToday :
     sprint.today!;
 
+  const projectToday = getProjectToday();
+  const isSprintActive = projectToday >= sprint.startDate && projectToday <= sprint.endDate;
+
   if (has(H_HEADER)) {
     const state = getState();
     const sprintNumber = state.sprints.findIndex((s) => s.id === sprint.id) + 1;
     dom.sprintTitleText.textContent = sprint.description || `Sprint ${sprintNumber}`;
+    dom.resetSprintBtn.textContent = `Reset Sprint ${sprintNumber}`;
     dom.deleteSprintBtn.textContent = `Delete Sprint ${sprintNumber}`;
+    dom.editSprintBtn.disabled = sprint.endDate < projectToday;
+    dom.addByIdInput.disabled = !isSprintActive;
+    dom.addByIdBtn.disabled = !isSprintActive;
 
-    if (fpToday) fpToday.destroy();
-    fpToday = flatpickr(dom.sprintToday, {
-      dateFormat: "Y-m-d",
-      defaultDate: effectiveToday,
-      minDate: sprint.startDate || null,
-      maxDate: maxToday || null,
-      disableMobile: true,
-      disable: [
-        (date: Date) => {
-          const iso = localIso(date);
-          if (holidaySet.has(iso)) return true;
-          const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-          if (isWeekend && workWeekendSet.has(iso)) return false;
-          return isWeekend;
-        },
-      ],
-      onChange: ([date]: Date[]) => {
-        if (date) updateToday(localIso(date));
-      },
-    });
   }
 
-  if (has(H_TASKS)) renderTasks(sprint, holidaySet, workWeekendSet);
-  if (has(H_PANEL)) renderBacklogPanel(sprint);
+  if (has(H_TASKS)) renderTasks(sprint, holidaySet, workWeekendSet, isSprintActive);
+  if (has(H_PANEL)) renderBacklogPanel(sprint, isSprintActive);
 
   if (has(H_STATS) || has(H_CHART)) {
-    const burndown = calculateBurndown(sprint, effectiveToday, holidaySet, workWeekendSet);
+    // Chart actual line always ends at project TODAY, not the browse date
+    const chartToday =
+      projectToday < sprint.startDate ? sprint.startDate :
+      projectToday > maxToday ? maxToday :
+      projectToday;
+    const burndown = calculateBurndown(sprint, chartToday, holidaySet, workWeekendSet);
+    // Browse index — where effectiveToday (sprint.today) falls in the dates array
+    const browseIndex = burndown.dates.reduce((last, date, i) => (date <= effectiveToday ? i : last), -1);
     if (has(H_STATS)) renderStats(sprint, burndown);
     if (has(H_CHART)) {
-      drawChart(burndown, (date) => updateToday(date));
+      drawChart(burndown, (date) => {
+        if (isSprintActive) {
+          // Current sprint: clicking a date updates project TODAY
+          setProjectToday(date);
+        } else {
+          // Past/future sprint: toggle browse line only
+          if (date === effectiveToday && date !== chartToday) updateToday(chartToday);
+          else updateToday(date);
+        }
+      }, browseIndex >= 0 ? browseIndex : undefined, chartToday === projectToday);
     }
   }
+
+  if (has(H_TASKS | H_PANEL | H_STATS)) renderPlanningModal(sprint, holidaySet, workWeekendSet);
 };
