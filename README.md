@@ -1,12 +1,8 @@
 # Burndown Studio
 
-Local, single-user web app for sprint burndown tracking with task-level daily updates. Data is stored in browser `localStorage`.
+Multi-user web app for sprint burndown tracking with task-level daily updates. State is shared in real time via Firebase Firestore, with localStorage as a fallback cache. Supports Google Sign-In and a dev-only fake email login.
 
 ## Run
-
-Open `index.html` in a browser — it works directly, no server needed.
-
-For development with a local server:
 
 ```bash
 npm run dev        # start static server on http://localhost:5173
@@ -19,14 +15,57 @@ Then visit `http://localhost:5173`.
 Source code lives in `src/` as TypeScript modules. After editing any file in `src/`, rebuild the bundle:
 
 ```bash
-npm install        # first time only (esbuild, typescript, tsx)
+npm install        # first time only (esbuild, typescript, tsx, firebase)
 npm run build      # bundles src/main.ts → app.js
 npm run typecheck  # run tsc --noEmit (zero errors expected)
 npm run test       # run unit tests via tsx
 npm run dev        # start static server on http://localhost:5173
 ```
 
+### Firebase Setup (required for multi-user mode)
+
+1. Create a project at [console.firebase.google.com](https://console.firebase.google.com)
+2. Enable **Authentication** → Sign-in method → **Google** and **Email/Password**
+3. Create a **Firestore Database** (production mode)
+4. Copy the SDK config object into `src/firebase.ts`
+5. Deploy Firestore security rules:
+
+```bash
+npm install -g firebase-tools
+firebase login
+firebase init firestore   # select project, accept firestore.rules
+firebase deploy --only firestore:rules
+```
+
+### Dev mode (localhost only)
+
+When running on `localhost`, a fake email login form appears below the Google button. Enter any email (e.g. `test@dev.com`) — the account is created automatically with a fixed dev password. Use different browsers or Chrome profiles to simulate multiple users.
+
+### Legacy mode (no Firebase)
+
+If `src/firebase.ts` still contains the placeholder `"YOUR_API_KEY"`, the app runs in single-user localStorage-only mode — identical to the previous behaviour.
+
+## User Roles
+
+| Role | Capabilities |
+|---|---|
+| `super_manager` | Full access; admin screen; manage all teams; delete/promote users |
+| `product_manager` | Create teams; manage members of owned teams; delete owned teams |
+| `member` | Access assigned teams; read/write sprint data |
+
+The email `dkyoon@gmail.com` is automatically assigned `super_manager` on first login.
+
 ## Current Features
+
+### Multi-user & Authentication
+
+- Google Sign-In (production) and fake email login (localhost only)
+- Team selection screen after login — users see only their assigned teams
+- Real-time Firestore sync: all team members see changes instantly
+- **"← Teams" button** in the app header to switch between teams without signing out
+- **Admin screen** (Super Manager only): view all users, change roles, delete user profiles
+- **Team management** (PM/SM): create teams, add/remove members from a user list, delete teams
+- `projectToday` is per-session — not shared across users; remote updates do not reset it
 
 ### Project TODAY
 
@@ -107,11 +146,16 @@ bdc/
 ├── index.html          # UI structure and templates
 ├── app.js              # Bundled output (built from src/, committed to git)
 ├── styles.css          # Layout, theming, animations
+├── firestore.rules     # Firestore security rules (deploy via Firebase CLI)
 ├── src/
-│   ├── main.ts         # Entry point — event wiring, modal logic, init
+│   ├── main.ts         # Entry point — event wiring, modal logic, auth gate
 │   ├── dom.ts          # DOM element references
-│   ├── state.ts        # State management — load, save, CRUD, migrations
-│   ├── types.ts        # Shared TypeScript interfaces
+│   ├── state.ts        # State management — load, save, CRUD, Firestore sync
+│   ├── types.ts        # Shared TypeScript interfaces (incl. UserProfile, Team)
+│   ├── firebase.ts     # Firebase app init (auth, db)
+│   ├── auth.ts         # Sign-in (Google + fake email), sign-out, ensureUserProfile
+│   ├── db.ts           # Firestore CRUD: users, teams, appdata
+│   ├── screens.ts      # Login, team selection, admin screen overlays
 │   ├── burndown.ts     # Pure burndown calculation functions
 │   ├── chart.ts        # SVG chart rendering
 │   ├── render.ts       # DOM rendering (sprint list, tasks, backlog, stats, chart)
@@ -125,11 +169,19 @@ bdc/
 │   ├── TECHNICAL_DESIGN.md   # Architecture, data model, algorithms
 │   └── ROADMAP.md            # Phased delivery plan
 ├── tsconfig.json       # TypeScript compiler configuration
-├── package.json        # Build scripts and dev dependencies
+├── package.json        # Build scripts and dependencies
 └── .gitignore
 ```
 
-## Data Model (localStorage: `burndown-studio`)
+## Firestore Collections
+
+```
+/users/{userId}        — email, displayName, role, createdAt
+/teams/{teamId}        — name, ownerId, memberIds[], createdAt
+/appdata/{teamId}      — full AppState (sprints, backlog, preferences, …)
+```
+
+## Data Model (AppState)
 
 ```json
 {
@@ -222,7 +274,8 @@ See `docs/` for detailed project documents:
 | 2026-02-24 | Backlog re-links sprint tasks on re-import; custom confirm dialogs |
 | 2026-02-26 | Holiday/PTO exclusions + work weekends in preferences |
 | 2026-02-27 | Drag-and-drop task reorder; progress %; scope line; 59 unit tests |
-| 2026-03-03 | TypeScript migration; Update/Save UX; auto-status (Todo/In Progress/Done); auto-Done on remain=0; daily workedLog/remainLog; scope line; clickable chart dates |
-| 2026-03-04 | Sprint planning modal; project TODAY field; current-sprint controls; ideal line locked to plannedPoints; custom delete/reset dialogs; man-days chip; disabled button styles; sort on planning modal |
-| 2026-03-04 | Burndown fixes: remove extra day; chart Today marker and actual line use project TODAY; data recording always uses project TODAY |
-| 2026-03-05 | Browse date toggle on past/future sprint charts; clicking chart date in current sprint updates project TODAY; project TODAY resets to real date on page load; sprint reset keeps all tasks; add/remove same task cancels scope history |
+| 2026-03-03 | TypeScript migration; Update/Save UX; auto-status; daily workedLog/remainLog; scope line; clickable chart dates |
+| 2026-03-04 | Sprint planning modal; project TODAY field; current-sprint controls; ideal line locked to plannedPoints; custom delete/reset dialogs; man-days chip |
+| 2026-03-04 | Burndown fixes: remove extra day; chart Today marker and actual line use project TODAY |
+| 2026-03-05 | Browse date toggle on past/future sprint charts; sprint reset keeps all tasks; add/remove same task cancels scope history |
+| 2026-03-05 | Multi-user: Firebase Auth (Google + dev fake email), Firestore real-time sync, team management, role-based access (super_manager / product_manager / member), admin screen, Switch Team button, Firestore security rules |

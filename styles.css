@@ -1689,3 +1689,428 @@ th.sortable.sort-desc::after {
     min-width: 640px;
   }
 }
+
+/* =========================================================
+   Multi-user: Header user info
+   ========================================================= */
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.header-user-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.header-team-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--accent, #5c67f2);
+  padding: 3px 8px;
+  background: rgba(92, 103, 242, 0.08);
+  border-radius: 6px;
+}
+
+.header-user-name {
+  font-size: 0.85rem;
+  color: var(--muted, #888);
+}
+
+/* =========================================================
+   Multi-user: Screen overlays
+   ========================================================= */
+
+.screen-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(4px);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.screen-card {
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 16px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.12);
+  padding: 40px;
+  width: 100%;
+}
+
+/* Login */
+.login-card {
+  max-width: 420px;
+  text-align: center;
+}
+
+.screen-title {
+  margin: 8px 0 4px;
+  font-size: 1.8rem;
+}
+
+.screen-subtitle {
+  color: var(--muted, #888);
+  margin-bottom: 32px;
+  font-size: 0.95rem;
+}
+
+.login-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.login-google-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px 20px;
+  font-size: 0.95rem;
+}
+
+.login-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted, #aaa);
+  font-size: 0.8rem;
+}
+.login-divider::before,
+.login-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.login-fake-row {
+  display: flex;
+  gap: 8px;
+}
+
+.login-email-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.screen-error {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: rgba(220, 53, 69, 0.08);
+  border: 1px solid rgba(220, 53, 69, 0.2);
+  border-radius: 8px;
+  color: #c0392b;
+  font-size: 0.85rem;
+  text-align: left;
+}
+
+/* Team selection */
+.team-screen-card {
+  max-width: 680px;
+}
+
+.team-screen-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  gap: 16px;
+}
+
+.team-screen-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  padding-top: 4px;
+}
+
+.team-user-name {
+  font-size: 0.85rem;
+  color: var(--muted, #888);
+}
+
+.team-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.team-card {
+  position: relative;
+  background: rgba(92, 103, 242, 0.04);
+  border: 1px solid rgba(92, 103, 242, 0.15);
+  border-radius: 12px;
+  padding: 20px 16px 14px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  font-family: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 90px;
+}
+
+.team-card:hover {
+  background: rgba(92, 103, 242, 0.09);
+  border-color: rgba(92, 103, 242, 0.35);
+  transform: translateY(-1px);
+}
+
+.team-card-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.team-card-meta {
+  font-size: 0.78rem;
+  color: var(--muted, #999);
+}
+
+.team-manage-btn {
+  margin-top: auto;
+  align-self: flex-start;
+}
+
+.team-card-new {
+  border-style: dashed;
+  border-color: rgba(0, 0, 0, 0.18);
+  background: transparent;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted, #aaa);
+}
+
+.team-card-new:hover {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.3);
+  color: #333;
+}
+
+.team-card-new-icon {
+  font-size: 1.8rem;
+  line-height: 1;
+  margin-bottom: 4px;
+  color: var(--muted, #aaa);
+}
+
+.team-card-loading {
+  grid-column: 1 / -1;
+  color: var(--muted, #aaa);
+  font-size: 0.9rem;
+  padding: 8px 0;
+}
+
+/* Inline modals (create team / manage members) */
+.team-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 2100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.team-modal {
+  background: #fff;
+  border-radius: 12px;
+  padding: 28px 32px;
+  width: 100%;
+  max-width: 440px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.team-modal h3 {
+  margin: 0 0 4px;
+  font-size: 1.1rem;
+}
+
+.screen-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.team-add-member-row {
+  display: flex;
+  gap: 8px;
+}
+
+.team-add-member-row .screen-input {
+  flex: 1;
+}
+
+.member-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.member-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(92, 103, 242, 0.04);
+  font-size: 0.85rem;
+}
+
+.member-email {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-name {
+  color: var(--muted, #999);
+  font-size: 0.8rem;
+  min-width: 80px;
+}
+
+.team-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+/* Admin screen */
+.admin-card {
+  max-width: 760px;
+}
+
+.admin-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.admin-header .screen-title {
+  margin: 0;
+}
+
+.admin-table-wrap {
+  overflow-x: auto;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.admin-table th,
+.admin-table td {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+}
+
+.admin-table th {
+  font-weight: 600;
+  color: var(--muted, #888);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.role-select {
+  padding: 4px 8px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  background: #fff;
+  cursor: pointer;
+}
+
+/* Manage Members — two-column layout */
+.team-modal-wide {
+  max-width: 620px;
+}
+
+.manage-members-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  min-height: 180px;
+}
+
+.manage-members-col-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted, #999);
+  margin-bottom: 6px;
+}
+
+.manage-member-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.manage-member-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(92, 103, 242, 0.04);
+  font-size: 0.83rem;
+}
+
+.manage-member-row.available {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.manage-member-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
+}
+
+.manage-member-info .member-email {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.manage-member-info .member-name {
+  font-size: 0.75rem;
+  color: var(--muted, #aaa);
+}

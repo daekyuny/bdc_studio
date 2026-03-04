@@ -550,7 +550,7 @@ const renderBacklog = (): void => {
       cancelBtn.hidden = false;
       deleteBtn.hidden = false;
     } else {
-      addTaskBtn.hidden = !isExpanded;
+      addTaskBtn.hidden = !isExpanded && story.tasks.length > 0;
     }
 
     editBtn.addEventListener("click", () => {

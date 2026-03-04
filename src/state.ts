@@ -1,5 +1,7 @@
 import { todayIso, addWorkingDays, createId, getNextWorkingDay } from "./utils.ts";
 import type { AppState, Sprint, SprintTask, Backlog, BacklogStory, BacklogTask, Preferences, ScopeDrop } from "./types.ts";
+import { isFirebaseConfigured } from "./firebase.ts";
+import { loadTeamState, saveTeamState, subscribeToTeamState } from "./db.ts";
 
 // --- Render hint bitmask constants ---
 export const H_SIDEBAR = 1;
@@ -16,6 +18,13 @@ export const H_SPRINT_TASKS = H_TASKS | H_PANEL | H_STATS | H_CHART;
 export const H_BACKLOG_DATA = H_BACKLOG | H_PANEL;
 
 const STORAGE_KEY = "burndown-studio";
+
+// --- Firestore integration state ---
+let currentTeamId: string | null = null;
+let unsubscribeSnapshot: (() => void) | null = null;
+let saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+// Timestamp of our last write to Firestore; used to suppress echo snapshots
+let lastFirestoreWriteAt = 0;
 
 let onChange: (hints?: number) => void = () => {};
 export const setOnStateChange = (callback: (hints?: number) => void): void => {
@@ -103,28 +112,31 @@ const defaultState = (): AppState => {
   };
 };
 
+const fixLoadedState = (appState: AppState): AppState => {
+  // Always reset project TODAY to real system date on every load
+  const today = todayIso();
+  appState.projectToday = today;
+  const holidaySet = new Set(appState.preferences.holidays.map((h: any) => h.date));
+  const workWeekendSet = new Set(appState.preferences.workWeekends);
+  for (const sprint of appState.sprints) {
+    if (sprint.endDate < today) {
+      sprint.today = getNextWorkingDay(sprint.endDate, holidaySet, workWeekendSet);
+    } else if (sprint.startDate > today) {
+      sprint.today = sprint.startDate;
+    } else {
+      sprint.today = today;
+    }
+  }
+  return appState;
+};
+
 const loadState = (): AppState => {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return defaultState();
   try {
     const parsed = JSON.parse(raw);
     if (!parsed || !Array.isArray(parsed.sprints)) return defaultState();
-    const appState = migrateState(parsed);
-    // Always reset project TODAY to real system date on every load
-    const today = todayIso();
-    appState.projectToday = today;
-    const holidaySet = new Set(appState.preferences.holidays.map((h: any) => h.date));
-    const workWeekendSet = new Set(appState.preferences.workWeekends);
-    for (const sprint of appState.sprints) {
-      if (sprint.endDate < today) {
-        sprint.today = getNextWorkingDay(sprint.endDate, holidaySet, workWeekendSet);
-      } else if (sprint.startDate > today) {
-        sprint.today = sprint.startDate;
-      } else {
-        sprint.today = today;
-      }
-    }
-    return appState;
+    return fixLoadedState(migrateState(parsed));
   } catch {
     console.warn("Burndown Studio: corrupt localStorage data, resetting to defaults.");
     localStorage.removeItem(STORAGE_KEY);
@@ -132,8 +144,56 @@ const loadState = (): AppState => {
   }
 };
 
+const doSaveToFirestore = async (teamId: string): Promise<void> => {
+  try {
+    await saveTeamState(teamId, JSON.parse(JSON.stringify(state)));
+  } catch (err) {
+    console.error("Burndown Studio: Firestore save failed:", err);
+  }
+};
+
 const save = (): void => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if (isFirebaseConfigured && currentTeamId) {
+    // Start the echo-suppression window immediately so the snapshot
+    // Firestore sends back for our own write gets ignored.
+    lastFirestoreWriteAt = Date.now();
+    if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
+    const teamId = currentTeamId;
+    saveDebounceTimer = setTimeout(() => doSaveToFirestore(teamId), 500);
+  }
+};
+
+// Load state from Firestore for the given team and subscribe to real-time updates.
+export const setCurrentTeam = async (teamId: string): Promise<void> => {
+  currentTeamId = teamId;
+  if (unsubscribeSnapshot) {
+    unsubscribeSnapshot();
+    unsubscribeSnapshot = null;
+  }
+  if (!isFirebaseConfigured) return;
+
+  try {
+    const remoteState = await loadTeamState(teamId);
+    if (remoteState && Array.isArray(remoteState.sprints)) {
+      state = fixLoadedState(migrateState(remoteState as any));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+  } catch (err) {
+    console.warn("Burndown Studio: failed to load from Firestore, using local cache:", err);
+  }
+
+  unsubscribeSnapshot = subscribeToTeamState(teamId, (remoteState) => {
+    // Suppress echoes of our own writes (5s suppression window)
+    if (Date.now() - lastFirestoreWriteAt < 5000) return;
+    if (!remoteState || !Array.isArray(remoteState.sprints)) return;
+    // projectToday is per-user/per-session — preserve the current user's value
+    const preservedToday = state.projectToday;
+    state = fixLoadedState(migrateState(remoteState as any));
+    state.projectToday = preservedToday;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    onChange(H_ALL);
+  });
 };
 
 let state: AppState = loadState();

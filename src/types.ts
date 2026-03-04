@@ -114,3 +114,23 @@ export interface GapInfo {
   after: Sprint;
   before: Sprint;
 }
+
+// --- Multi-user types ---
+
+export type UserRole = "super_manager" | "product_manager" | "member";
+
+export interface UserProfile {
+  uid: string;
+  email: string;
+  displayName: string;
+  role: UserRole;
+  createdAt: string;
+}
+
+export interface Team {
+  id: string;
+  name: string;
+  ownerId: string;
+  memberIds: string[];
+  createdAt: string;
+}

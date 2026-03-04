@@ -1,6 +1,6 @@
 # Burndown Studio — Technical Design Document
 
-**Version:** 1.1
+**Version:** 1.2
 **Last updated:** 2026-03-05
 **Status:** Current
 
@@ -8,7 +8,7 @@
 
 ## 1. Architecture Overview
 
-Burndown Studio is a **static single-page application** with a modular TypeScript source and an esbuild bundling step. There is no framework and no backend. The source code is organized as ES modules under `src/`, bundled into a single `app.js` for browser consumption.
+Burndown Studio is a **static single-page application** with a modular TypeScript source and an esbuild bundling step. There is no custom backend. The source code is organized as ES modules under `src/`, bundled into a single `app.js` for browser consumption.
 
 ```
 Browser
@@ -16,14 +16,20 @@ Browser
   ├── styles.css        (layout, theming, animations)
   └── app.js            (bundled from src/ via esbuild)
           │
-          └── localStorage ("burndown-studio" key)
+          ├── Firebase Auth    (Google Sign-In + Email/Password for dev)
+          ├── Firestore        (real-time shared AppState per team)
+          └── localStorage     ("burndown-studio" — local cache + legacy fallback)
 
 Development
   └── src/
-      ├── main.ts       → entry point, event wiring, modal logic
+      ├── main.ts       → entry point, auth gate, event wiring, modal logic
       ├── dom.ts        → DOM element references
-      ├── state.ts      → state management, CRUD, migrations
-      ├── types.ts      → shared TypeScript interfaces
+      ├── state.ts      → state management, CRUD, Firestore sync, migrations
+      ├── types.ts      → shared TypeScript interfaces (incl. UserProfile, Team)
+      ├── firebase.ts   → Firebase app init (auth, db, isFirebaseConfigured flag)
+      ├── auth.ts       → sign-in (Google + fake email), sign-out, ensureUserProfile
+      ├── db.ts         → Firestore CRUD: users, teams, appdata
+      ├── screens.ts    → login, team selection, admin screen overlays
       ├── burndown.ts   → pure calculation functions
       ├── chart.ts      → SVG chart rendering
       ├── render.ts     → DOM rendering (sidebar, tasks, backlog, stats, chart)
@@ -32,12 +38,20 @@ Development
       └── globals.d.ts  → ambient declarations for CDN globals (flatpickr, XLSX)
 ```
 
+### Multi-User Flow
+
+```
+User opens app → Login screen (Firebase Auth)
+              → Team selection (Firestore /teams)
+              → Burndown Studio (Firestore /appdata/{teamId} — real-time)
+```
+
 ### Design Principles
-- **Open and run** — open `index.html` directly in a browser (`file://` works, no server required).
-- **Modular source** — 9 focused ES modules for clean separation.
+- **Multi-user by default** — Firebase Auth + Firestore when configured; falls back to single-user localStorage mode when `isFirebaseConfigured = false`.
+- **Modular source** — 13 focused ES modules for clean separation.
 - **Single build step** — `npm run build` bundles `src/main.ts` → `app.js` via esbuild.
-- **Minimal dependencies** — only dev dependencies are esbuild, typescript, tsx. Runtime CDN: Google Fonts, Flatpickr, SheetJS.
-- **Single global state** — one JS object, one localStorage key.
+- **Minimal dependencies** — dev: esbuild, typescript, tsx. Runtime: firebase (npm), Google Fonts, Flatpickr, SheetJS (CDN).
+- **Single global state** — one JS object; persisted to Firestore (primary) + localStorage (cache).
 - **Selective re-render** — state changes carry bitmask hints; `render(hints)` only rebuilds affected UI regions.
 
 ## 2. Tech Stack
@@ -51,9 +65,12 @@ Development
 | Fonts | Google Fonts (CDN) | Fraunces (headings), Source Sans 3 (body) |
 | Date picker | Flatpickr (CDN) | Calendar UI for sprint dates and project TODAY; weekends/holidays/occupied ranges disabled |
 | Excel I/O | SheetJS / xlsx (CDN) | Backlog Excel import (.xlsx/.xls) and export; sprint task export |
-| Storage | localStorage | Single JSON blob under `burndown-studio` key |
+| Auth | Firebase Auth (npm) | Google Sign-In (production); Email/Password fake login (localhost dev only) |
+| Database | Firestore (npm) | Real-time shared AppState per team; `onSnapshot` listener for live updates |
+| Storage | localStorage | Cache for Firestore data; sole store in legacy mode (`isFirebaseConfigured = false`) |
+| Security | Firestore Security Rules | Role-based: super_manager / product_manager / member; deployed via Firebase CLI |
 | Bundler | esbuild | Bundles ES modules into single `app.js` |
-| Serving | Any static server or `file://` | `python3 -m http.server`, or open `index.html` directly |
+| Serving | Any static server | `npm run dev` (port 5173); Firebase Hosting or nginx for production |
 | Version control | Git + GitHub | Remote: `git@github.com:daekyuny/bdc_studio.git` |
 
 ## 3. Build Pipeline
@@ -73,6 +90,31 @@ src/*.ts  ──esbuild──▶  app.js  ──browser──▶  runs in any mo
 `app.js` is committed to git so the app works after cloning without a build step. The build step is only required after editing `src/`.
 
 ## 4. Data Model
+
+### 4.0 Firestore Collections
+
+When Firebase is configured, the following Firestore collections are used:
+
+```
+/users/{userId}       — UserProfile: email, displayName, role, createdAt
+/teams/{teamId}       — Team: name, ownerId, memberIds[], createdAt
+/appdata/{teamId}     — AppState (full sprint/backlog/preferences JSON blob)
+```
+
+**Roles:** `super_manager` (full access + admin), `product_manager` (create/manage teams), `member` (read/write sprint data for assigned teams). The email `dkyoon@gmail.com` is assigned `super_manager` automatically on first login.
+
+### 4.1 AppState
+
+All sprint/backlog state is stored as a single JSON object — in Firestore `/appdata/{teamId}` (multi-user) or in `localStorage` under `burndown-studio` (legacy):
+
+```
+AppState
+├── activeSprintId: string (UUID)
+├── projectToday: string (YYYY-MM-DD) — per-session; not shared via Firestore
+...
+```
+
+Full AppState schema (unchanged from v1.1, see below):
 
 All state is stored as a single JSON object in `localStorage` under `burndown-studio`:
 
@@ -169,9 +211,15 @@ When a backlog is imported from Excel, all backlog tasks receive fresh UUIDs. `r
 
 ### Storage Limits
 
-- localStorage is typically capped at 5–10 MB per origin.
-- A sprint with 50 tasks × 14-day log is roughly 10–15 KB of JSON.
-- Practical limit: hundreds of sprints before storage concerns.
+- Firestore: 1 MiB document limit. A sprint with 50 tasks × 14-day log is ~15 KB; hundreds of sprints per team before concern.
+- localStorage: typically 5–10 MB per origin; used as a write-through cache in multi-user mode.
+
+### Firestore Sync Strategy
+
+- **Write**: every `save()` call immediately updates localStorage and sets `lastFirestoreWriteAt = Date.now()`. A debounced (500 ms) async write sends to Firestore.
+- **Read**: `onSnapshot` listener fires on every remote change. Echo suppression: if `Date.now() - lastFirestoreWriteAt < 5000`, the snapshot is ignored (it's our own write echoing back).
+- **`projectToday` preservation**: `projectToday` is per-session (not shared). Remote snapshots apply `fixLoadedState()` but immediately restore `state.projectToday` from before the snapshot.
+- **Legacy mode**: if `isFirebaseConfigured = false` (placeholder API key), the app behaves identically to the pre-Firebase version using only localStorage.
 
 ## 5. Key Algorithms
 
@@ -322,22 +370,29 @@ Add/remove cancellation: `addTaskFromBacklog` checks `sprint.scopeDrops` for a m
 
 | Module | Responsibility |
 |---|---|
-| `types.ts` | Shared interfaces: `Sprint`, `SprintTask`, `RemainEntry`, `WorkedEntry`, `ScopeDrop`, `ScopeDropMarker`, `BacklogStory`, `BacklogTask`, `BurndownData`, `AppState`, `SortState`, `GapInfo`, etc. |
+| `types.ts` | Shared interfaces: `Sprint`, `SprintTask`, `RemainEntry`, `WorkedEntry`, `ScopeDrop`, `ScopeDropMarker`, `BacklogStory`, `BacklogTask`, `BurndownData`, `AppState`, `SortState`, `GapInfo`, `UserRole`, `UserProfile`, `Team` |
 | `utils.ts` | Pure helpers: timezone-safe date math, working day calculation, overlap/gap detection, UUID, formatting |
 | `dom.ts` | Queries and exports all DOM element references |
-| `state.ts` | State CRUD for sprints and backlog, localStorage load/save/migrate, change callback, `getProjectToday`/`setProjectToday`, `finalizeSprintPlan` |
+| `firebase.ts` | Firebase app initialization; exports `auth`, `db`, `isFirebaseConfigured` flag |
+| `auth.ts` | `initAuth(onLogin, onLogout)`, `signInWithGoogle()`, `signInWithFakeEmail(email)` (localhost only), `signOut()`, `ensureUserProfile(user)` |
+| `db.ts` | Firestore CRUD: `getUserProfile`, `createUserProfile`; `getTeamsForUser`, `createTeam`, `addMemberToTeam`, `removeMemberFromTeam`, `deleteTeam`; `loadTeamState`, `saveTeamState`, `subscribeToTeamState`; `getAllUsers`, `setUserRole`, `deleteUserProfile` |
+| `screens.ts` | Dynamic DOM overlays: `showLoginScreen()`, `showTeamScreen()`, `showAdminScreen()`, `showManageMembers()`, `hideAllScreens()` |
+| `state.ts` | State CRUD for sprints and backlog; localStorage + Firestore load/save/sync; `setCurrentTeam(teamId)` async; echo suppression; `projectToday` preservation on remote snapshots; change callback; `getProjectToday`/`setProjectToday`; `finalizeSprintPlan` |
 | `burndown.ts` | Pure burndown calculation: ideal/actual/scope lines, scope drop contribution, log-aware point-in-time queries |
 | `chart.ts` | SVG chart rendering: grid, ideal/actual/scope lines, Today marker (indigo), browse marker (gray), scope drop triangles, clickable date labels |
 | `render.ts` | Full DOM rebuild: sprint list, task table (Update/Save UX, auto-status display, isSprintActive gating), backlog panel, stats card, planning modal, project TODAY Flatpickr picker |
 | `io.ts` | JSON export/import; sprint Excel export; backlog Excel export and import; sprint↔backlog re-linking; import confirmation dialogs |
-| `main.ts` | Entry point: tab/toolbar event wiring, sprint modal (create/edit/plan-edit), planning modal open/close, Add-by-ID, drag-to-sprint drop, column sort wiring, preferences modal, delete/reset confirm dialogs |
+| `main.ts` | Entry point: auth gate (`initAuth`), `startApp(teamId)`, Switch Team / Sign Out wiring; tab/toolbar event wiring; sprint modal; planning modal; preferences modal; delete/reset confirm dialogs |
 
 ### Module Dependency Graph
 
 ```
 main.ts
 ├── dom.ts
-├── state.ts ← utils.ts, types.ts
+├── firebase.ts
+├── auth.ts ← firebase.ts, db.ts, types.ts
+├── screens.ts ← db.ts, auth.ts, types.ts
+├── state.ts ← firebase.ts, db.ts, utils.ts, types.ts
 ├── render.ts
 │   ├── dom.ts
 │   ├── state.ts
@@ -345,6 +400,8 @@ main.ts
 │   ├── chart.ts ← dom.ts, utils.ts, types.ts
 │   └── utils.ts
 └── io.ts ← state.ts, utils.ts, dom.ts, types.ts
+
+db.ts ← firebase.ts, types.ts
 ```
 
 No circular dependencies. `state.ts` communicates with `render.ts` via a callback registered by `main.ts`, avoiding a direct import cycle.
@@ -356,19 +413,27 @@ No circular dependencies. `state.ts` communicates with `render.ts` via a callbac
 | TD-01 | No git repository | High | **Resolved** | Git initialized, connected to GitHub remote. |
 | TD-02 | Full re-render on every change | Medium | **Resolved** | Selective rendering via bitmask hints. |
 | TD-03 | No tests | Medium | **Resolved** | 59 unit tests via Node built-in test runner (`npm test`). |
-| TD-04 | Single JS file | Low | **Resolved** | Split into 9 ES modules under `src/`. |
-| TD-05 | localStorage only | Medium | **Mitigated** | JSON export/import added. localStorage remains the primary store. |
+| TD-04 | Single JS file | Low | **Resolved** | Split into 13 ES modules under `src/`. |
+| TD-05 | localStorage only | Medium | **Resolved** | Firestore real-time sync added; localStorage is now a write-through cache. |
 | TD-06 | No input validation | Low | Open | Invalid dates, negative estimates, efficiency > 1 are not explicitly blocked in JS. |
 | TD-07 | No error handling | Low | **Resolved** | `loadState` has try/catch with graceful fallback. |
 | TD-08 | Date handling / timezone | Low | **Resolved** | `localIso()` fixes UTC+N off-by-one. String comparison retained where safe. |
 | TD-09 | Backlog denormalization | Low | **Mitigated** | Sprint tasks copy fields at assignment; backlog re-import triggers `relinkSprintTasks()`. |
+| TD-10 | No Firestore offline conflict resolution | Low | Open | Last-writer-wins on snapshot apply. Echo suppression (5 s window) prevents self-overwrite but simultaneous edits by two users may cause the slower write to be overwritten. |
+| TD-11 | Firebase user deletion is profile-only | Low | Open | `deleteUserProfile` removes the Firestore `/users/{uid}` doc but cannot delete the Firebase Auth account (requires Admin SDK). The user can still sign in but will be recreated as a `member` on next login. |
 
 ## 9. Future Architecture Considerations
 
-### If adding a backend (Phase 4)
-- The data model is already JSON-serializable — drop-in compatible with a REST API.
-- Consider: SQLite per user (simplest), or PostgreSQL for multi-user.
-- The frontend would need to switch from `localStorage` calls to `fetch()` in `state.ts` — straightforward since state management is centralized.
+### Firestore conflict resolution
+- Current strategy is last-writer-wins with 5 s echo suppression.
+- For higher concurrency, consider Firestore transactions or per-sprint sub-collections so different teams' sprints can be written independently.
+
+### Operational transforms / CRDTs
+- For simultaneous cell-level editing (e.g. two users updating the same task at once), an OT or CRDT library would be needed. Currently out of scope (~30 users, low concurrency expected).
+
+### Firebase Admin SDK (server-side)
+- Deleting Firebase Auth accounts requires the Admin SDK (Node.js backend or Cloud Function).
+- A Cloud Function triggered on `/users/{uid}` delete could call `admin.auth().deleteUser(uid)` and clean up `appdata` references.
 
 ### If migrating to Vite
 - Vite could replace esbuild for a richer dev experience (HMR, TypeScript, CSS modules).
@@ -389,3 +454,4 @@ No circular dependencies. `state.ts` communicates with `render.ts` via a callbac
 | 2026-02-27 | 0.9 | Drag-and-drop reorder; progress %; scope line algorithm; 59 unit tests |
 | 2026-03-03 | 1.0 | TypeScript migration; `worked`/`remain`/`workedLog`/`remainLog` data model; log-aware burndown queries; Update/Save UX; auto-status; scope drop model |
 | 2026-03-05 | 1.1 | Project TODAY field and semantics; `plannedPoints` and `finalizeSprintPlan`; `addedDate` field and planned-vs-mid-sprint distinction; `isSprintActive` gate; `chartToday` vs `effectiveToday` vs `browseIndex`; chart browse marker; chart click behaviour by sprint type; scope drop add/remove cancellation; sprint reset keeps tasks; `updateGapBounds` for non-overlapping date pickers; project TODAY resets to real date on load |
+| 2026-03-05 | 1.2 | Multi-user: Firebase Auth + Firestore; `firebase.ts`, `auth.ts`, `db.ts`, `screens.ts` new modules; `UserRole`, `UserProfile`, `Team` types; `setCurrentTeam` async in `state.ts`; echo suppression + `projectToday` preservation on remote snapshots; role-based Firestore security rules; login/team-selection/admin screen overlays; Switch Team button; team management (create/manage members/delete); admin user management (roles/delete); TD-10, TD-11 added |

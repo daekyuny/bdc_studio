@@ -21,12 +21,17 @@ import {
   getMembers,
   addMember,
   removeMember,
+  setCurrentTeam,
 } from "./state.ts";
 import { render, setActiveTab, startEditing, expandAll, collapseAll, toggleTaskSort, toggleBacklogSort, setHighlightBacklogTaskId, togglePlanTaskSort, togglePlanBacklogSort } from "./render.ts";
 import { H_CHART } from "./state.ts";
 import { exportData, exportSprintExcel, importData, exportBacklogExcel, importBacklogExcel } from "./io.ts";
 import { getNextWorkingDay, addWorkingDays, findGaps, todayIso, getWorkingDates, localIso } from "./utils.ts";
 import type { Sprint } from "./types.ts";
+import { isFirebaseConfigured } from "./firebase.ts";
+import { initAuth, ensureUserProfile, signOut } from "./auth.ts";
+import { showLoginScreen, showTeamScreen, hideAllScreens } from "./screens.ts";
+import type { UserProfile } from "./types.ts";
 
 setOnStateChange(render);
 
@@ -558,4 +563,74 @@ document.addEventListener("click", (e) => {
   setHighlightBacklogTaskId(null);
 }, true);
 
-render();
+// --- Header sign-out button ---
+document.getElementById("signOutBtn")?.addEventListener("click", () => signOut());
+
+// ---------------------------------------------------------------------------
+// Auth gate
+// ---------------------------------------------------------------------------
+
+const showApp = (): void => {
+  (document.querySelector(".app") as HTMLElement).style.visibility = "visible";
+};
+
+const hideApp = (): void => {
+  (document.querySelector(".app") as HTMLElement).style.visibility = "hidden";
+};
+
+// Stored so the Switch Team button can re-open the team screen
+let _activeUser: User | null = null;
+let _activeProfile: UserProfile | null = null;
+
+const goToTeamScreen = (): void => {
+  if (!_activeUser || !_activeProfile) return;
+  hideApp();
+  showTeamScreen(_activeUser, _activeProfile, (teamId, teamName) => {
+    startApp(teamId, _activeProfile!, teamName);
+  });
+};
+
+const startApp = async (teamId: string, profile: UserProfile, teamName: string): Promise<void> => {
+  await setCurrentTeam(teamId);
+  hideAllScreens();
+  showApp();
+
+  const headerUserInfo = document.getElementById("headerUserInfo") as HTMLElement;
+  headerUserInfo.hidden = false;
+  (document.getElementById("headerUserName") as HTMLElement).textContent = profile.displayName;
+  (document.getElementById("headerTeamName") as HTMLElement).textContent = teamName;
+
+  render();
+};
+
+document.getElementById("switchTeamBtn")?.addEventListener("click", goToTeamScreen);
+
+if (!isFirebaseConfigured) {
+  // No Firebase config — legacy single-user mode (localStorage only)
+  render();
+} else {
+  hideApp();
+  initAuth(
+    async (user) => {
+      try {
+        _activeUser = user;
+        const profile = await ensureUserProfile(user);
+        _activeProfile = profile;
+        showTeamScreen(user, profile, (teamId, teamName) => {
+          startApp(teamId, profile, teamName);
+        });
+      } catch (e) {
+        console.error("Auth error:", e);
+        showLoginScreen();
+      }
+    },
+    () => {
+      _activeUser = null;
+      _activeProfile = null;
+      hideApp();
+      const headerUserInfo = document.getElementById("headerUserInfo");
+      if (headerUserInfo) headerUserInfo.hidden = true;
+      showLoginScreen();
+    },
+  );
+}
