@@ -1,5 +1,6 @@
 .claude/
 test_data/
+todo_dk/
 node_modules/
 dist/
 .DS_Store
