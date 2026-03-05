@@ -58,7 +58,7 @@ export interface BacklogTask {
   taskId: string;
   description: string;
   estimate: number;
-  assignedTo: string;
+  assignedTo: string[];
 }
 
 export interface BacklogStory {
@@ -123,6 +123,7 @@ export interface UserProfile {
   uid: string;
   email: string;
   displayName: string;
+  phoneNumber?: string;
   role: UserRole;
   createdAt: string;
 }

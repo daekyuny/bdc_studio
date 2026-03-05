@@ -19,8 +19,7 @@ import {
   addWorkWeekend,
   removeWorkWeekend,
   getMembers,
-  addMember,
-  removeMember,
+  replaceMembers,
   setCurrentTeam,
 } from "./state.ts";
 import { render, setActiveTab, startEditing, expandAll, collapseAll, toggleTaskSort, toggleBacklogSort, setHighlightBacklogTaskId, togglePlanTaskSort, togglePlanBacklogSort } from "./render.ts";
@@ -29,8 +28,9 @@ import { exportData, exportSprintExcel, importData, exportBacklogExcel, importBa
 import { getNextWorkingDay, addWorkingDays, findGaps, todayIso, getWorkingDates, localIso } from "./utils.ts";
 import type { Sprint } from "./types.ts";
 import { isFirebaseConfigured } from "./firebase.ts";
-import { initAuth, ensureUserProfile, signOut } from "./auth.ts";
-import { showLoginScreen, showTeamScreen, hideAllScreens } from "./screens.ts";
+import { initAuth, ensureUserProfile, signOut, type User } from "./auth.ts";
+import { showLoginScreen, showTeamScreen, hideAllScreens, showProfileEditModal } from "./screens.ts";
+import { getUserMemo, saveUserMemo, getTeamById, getUsersByIds } from "./db.ts";
 import type { UserProfile } from "./types.ts";
 
 setOnStateChange(render);
@@ -443,8 +443,152 @@ document.querySelectorAll(".plan-task-table thead th.sortable").forEach((th) => 
 let fpPrefHoliday: FlatpickrInstance | null = null;
 let fpPrefWeekend: FlatpickrInstance | null = null;
 
+// Simple markdown → HTML renderer for memo preview
+const renderMarkdown = (text: string): string => {
+  const lines = text.split("\n");
+  const out: string[] = [];
+  let inList = false;
+  for (const raw of lines) {
+    let line = raw
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.+?)\*/g, "<em>$1</em>")
+      .replace(/`(.+?)`/g, "<code>$1</code>");
+    if (/^# (.+)/.test(line)) {
+      if (inList) { out.push("</ul>"); inList = false; }
+      out.push(`<h3>${line.replace(/^# /, "")}</h3>`);
+    } else if (/^[-*] (.+)/.test(line)) {
+      if (!inList) { out.push("<ul>"); inList = true; }
+      out.push(`<li>${line.replace(/^[-*] /, "")}</li>`);
+    } else {
+      if (inList) { out.push("</ul>"); inList = false; }
+      out.push(line === "" ? "<br>" : `<p>${line}</p>`);
+    }
+  }
+  if (inList) out.push("</ul>");
+  return out.join("");
+};
+
+// Memo state
+let _memoSaveTimer: ReturnType<typeof setTimeout> | null = null;
+let _currentTeamIdForMemo: string | null = null;
+let _currentUidForMemo: string | null = null;
+let _memoPreviewMode = false;
+
+const saveMemoNow = async (): Promise<void> => {
+  if (!_currentUidForMemo || !_currentTeamIdForMemo) return;
+  const text = dom.prefMemoTextarea.value;
+  try {
+    await saveUserMemo(_currentUidForMemo, _currentTeamIdForMemo, text);
+    dom.prefMemoStatus.textContent = "Saved";
+    setTimeout(() => { dom.prefMemoStatus.textContent = ""; }, 2000);
+  } catch {
+    dom.prefMemoStatus.textContent = "Save failed";
+  }
+};
+
+dom.prefMemoTextarea.addEventListener("input", () => {
+  dom.prefMemoStatus.textContent = "Saving…";
+  if (_memoSaveTimer) clearTimeout(_memoSaveTimer);
+  _memoSaveTimer = setTimeout(() => { void saveMemoNow(); }, 800);
+});
+
+dom.prefMemoTogglePreview.addEventListener("click", () => {
+  _memoPreviewMode = !_memoPreviewMode;
+  if (_memoPreviewMode) {
+    dom.prefMemoPreview.innerHTML = renderMarkdown(dom.prefMemoTextarea.value);
+    dom.prefMemoPreview.hidden = false;
+    dom.prefMemoTextarea.hidden = true;
+    dom.prefMemoTogglePreview.textContent = "Edit";
+  } else {
+    dom.prefMemoPreview.hidden = true;
+    dom.prefMemoTextarea.hidden = false;
+    dom.prefMemoTogglePreview.textContent = "Preview";
+  }
+});
+
+document.querySelectorAll<HTMLButtonElement>(".pref-memo-format-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const fmt = btn.dataset.format!;
+    const ta = dom.prefMemoTextarea;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const sel = ta.value.slice(start, end);
+    let insertion = "";
+    let cursorOffset = 0;
+    if (fmt === "bold") { insertion = `**${sel || "bold text"}**`; cursorOffset = sel ? insertion.length : 2; }
+    else if (fmt === "italic") { insertion = `*${sel || "italic text"}*`; cursorOffset = sel ? insertion.length : 1; }
+    else if (fmt === "heading") { insertion = `# ${sel || "Heading"}`; cursorOffset = insertion.length; }
+    else if (fmt === "list") { insertion = `- ${sel || "item"}`; cursorOffset = insertion.length; }
+    ta.setRangeText(insertion, start, end, "end");
+    ta.selectionStart = ta.selectionEnd = start + cursorOffset;
+    ta.focus();
+    ta.dispatchEvent(new Event("input"));
+  });
+});
+
+const buildWeekendDisableFn = (): [(date: Date) => boolean] => {
+  const workWeekendSet = new Set(getPreferences().workWeekends);
+  return [
+    (date: Date) =>
+      (date.getDay() !== 0 && date.getDay() !== 6) || workWeekendSet.has(localIso(date)),
+  ];
+};
+
+const buildHolidayDisableFn = (): [(date: Date) => boolean] => {
+  const holidaySet = new Set(getPreferences().holidays.map((h) => h.date));
+  return [
+    (date: Date) =>
+      date.getDay() === 0 || date.getDay() === 6 || holidaySet.has(localIso(date)),
+  ];
+};
+
+const showMemberProfilePopup = (name: string): void => {
+  document.getElementById("memberProfilePopup")?.remove();
+  const p = _teamMemberProfiles.find((m) => m.displayName === name);
+
+  const popup = document.createElement("div");
+  popup.id = "memberProfilePopup";
+  popup.className = "team-modal-overlay";
+  popup.innerHTML = `
+    <div class="team-modal member-profile-popup">
+      <div class="member-profile-popup-header">
+        <span class="member-profile-popup-avatar">${Array.from(name)[0]?.toUpperCase() ?? "?"}</span>
+        <div>
+          <div class="member-profile-popup-name">${name}</div>
+          ${p ? `<div class="member-profile-popup-role">${p.role.replace("_", " ")}</div>` : ""}
+        </div>
+        <button class="modal-close member-profile-popup-close">&times;</button>
+      </div>
+      <div class="member-profile-popup-fields">
+        <div class="member-profile-popup-row">
+          <span class="member-profile-popup-label">Email</span>
+          <span class="member-profile-popup-value">${p ? p.email : "—"}</span>
+        </div>
+        <div class="member-profile-popup-row">
+          <span class="member-profile-popup-label">Phone</span>
+          <span class="member-profile-popup-value">${p?.phoneNumber || "—"}</span>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(popup);
+  popup.addEventListener("click", (e) => { if (e.target === popup) popup.remove(); });
+  popup.querySelector(".member-profile-popup-close")!.addEventListener("click", () => popup.remove());
+};
+
+const refreshHolidayDisable = (): void => {
+  if (fpPrefHoliday) {
+    fpPrefHoliday.set("disable", buildHolidayDisableFn());
+  }
+};
+
 const renderPrefLists = (): void => {
   const prefs = getPreferences();
+
+  // Sync picker disabled dates
+  refreshHolidayDisable();
+  if (fpPrefWeekend) fpPrefWeekend.set("disable", buildWeekendDisableFn());
 
   dom.prefHolidayList.innerHTML = "";
   for (const h of prefs.holidays) {
@@ -470,17 +614,20 @@ const renderPrefLists = (): void => {
     dom.prefWeekendList.appendChild(row);
   }
 
+  // Members are read-only — click a row to view full profile
   dom.prefMemberList.innerHTML = "";
   const members = getMembers();
-  for (const name of members) {
-    const row = document.createElement("div");
-    row.className = "pref-list-row";
-    row.innerHTML = `<span class="pref-list-name">${name}</span><button class="btn ghost small pref-list-delete">&times;</button>`;
-    row.querySelector(".pref-list-delete")!.addEventListener("click", () => {
-      removeMember(name);
-      renderPrefLists();
-    });
-    dom.prefMemberList.appendChild(row);
+  if (members.length === 0) {
+    dom.prefMemberList.innerHTML = "<em class='pref-hint'>No members yet. Add members via the Team screen.</em>";
+  } else {
+    for (const name of members) {
+      const row = document.createElement("div");
+      row.className = "pref-list-row pref-member-row-clickable";
+      row.title = "Click to view profile";
+      row.innerHTML = `<span class="pref-list-name">${name}</span><span class="pref-member-row-hint">›</span>`;
+      row.addEventListener("click", () => showMemberProfilePopup(name));
+      dom.prefMemberList.appendChild(row);
+    }
   }
 };
 
@@ -490,10 +637,26 @@ const openPreferences = (): void => {
   dom.prefHolidayName.value = "";
   dom.prefWeekendDate.value = "";
 
+  // Reset memo preview mode
+  _memoPreviewMode = false;
+  dom.prefMemoPreview.hidden = true;
+  dom.prefMemoTextarea.hidden = false;
+  dom.prefMemoTogglePreview.textContent = "Preview";
+  dom.prefMemoStatus.textContent = "";
+
+  // Load memo for current user/team
+  if (_currentUidForMemo && _currentTeamIdForMemo) {
+    dom.prefMemoTextarea.value = "";
+    getUserMemo(_currentUidForMemo, _currentTeamIdForMemo)
+      .then((text) => { dom.prefMemoTextarea.value = text; })
+      .catch(() => {});
+  }
+
   if (fpPrefHoliday) fpPrefHoliday.destroy();
   fpPrefHoliday = flatpickr(dom.prefHolidayDate, {
     dateFormat: "Y-m-d",
     disableMobile: true,
+    disable: buildHolidayDisableFn(),
     onOpen: (_: Date[], __: string, instance: FlatpickrInstance) => fixCalendarPosition(instance),
   });
 
@@ -501,7 +664,7 @@ const openPreferences = (): void => {
   fpPrefWeekend = flatpickr(dom.prefWeekendDate, {
     dateFormat: "Y-m-d",
     disableMobile: true,
-    disable: [(date: Date) => date.getDay() !== 0 && date.getDay() !== 6],
+    disable: buildWeekendDisableFn(),
     onOpen: (_: Date[], __: string, instance: FlatpickrInstance) => fixCalendarPosition(instance),
   });
 
@@ -509,6 +672,8 @@ const openPreferences = (): void => {
 };
 
 const closePreferences = (): void => {
+  // Flush any pending memo save
+  if (_memoSaveTimer) { clearTimeout(_memoSaveTimer); _memoSaveTimer = null; void saveMemoNow(); }
   dom.preferencesModal.hidden = true;
   if (fpPrefHoliday) { fpPrefHoliday.destroy(); fpPrefHoliday = null; }
   if (fpPrefWeekend) { fpPrefWeekend.destroy(); fpPrefWeekend = null; }
@@ -529,7 +694,7 @@ dom.prefHolidayAddBtn.addEventListener("click", () => {
   addHoliday(date, name);
   dom.prefHolidayDate.value = "";
   dom.prefHolidayName.value = "";
-  if (fpPrefHoliday) fpPrefHoliday.clear();
+  if (fpPrefHoliday) { fpPrefHoliday.clear(); fpPrefHoliday.set("disable", buildHolidayDisableFn()); }
   renderPrefLists();
 });
 
@@ -538,20 +703,8 @@ dom.prefWeekendAddBtn.addEventListener("click", () => {
   if (!date) return;
   addWorkWeekend(date);
   dom.prefWeekendDate.value = "";
-  if (fpPrefWeekend) fpPrefWeekend.clear();
+  if (fpPrefWeekend) { fpPrefWeekend.clear(); fpPrefWeekend.set("disable", buildWeekendDisableFn()); }
   renderPrefLists();
-});
-
-const commitAddMember = (): void => {
-  const name = dom.prefMemberName.value.trim();
-  if (!name) return;
-  addMember(name);
-  dom.prefMemberName.value = "";
-  renderPrefLists();
-};
-dom.prefMemberAddBtn.addEventListener("click", commitAddMember);
-dom.prefMemberName.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") { e.preventDefault(); commitAddMember(); }
 });
 
 // --- Clear task highlight on any click ---
@@ -581,6 +734,7 @@ const hideApp = (): void => {
 // Stored so the Switch Team button can re-open the team screen
 let _activeUser: User | null = null;
 let _activeProfile: UserProfile | null = null;
+let _teamMemberProfiles: UserProfile[] = [];
 
 const goToTeamScreen = (): void => {
   if (!_activeUser || !_activeProfile) return;
@@ -590,20 +744,49 @@ const goToTeamScreen = (): void => {
   });
 };
 
+const updateHeaderUser = (profile: UserProfile): void => {
+  const btn = document.getElementById("headerUserName") as HTMLButtonElement;
+  btn.textContent = profile.displayName;
+};
+
 const startApp = async (teamId: string, profile: UserProfile, teamName: string): Promise<void> => {
   await setCurrentTeam(teamId);
   hideAllScreens();
   showApp();
 
+  // Store context for memo and profile edit
+  _currentTeamIdForMemo = teamId;
+  _currentUidForMemo = profile.uid;
+
   const headerUserInfo = document.getElementById("headerUserInfo") as HTMLElement;
   headerUserInfo.hidden = false;
-  (document.getElementById("headerUserName") as HTMLElement).textContent = profile.displayName;
+  updateHeaderUser(profile);
   (document.getElementById("headerTeamName") as HTMLElement).textContent = teamName;
+
+  // Sync preferences.members with the actual Firebase team member display names.
+  // This ensures the list is always up-to-date regardless of how members were added.
+  try {
+    const team = await getTeamById(teamId);
+    if (team) {
+      const memberProfiles = await getUsersByIds(team.memberIds);
+      _teamMemberProfiles = memberProfiles;
+      replaceMembers(memberProfiles.map((p) => p.displayName));
+    }
+  } catch { /* non-critical — preferences.members stays as-is */ }
 
   render();
 };
 
 document.getElementById("switchTeamBtn")?.addEventListener("click", goToTeamScreen);
+
+// Profile edit via header name button
+document.getElementById("headerUserName")?.addEventListener("click", () => {
+  if (!_activeProfile) return;
+  showProfileEditModal(_activeProfile, false, (updated) => {
+    _activeProfile = updated;
+    updateHeaderUser(updated);
+  });
+});
 
 if (!isFirebaseConfigured) {
   // No Firebase config — legacy single-user mode (localStorage only)
@@ -614,11 +797,21 @@ if (!isFirebaseConfigured) {
     async (user) => {
       try {
         _activeUser = user;
-        const profile = await ensureUserProfile(user);
+        const { profile, isNew } = await ensureUserProfile(user);
         _activeProfile = profile;
-        showTeamScreen(user, profile, (teamId, teamName) => {
-          startApp(teamId, profile, teamName);
-        });
+        if (isNew) {
+          // Show profile completion modal for first-time users
+          showProfileEditModal(profile, true, (updated) => {
+            _activeProfile = updated;
+            showTeamScreen(user, updated, (teamId, teamName) => {
+              startApp(teamId, updated, teamName);
+            });
+          });
+        } else {
+          showTeamScreen(user, profile, (teamId, teamName) => {
+            startApp(teamId, profile, teamName);
+          });
+        }
       } catch (e) {
         console.error("Auth error:", e);
         showLoginScreen();
@@ -627,6 +820,8 @@ if (!isFirebaseConfigured) {
     () => {
       _activeUser = null;
       _activeProfile = null;
+      _currentTeamIdForMemo = null;
+      _currentUidForMemo = null;
       hideApp();
       const headerUserInfo = document.getElementById("headerUserInfo");
       if (headerUserInfo) headerUserInfo.hidden = true;

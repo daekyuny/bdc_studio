@@ -118,10 +118,13 @@
     prefWeekendDate: $("prefWeekendDate"),
     prefWeekendAddBtn: $("prefWeekendAddBtn"),
     prefWeekendList: $("prefWeekendList"),
-    // Members
-    prefMemberName: $("prefMemberName"),
-    prefMemberAddBtn: $("prefMemberAddBtn"),
-    prefMemberList: $("prefMemberList")
+    // Members (read-only in preferences, managed via Team screen)
+    prefMemberList: $("prefMemberList"),
+    // Memo
+    prefMemoTextarea: $("prefMemoTextarea"),
+    prefMemoPreview: $("prefMemoPreview"),
+    prefMemoTogglePreview: $("prefMemoTogglePreview"),
+    prefMemoStatus: $("prefMemoStatus")
   };
 
   // src/utils.ts
@@ -8763,7 +8766,7 @@
   var EventType;
   var ErrorCode;
   var Stat;
-  var Event;
+  var Event2;
   var getStatEventTarget;
   var createWebChannelTransport;
   (function() {
@@ -10791,7 +10794,7 @@
     getStatEventTarget = webchannel_blob_es2018.getStatEventTarget = function() {
       return jb();
     };
-    Event = webchannel_blob_es2018.Event = I;
+    Event2 = webchannel_blob_es2018.Event = I;
     Stat = webchannel_blob_es2018.Stat = { jb: 0, mb: 1, nb: 2, Hb: 3, Mb: 4, Jb: 5, Kb: 6, Ib: 7, Gb: 8, Lb: 9, PROXY: 10, NOPROXY: 11, Eb: 12, Ab: 13, Bb: 14, zb: 15, Cb: 16, Db: 17, fb: 18, eb: 19, gb: 20 };
     ub.NO_ERROR = 0;
     ub.TIMEOUT = 8;
@@ -16895,7 +16898,7 @@ Total Duration: ${a - u}ms`);
     static u_() {
       if (!___PRIVATE_WebChannelConnection.c_) {
         const e = getStatEventTarget();
-        __PRIVATE_unguardedEventListen(e, Event.STAT_EVENT, ((e2) => {
+        __PRIVATE_unguardedEventListen(e, Event2.STAT_EVENT, ((e2) => {
           e2.stat === Stat.PROXY ? __PRIVATE_logDebug(zt, "STAT_EVENT: detected buffering proxy") : e2.stat === Stat.NOPROXY && __PRIVATE_logDebug(zt, "STAT_EVENT: detected no buffering proxy");
         })), ___PRIVATE_WebChannelConnection.c_ = true;
       }
@@ -20357,6 +20360,9 @@ This typically indicates that your device does not have a healthy Internet conne
       );
     }
   };
+  function deleteField() {
+    return new __PRIVATE_DeleteFieldValueImpl("deleteField");
+  }
   function arrayUnion(...e) {
     return new __PRIVATE_ArrayUnionFieldValueImpl("arrayUnion", e);
   }
@@ -20944,6 +20950,13 @@ This typically indicates that your device does not have a healthy Internet conne
   var createUserProfile = async (profile) => {
     await setDoc(doc(db, "users", profile.uid), profile);
   };
+  var updateUserProfile = async (uid, updates) => {
+    const firestoreUpdates = { ...updates };
+    if ("phoneNumber" in updates && updates.phoneNumber === null) {
+      firestoreUpdates.phoneNumber = deleteField();
+    }
+    await updateDoc(doc(db, "users", uid), firestoreUpdates);
+  };
   var getTeamsForUser = async (userId, role) => {
     if (role === "super_manager") {
       const snap2 = await getDocs(collection(db, "teams"));
@@ -20964,18 +20977,50 @@ This typically indicates that your device does not have a healthy Internet conne
     });
     return ref.id;
   };
-  var addMemberToTeamById = async (teamId, userId) => {
+  var addMemberToTeamWithPrefs = async (teamId, userId, displayName) => {
     await updateDoc(doc(db, "teams", teamId), { memberIds: arrayUnion(userId) });
+    const appState = await loadTeamState(teamId);
+    if (appState) {
+      const name4 = displayName.trim();
+      if (name4 && !appState.preferences.members.includes(name4)) {
+        appState.preferences.members.push(name4);
+        appState.preferences.members.sort((a, b) => a.localeCompare(b));
+        await saveTeamState(teamId, appState);
+      }
+    }
   };
-  var removeMemberFromTeam = async (teamId, userId) => {
+  var removeMemberFromTeamWithPrefs = async (teamId, userId, displayName) => {
     await updateDoc(doc(db, "teams", teamId), { memberIds: arrayRemove(userId) });
+    const appState = await loadTeamState(teamId);
+    if (appState) {
+      appState.preferences.members = appState.preferences.members.filter(
+        (m) => m !== displayName.trim()
+      );
+      await saveTeamState(teamId, appState);
+    }
+  };
+  var getTeamById = async (teamId) => {
+    const snap = await getDoc(doc(db, "teams", teamId));
+    return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+  };
+  var getUsersByIds = async (uids) => {
+    if (uids.length === 0) return [];
+    const profiles = await Promise.all(uids.map((uid) => getUserProfile(uid)));
+    return profiles.filter((p) => p !== null);
   };
   var deleteTeam = async (teamId) => {
+    const teamSnap = await getDoc(doc(db, "teams", teamId));
+    const memberIds = teamSnap.exists() ? teamSnap.data().memberIds ?? [] : [];
     await deleteDoc(doc(db, "teams", teamId));
     try {
       await deleteDoc(doc(db, "appdata", teamId));
     } catch {
     }
+    await Promise.allSettled(
+      memberIds.map(
+        (uid) => updateDoc(doc(db, "users", uid), { [`memos.${teamId}`]: deleteField() })
+      )
+    );
   };
   var loadTeamState = async (teamId) => {
     const snap = await getDoc(doc(db, "appdata", teamId));
@@ -21006,6 +21051,16 @@ This typically indicates that your device does not have a healthy Internet conne
       teamsSnap.docs.map((d) => updateDoc(doc(db, "teams", d.id), { memberIds: arrayRemove(userId) }))
     );
     await deleteDoc(doc(db, "users", userId));
+  };
+  var getUserMemo = async (uid, teamId) => {
+    const snap = await getDoc(doc(db, "users", uid));
+    if (!snap.exists()) return "";
+    const data = snap.data();
+    const memos = data.memos;
+    return memos?.[teamId] ?? "";
+  };
+  var saveUserMemo = async (uid, teamId, text) => {
+    await updateDoc(doc(db, "users", uid), { [`memos.${teamId}`]: text });
   };
 
   // src/state.ts
@@ -21079,6 +21134,15 @@ This typically indicates that your device does not have a healthy Internet conne
         }
       }
       sprint.tasks = sprint.tasks.filter((t) => !t._delete);
+    }
+    for (const story of parsed.backlog?.stories ?? []) {
+      for (const task of story.tasks ?? []) {
+        if (typeof task.assignedTo === "string") {
+          task.assignedTo = task.assignedTo ? [task.assignedTo] : [];
+        } else if (!Array.isArray(task.assignedTo)) {
+          task.assignedTo = [];
+        }
+      }
     }
     return parsed;
   };
@@ -21318,7 +21382,7 @@ This typically indicates that your device does not have a healthy Internet conne
       backlogTaskId,
       taskId: foundTask.taskId,
       name: foundTask.description,
-      assignedTo: foundTask.assignedTo,
+      assignedTo: foundTask.assignedTo.join(", "),
       estimate,
       worked: 0,
       remain: estimate,
@@ -21420,7 +21484,7 @@ This typically indicates that your device does not have a healthy Internet conne
       taskId: `${story.storyId}.${taskNum}`,
       description: "",
       estimate: 0,
-      assignedTo: ""
+      assignedTo: []
     });
     save();
     onChange(H_BACKLOG_DATA);
@@ -21474,7 +21538,7 @@ This typically indicates that your device does not have a healthy Internet conne
         t.backlogTaskId = bt2.id;
         t.name = bt2.description;
         t.estimate = Number(bt2.estimate) || 0;
-        t.assignedTo = bt2.assignedTo || "";
+        t.assignedTo = bt2.assignedTo.join(", ");
         return true;
       });
     }
@@ -21506,17 +21570,8 @@ This typically indicates that your device does not have a healthy Internet conne
     onChange(H_ALL);
   };
   var getMembers = () => state.preferences.members;
-  var addMember = (name4) => {
-    const trimmed = name4.trim();
-    if (!trimmed) return;
-    if (state.preferences.members.includes(trimmed)) return;
-    state.preferences.members.push(trimmed);
-    state.preferences.members.sort((a, b) => a.localeCompare(b));
-    save();
-    onChange(H_ALL);
-  };
-  var removeMember = (name4) => {
-    state.preferences.members = state.preferences.members.filter((m) => m !== name4);
+  var replaceMembers = (names) => {
+    state.preferences.members = [...names].sort((a, b) => a.localeCompare(b));
     save();
     onChange(H_ALL);
   };
@@ -21991,7 +22046,7 @@ ${marker.label}`;
         for (const story of backlog.stories) {
           const bt2 = story.tasks.find((t) => t.id === task.backlogTaskId);
           if (bt2) {
-            currentAssigned = bt2.assignedTo || "";
+            currentAssigned = bt2.assignedTo.length > 0 ? bt2.assignedTo.join(", ") : "";
             parentStoryDesc = story.description || "";
             break;
           }
@@ -22169,7 +22224,7 @@ ${marker.label}`;
       if (parentStory?.description) bpTaskId.title = parentStory.description;
       const bpDesc = row.querySelector(".bp-description");
       bpDesc.textContent = task.description;
-      if (task.assignedTo) bpDesc.title = task.assignedTo;
+      if (task.assignedTo.length > 0) bpDesc.title = task.assignedTo.join(", ");
       row.querySelector(".bp-estimate").textContent = String(task.estimate ?? "");
       if (!isSprintActive) {
         row.draggable = false;
@@ -22194,6 +22249,69 @@ ${marker.label}`;
     });
   };
   var STORY_SORT_KEYS = /* @__PURE__ */ new Set(["storyId", "description", "priority"]);
+  var openAssignedPicker = (current, members, onDone) => {
+    const overlay = document.createElement("div");
+    overlay.className = "team-modal-overlay";
+    overlay.style.zIndex = "1100";
+    const modal = document.createElement("div");
+    modal.className = "team-modal";
+    modal.style.cssText = "max-width:300px;padding:20px;max-height:80vh;overflow-y:auto;";
+    const title = document.createElement("h3");
+    title.textContent = "Assign Members";
+    title.style.cssText = "margin:0 0 14px;font-size:1rem;";
+    modal.appendChild(title);
+    const currentSet = new Set(current);
+    const checkboxes = [];
+    const makeRow = (value, label, checked) => {
+      const wrap2 = document.createElement("label");
+      wrap2.className = "assigned-cb-label";
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.value = value;
+      cb.checked = checked;
+      wrap2.appendChild(cb);
+      wrap2.append(" " + label);
+      return wrap2;
+    };
+    const noneRow = makeRow("", "None", current.length === 0);
+    const noneCb = noneRow.querySelector("input");
+    modal.appendChild(noneRow);
+    for (const m of members) {
+      const row = makeRow(m, m, currentSet.has(m));
+      const cb = row.querySelector("input");
+      checkboxes.push({ cb, value: m });
+      modal.appendChild(row);
+    }
+    noneCb.addEventListener("change", () => {
+      if (noneCb.checked) checkboxes.forEach(({ cb }) => {
+        cb.checked = false;
+      });
+    });
+    checkboxes.forEach(({ cb }) => {
+      cb.addEventListener("change", () => {
+        noneCb.checked = !checkboxes.some(({ cb: c }) => c.checked);
+      });
+    });
+    const footer = document.createElement("div");
+    footer.style.cssText = "display:flex;justify-content:flex-end;margin-top:16px;";
+    const doneBtn = document.createElement("button");
+    doneBtn.className = "btn btn-primary";
+    doneBtn.textContent = "Done";
+    footer.appendChild(doneBtn);
+    modal.appendChild(footer);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    const close = () => {
+      document.body.removeChild(overlay);
+    };
+    doneBtn.addEventListener("click", () => {
+      onDone(checkboxes.filter(({ cb }) => cb.checked).map(({ value }) => value));
+      close();
+    });
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) close();
+    });
+  };
   var renderBacklog = () => {
     const backlog = getBacklog();
     if (!backlog) return;
@@ -22311,7 +22429,7 @@ ${marker.label}`;
           const taskEstView = taskRow.querySelector(".task-estimate-view");
           const taskEstEdit = taskRow.querySelector(".task-estimate-edit");
           const taskAssignedView = taskRow.querySelector(".task-assigned-view");
-          const taskAssignedEdit = taskRow.querySelector(".task-assigned-edit");
+          const taskAssignedDropdown = taskRow.querySelector(".task-assigned-dropdown");
           const taskEditBtn = taskRow.querySelector(".task-edit-btn");
           const taskSaveBtn = taskRow.querySelector(".task-save-btn");
           const taskCancelBtn = taskRow.querySelector(".task-cancel-btn");
@@ -22319,8 +22437,9 @@ ${marker.label}`;
           taskIdView.textContent = task.taskId || "";
           taskDescView.textContent = task.description || "";
           taskEstView.textContent = String(task.estimate ?? "");
-          taskAssignedView.textContent = task.assignedTo || "";
+          taskAssignedView.textContent = task.assignedTo.length > 0 ? task.assignedTo.join(", ") : "\u2014";
           if (assignedIds.has(task.id)) taskRow.classList.add("assigned");
+          let _assignedSelection = [...task.assignedTo];
           if (isTaskEditing) {
             taskRow.classList.add("row-editing");
             taskIdView.hidden = true;
@@ -22333,26 +22452,15 @@ ${marker.label}`;
             taskEstEdit.hidden = false;
             taskEstEdit.value = String(task.estimate ?? "");
             taskAssignedView.hidden = true;
-            taskAssignedEdit.hidden = false;
-            taskAssignedEdit.innerHTML = "";
-            const members = getMembers();
-            const emptyOpt = document.createElement("option");
-            emptyOpt.value = "";
-            emptyOpt.textContent = "\u2014";
-            taskAssignedEdit.appendChild(emptyOpt);
-            for (const m of members) {
-              const opt = document.createElement("option");
-              opt.value = m;
-              opt.textContent = m;
-              taskAssignedEdit.appendChild(opt);
-            }
-            if (task.assignedTo && !members.includes(task.assignedTo)) {
-              const legacyOpt = document.createElement("option");
-              legacyOpt.value = task.assignedTo;
-              legacyOpt.textContent = task.assignedTo;
-              taskAssignedEdit.appendChild(legacyOpt);
-            }
-            taskAssignedEdit.value = task.assignedTo || "";
+            taskAssignedDropdown.hidden = false;
+            taskAssignedDropdown.className = "task-assigned-clickable";
+            taskAssignedDropdown.textContent = _assignedSelection.length > 0 ? _assignedSelection.join(", ") : "\u2014";
+            taskAssignedDropdown.addEventListener("click", () => {
+              openAssignedPicker(_assignedSelection, getMembers(), (selected) => {
+                _assignedSelection = selected;
+                taskAssignedDropdown.textContent = _assignedSelection.length > 0 ? _assignedSelection.join(", ") : "\u2014";
+              });
+            });
             taskEditBtn.hidden = true;
             taskSaveBtn.hidden = false;
             taskCancelBtn.hidden = false;
@@ -22369,7 +22477,7 @@ ${marker.label}`;
               taskId: taskIdEdit.value.trim(),
               description: taskDescEdit.value.trim(),
               estimate: Number(taskEstEdit.value) || 0,
-              assignedTo: taskAssignedEdit.value.trim()
+              assignedTo: _assignedSelection
             });
           });
           taskCancelBtn.addEventListener("click", () => {
@@ -22756,9 +22864,9 @@ ${marker.label}`;
       } else {
         story.tasks.forEach((task, i) => {
           if (i === 0) {
-            aoa.push([story.storyId, story.description, story.priority ?? 100, task.taskId, task.description, task.estimate, task.assignedTo]);
+            aoa.push([story.storyId, story.description, story.priority ?? 100, task.taskId, task.description, task.estimate, task.assignedTo.join(", ")]);
           } else {
-            aoa.push(["", "", "", task.taskId, task.description, task.estimate, task.assignedTo]);
+            aoa.push(["", "", "", task.taskId, task.description, task.estimate, task.assignedTo.join(", ")]);
           }
         });
       }
@@ -22799,7 +22907,8 @@ ${marker.label}`;
         const taskDesc = String(cols[4] ?? "").trim();
         const estimateRaw = parseFloat(String(cols[5] ?? ""));
         const estimate = isNaN(estimateRaw) ? 0 : estimateRaw;
-        const assignedTo = String(cols[6] ?? "").trim();
+        const assignedToRaw = String(cols[6] ?? "").trim();
+        const assignedTo = assignedToRaw ? assignedToRaw.split(",").map((s) => s.trim()).filter(Boolean) : [];
         if (storyId) {
           currentStory = { id: createId(), storyId, description: storyDesc, priority, tasks: [] };
           stories.push(currentStory);
@@ -22837,7 +22946,7 @@ ${marker.label}`;
       replaceBacklog({ stories });
       relinkSprintTasks();
       const uniqueNames = [...new Set(
-        stories.flatMap((s) => s.tasks.map((t) => t.assignedTo)).filter(Boolean)
+        stories.flatMap((s) => s.tasks.flatMap((t) => t.assignedTo)).filter(Boolean)
       )];
       if (uniqueNames.length > 0) addMembersFromImport(uniqueNames);
     };
@@ -22878,7 +22987,7 @@ ${marker.label}`;
   };
   var ensureUserProfile = async (user) => {
     const existing = await getUserProfile(user.uid);
-    if (existing) return existing;
+    if (existing) return { profile: existing, isNew: false };
     const profile = {
       uid: user.uid,
       email: user.email ?? "",
@@ -22887,7 +22996,7 @@ ${marker.label}`;
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     await createUserProfile(profile);
-    return profile;
+    return { profile, isNew: true };
   };
 
   // src/screens.ts
@@ -22919,12 +23028,12 @@ ${marker.label}`;
         <h1 class="screen-title">Burndown Studio</h1>
         <p class="screen-subtitle">Track your team's sprint progress in real time.</p>
         <div class="login-actions">
-          <button class="btn login-google-btn" id="loginGoogleBtn">
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908C16.658 14.234 17.64 11.926 17.64 9.2z" fill="#4285F4"/>
-              <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/>
-              <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
-              <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+          <button class="login-google-btn" id="loginGoogleBtn">
+            <svg width="16" height="16" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908C16.658 14.234 17.64 11.926 17.64 9.2z" fill="#888"/>
+              <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#888"/>
+              <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#888"/>
+              <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#888"/>
             </svg>
             Sign in with Google
           </button>
@@ -23170,25 +23279,32 @@ All shared sprint data for this team will be permanently removed.`)) return;
       }
       const members = allUsers.filter((u) => team.memberIds.includes(u.uid));
       const available = allUsers.filter((u) => !team.memberIds.includes(u.uid));
+      const memberRow = (u, isRemovable) => {
+        const phone = u.phoneNumber ? `<span class="member-phone">${escapeHtml(u.phoneNumber)}</span>` : "";
+        return `
+        <div class="manage-member-row" data-uid="${u.uid}" data-name="${escapeHtml(u.displayName)}">
+          <div class="manage-member-info">
+            <span class="member-name">${escapeHtml(u.displayName)}</span>
+            <span class="member-email">${escapeHtml(u.email)}</span>
+            ${phone}
+          </div>
+          ${isRemovable ? `<button class="btn ghost small danger member-remove-btn"
+            data-uid="${u.uid}" data-name="${escapeHtml(u.displayName)}"
+            ${u.uid === profile.uid ? "disabled title='Cannot remove yourself'" : ""}>Remove</button>` : ""}
+        </div>
+      `;
+      };
       if (members.length === 0) {
         currentEl.innerHTML = "<em>No members yet.</em>";
       } else {
-        currentEl.innerHTML = members.map((u) => `
-        <div class="manage-member-row" data-uid="${u.uid}">
-          <div class="manage-member-info">
-            <span class="member-email">${escapeHtml(u.email)}</span>
-            <span class="member-name">${escapeHtml(u.displayName)}</span>
-          </div>
-          <button class="btn ghost small danger member-remove-btn"
-            data-uid="${u.uid}" ${u.uid === profile.uid ? "disabled title='Cannot remove yourself'" : ""}>Remove</button>
-        </div>
-      `).join("");
+        currentEl.innerHTML = members.map((u) => memberRow(u, true)).join("");
         currentEl.querySelectorAll(".member-remove-btn").forEach((btn) => {
           btn.addEventListener("click", async () => {
             const uid = btn.dataset.uid;
+            const displayName = btn.dataset.name;
             errEl.hidden = true;
             try {
-              await removeMemberFromTeam(team.id, uid);
+              await removeMemberFromTeamWithPrefs(team.id, uid, displayName);
               team.memberIds = team.memberIds.filter((id) => id !== uid);
               refresh();
             } catch (e) {
@@ -23202,20 +23318,22 @@ All shared sprint data for this team will be permanently removed.`)) return;
         availableEl.innerHTML = "<em>All registered users are already members.</em>";
       } else {
         availableEl.innerHTML = available.map((u) => `
-        <div class="manage-member-row available" data-uid="${u.uid}">
+        <div class="manage-member-row available" data-uid="${u.uid}" data-name="${escapeHtml(u.displayName)}">
           <div class="manage-member-info">
-            <span class="member-email">${escapeHtml(u.email)}</span>
             <span class="member-name">${escapeHtml(u.displayName)}</span>
+            <span class="member-email">${escapeHtml(u.email)}</span>
+            ${u.phoneNumber ? `<span class="member-phone">${escapeHtml(u.phoneNumber)}</span>` : ""}
           </div>
-          <button class="btn small member-add-btn" data-uid="${u.uid}">Add</button>
+          <button class="btn small member-add-btn" data-uid="${u.uid}" data-name="${escapeHtml(u.displayName)}">Add</button>
         </div>
       `).join("");
         availableEl.querySelectorAll(".member-add-btn").forEach((btn) => {
           btn.addEventListener("click", async () => {
             const uid = btn.dataset.uid;
+            const displayName = btn.dataset.name;
             errEl.hidden = true;
             try {
-              await addMemberToTeamById(team.id, uid);
+              await addMemberToTeamWithPrefs(team.id, uid, displayName);
               team.memberIds.push(uid);
               refresh();
             } catch (e) {
@@ -23321,6 +23439,66 @@ They will be removed from all teams and lose access. Their Auth account remains 
     } catch (e) {
       tableEl.innerHTML = `<em>Failed to load users: ${e instanceof Error ? escapeHtml(e.message) : "Unknown error"}</em>`;
     }
+  };
+  var showProfileEditModal = (profile, isNew, onSaved) => {
+    document.getElementById("profileEditModal")?.remove();
+    const modal = document.createElement("div");
+    modal.id = "profileEditModal";
+    modal.className = "team-modal-overlay";
+    modal.innerHTML = `
+    <div class="team-modal">
+      <h3>${isNew ? "Complete Your Profile" : "Edit Profile"}</h3>
+      ${isNew ? '<p class="pref-hint">Welcome! Please confirm your name and optionally add your phone number.</p>' : ""}
+      <div class="profile-email-row">${escapeHtml(profile.email)}</div>
+      <label class="screen-label">
+        Name
+        <input type="text" id="profileNameInput" class="screen-input" value="${isNew ? "" : escapeHtml(profile.displayName)}" placeholder="Your name" />
+      </label>
+      <label class="screen-label">
+        Phone Number <span class="label-optional">(optional)</span>
+        <input type="tel" id="profilePhoneInput" class="screen-input" value="${escapeHtml(profile.phoneNumber ?? "")}" placeholder="e.g. 010-1234-5678" />
+      </label>
+      <div class="screen-error" id="profileEditError" hidden></div>
+      <div class="team-modal-footer">
+        ${isNew ? "" : '<button class="btn ghost" id="profileEditCancel">Cancel</button>'}
+        <button class="btn" id="profileEditSave">Save</button>
+      </div>
+    </div>
+  `;
+    document.body.appendChild(modal);
+    if (!isNew) {
+      modal.addEventListener("click", (e) => {
+        if (e.target === modal) modal.remove();
+      });
+      document.getElementById("profileEditCancel").addEventListener("click", () => modal.remove());
+    }
+    const doSave = async () => {
+      const name4 = document.getElementById("profileNameInput").value.trim();
+      const phone = document.getElementById("profilePhoneInput").value.trim();
+      const errEl = document.getElementById("profileEditError");
+      errEl.hidden = true;
+      if (!name4) {
+        errEl.textContent = "Name cannot be empty.";
+        errEl.hidden = false;
+        return;
+      }
+      try {
+        await updateUserProfile(profile.uid, { displayName: name4, phoneNumber: phone || null });
+        const updated = { ...profile, displayName: name4 };
+        if (phone) updated.phoneNumber = phone;
+        else delete updated.phoneNumber;
+        modal.remove();
+        onSaved(updated);
+      } catch (e) {
+        errEl.textContent = e instanceof Error ? e.message : "Failed to save profile.";
+        errEl.hidden = false;
+      }
+    };
+    document.getElementById("profileEditSave").addEventListener("click", doSave);
+    document.getElementById("profileNameInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") doSave();
+    });
+    setTimeout(() => document.getElementById("profileNameInput").focus(), 50);
   };
 
   // src/main.ts
@@ -23679,8 +23857,155 @@ They will be removed from all teams and lose access. Their Auth account remains 
   })();
   var fpPrefHoliday = null;
   var fpPrefWeekend = null;
+  var renderMarkdown = (text) => {
+    const lines = text.split("\n");
+    const out = [];
+    let inList = false;
+    for (const raw of lines) {
+      let line = raw.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/\*(.+?)\*/g, "<em>$1</em>").replace(/`(.+?)`/g, "<code>$1</code>");
+      if (/^# (.+)/.test(line)) {
+        if (inList) {
+          out.push("</ul>");
+          inList = false;
+        }
+        out.push(`<h3>${line.replace(/^# /, "")}</h3>`);
+      } else if (/^[-*] (.+)/.test(line)) {
+        if (!inList) {
+          out.push("<ul>");
+          inList = true;
+        }
+        out.push(`<li>${line.replace(/^[-*] /, "")}</li>`);
+      } else {
+        if (inList) {
+          out.push("</ul>");
+          inList = false;
+        }
+        out.push(line === "" ? "<br>" : `<p>${line}</p>`);
+      }
+    }
+    if (inList) out.push("</ul>");
+    return out.join("");
+  };
+  var _memoSaveTimer = null;
+  var _currentTeamIdForMemo = null;
+  var _currentUidForMemo = null;
+  var _memoPreviewMode = false;
+  var saveMemoNow = async () => {
+    if (!_currentUidForMemo || !_currentTeamIdForMemo) return;
+    const text = dom.prefMemoTextarea.value;
+    try {
+      await saveUserMemo(_currentUidForMemo, _currentTeamIdForMemo, text);
+      dom.prefMemoStatus.textContent = "Saved";
+      setTimeout(() => {
+        dom.prefMemoStatus.textContent = "";
+      }, 2e3);
+    } catch {
+      dom.prefMemoStatus.textContent = "Save failed";
+    }
+  };
+  dom.prefMemoTextarea.addEventListener("input", () => {
+    dom.prefMemoStatus.textContent = "Saving\u2026";
+    if (_memoSaveTimer) clearTimeout(_memoSaveTimer);
+    _memoSaveTimer = setTimeout(() => {
+      void saveMemoNow();
+    }, 800);
+  });
+  dom.prefMemoTogglePreview.addEventListener("click", () => {
+    _memoPreviewMode = !_memoPreviewMode;
+    if (_memoPreviewMode) {
+      dom.prefMemoPreview.innerHTML = renderMarkdown(dom.prefMemoTextarea.value);
+      dom.prefMemoPreview.hidden = false;
+      dom.prefMemoTextarea.hidden = true;
+      dom.prefMemoTogglePreview.textContent = "Edit";
+    } else {
+      dom.prefMemoPreview.hidden = true;
+      dom.prefMemoTextarea.hidden = false;
+      dom.prefMemoTogglePreview.textContent = "Preview";
+    }
+  });
+  document.querySelectorAll(".pref-memo-format-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const fmt = btn.dataset.format;
+      const ta = dom.prefMemoTextarea;
+      const start = ta.selectionStart;
+      const end = ta.selectionEnd;
+      const sel = ta.value.slice(start, end);
+      let insertion = "";
+      let cursorOffset = 0;
+      if (fmt === "bold") {
+        insertion = `**${sel || "bold text"}**`;
+        cursorOffset = sel ? insertion.length : 2;
+      } else if (fmt === "italic") {
+        insertion = `*${sel || "italic text"}*`;
+        cursorOffset = sel ? insertion.length : 1;
+      } else if (fmt === "heading") {
+        insertion = `# ${sel || "Heading"}`;
+        cursorOffset = insertion.length;
+      } else if (fmt === "list") {
+        insertion = `- ${sel || "item"}`;
+        cursorOffset = insertion.length;
+      }
+      ta.setRangeText(insertion, start, end, "end");
+      ta.selectionStart = ta.selectionEnd = start + cursorOffset;
+      ta.focus();
+      ta.dispatchEvent(new Event("input"));
+    });
+  });
+  var buildWeekendDisableFn = () => {
+    const workWeekendSet = new Set(getPreferences().workWeekends);
+    return [
+      (date) => date.getDay() !== 0 && date.getDay() !== 6 || workWeekendSet.has(localIso(date))
+    ];
+  };
+  var buildHolidayDisableFn = () => {
+    const holidaySet = new Set(getPreferences().holidays.map((h) => h.date));
+    return [
+      (date) => date.getDay() === 0 || date.getDay() === 6 || holidaySet.has(localIso(date))
+    ];
+  };
+  var showMemberProfilePopup = (name4) => {
+    document.getElementById("memberProfilePopup")?.remove();
+    const p = _teamMemberProfiles.find((m) => m.displayName === name4);
+    const popup = document.createElement("div");
+    popup.id = "memberProfilePopup";
+    popup.className = "team-modal-overlay";
+    popup.innerHTML = `
+    <div class="team-modal member-profile-popup">
+      <div class="member-profile-popup-header">
+        <span class="member-profile-popup-avatar">${Array.from(name4)[0]?.toUpperCase() ?? "?"}</span>
+        <div>
+          <div class="member-profile-popup-name">${name4}</div>
+          ${p ? `<div class="member-profile-popup-role">${p.role.replace("_", " ")}</div>` : ""}
+        </div>
+        <button class="modal-close member-profile-popup-close">&times;</button>
+      </div>
+      <div class="member-profile-popup-fields">
+        <div class="member-profile-popup-row">
+          <span class="member-profile-popup-label">Email</span>
+          <span class="member-profile-popup-value">${p ? p.email : "\u2014"}</span>
+        </div>
+        <div class="member-profile-popup-row">
+          <span class="member-profile-popup-label">Phone</span>
+          <span class="member-profile-popup-value">${p?.phoneNumber || "\u2014"}</span>
+        </div>
+      </div>
+    </div>
+  `;
+    document.body.appendChild(popup);
+    popup.addEventListener("click", (e) => {
+      if (e.target === popup) popup.remove();
+    });
+    popup.querySelector(".member-profile-popup-close").addEventListener("click", () => popup.remove());
+  };
+  var refreshHolidayDisable = () => {
+    if (fpPrefHoliday) {
+      fpPrefHoliday.set("disable", buildHolidayDisableFn());
+    }
+  };
   var renderPrefLists = () => {
     const prefs = getPreferences();
+    refreshHolidayDisable();
+    if (fpPrefWeekend) fpPrefWeekend.set("disable", buildWeekendDisableFn());
     dom.prefHolidayList.innerHTML = "";
     for (const h of prefs.holidays) {
       const row = document.createElement("div");
@@ -23705,15 +24030,17 @@ They will be removed from all teams and lose access. Their Auth account remains 
     }
     dom.prefMemberList.innerHTML = "";
     const members = getMembers();
-    for (const name4 of members) {
-      const row = document.createElement("div");
-      row.className = "pref-list-row";
-      row.innerHTML = `<span class="pref-list-name">${name4}</span><button class="btn ghost small pref-list-delete">&times;</button>`;
-      row.querySelector(".pref-list-delete").addEventListener("click", () => {
-        removeMember(name4);
-        renderPrefLists();
-      });
-      dom.prefMemberList.appendChild(row);
+    if (members.length === 0) {
+      dom.prefMemberList.innerHTML = "<em class='pref-hint'>No members yet. Add members via the Team screen.</em>";
+    } else {
+      for (const name4 of members) {
+        const row = document.createElement("div");
+        row.className = "pref-list-row pref-member-row-clickable";
+        row.title = "Click to view profile";
+        row.innerHTML = `<span class="pref-list-name">${name4}</span><span class="pref-member-row-hint">\u203A</span>`;
+        row.addEventListener("click", () => showMemberProfilePopup(name4));
+        dom.prefMemberList.appendChild(row);
+      }
     }
   };
   var openPreferences = () => {
@@ -23721,22 +24048,40 @@ They will be removed from all teams and lose access. Their Auth account remains 
     dom.prefHolidayDate.value = "";
     dom.prefHolidayName.value = "";
     dom.prefWeekendDate.value = "";
+    _memoPreviewMode = false;
+    dom.prefMemoPreview.hidden = true;
+    dom.prefMemoTextarea.hidden = false;
+    dom.prefMemoTogglePreview.textContent = "Preview";
+    dom.prefMemoStatus.textContent = "";
+    if (_currentUidForMemo && _currentTeamIdForMemo) {
+      dom.prefMemoTextarea.value = "";
+      getUserMemo(_currentUidForMemo, _currentTeamIdForMemo).then((text) => {
+        dom.prefMemoTextarea.value = text;
+      }).catch(() => {
+      });
+    }
     if (fpPrefHoliday) fpPrefHoliday.destroy();
     fpPrefHoliday = flatpickr(dom.prefHolidayDate, {
       dateFormat: "Y-m-d",
       disableMobile: true,
+      disable: buildHolidayDisableFn(),
       onOpen: (_, __, instance) => fixCalendarPosition(instance)
     });
     if (fpPrefWeekend) fpPrefWeekend.destroy();
     fpPrefWeekend = flatpickr(dom.prefWeekendDate, {
       dateFormat: "Y-m-d",
       disableMobile: true,
-      disable: [(date) => date.getDay() !== 0 && date.getDay() !== 6],
+      disable: buildWeekendDisableFn(),
       onOpen: (_, __, instance) => fixCalendarPosition(instance)
     });
     renderPrefLists();
   };
   var closePreferences = () => {
+    if (_memoSaveTimer) {
+      clearTimeout(_memoSaveTimer);
+      _memoSaveTimer = null;
+      void saveMemoNow();
+    }
     dom.preferencesModal.hidden = true;
     if (fpPrefHoliday) {
       fpPrefHoliday.destroy();
@@ -23761,7 +24106,10 @@ They will be removed from all teams and lose access. Their Auth account remains 
     addHoliday(date, name4);
     dom.prefHolidayDate.value = "";
     dom.prefHolidayName.value = "";
-    if (fpPrefHoliday) fpPrefHoliday.clear();
+    if (fpPrefHoliday) {
+      fpPrefHoliday.clear();
+      fpPrefHoliday.set("disable", buildHolidayDisableFn());
+    }
     renderPrefLists();
   });
   dom.prefWeekendAddBtn.addEventListener("click", () => {
@@ -23769,22 +24117,11 @@ They will be removed from all teams and lose access. Their Auth account remains 
     if (!date) return;
     addWorkWeekend(date);
     dom.prefWeekendDate.value = "";
-    if (fpPrefWeekend) fpPrefWeekend.clear();
-    renderPrefLists();
-  });
-  var commitAddMember = () => {
-    const name4 = dom.prefMemberName.value.trim();
-    if (!name4) return;
-    addMember(name4);
-    dom.prefMemberName.value = "";
-    renderPrefLists();
-  };
-  dom.prefMemberAddBtn.addEventListener("click", commitAddMember);
-  dom.prefMemberName.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      commitAddMember();
+    if (fpPrefWeekend) {
+      fpPrefWeekend.clear();
+      fpPrefWeekend.set("disable", buildWeekendDisableFn());
     }
+    renderPrefLists();
   });
   document.addEventListener("click", (e) => {
     const target = e.target;
@@ -23802,6 +24139,7 @@ They will be removed from all teams and lose access. Their Auth account remains 
   };
   var _activeUser = null;
   var _activeProfile = null;
+  var _teamMemberProfiles = [];
   var goToTeamScreen = () => {
     if (!_activeUser || !_activeProfile) return;
     hideApp();
@@ -23809,17 +24147,39 @@ They will be removed from all teams and lose access. Their Auth account remains 
       startApp(teamId, _activeProfile, teamName);
     });
   };
+  var updateHeaderUser = (profile) => {
+    const btn = document.getElementById("headerUserName");
+    btn.textContent = profile.displayName;
+  };
   var startApp = async (teamId, profile, teamName) => {
     await setCurrentTeam(teamId);
     hideAllScreens();
     showApp();
+    _currentTeamIdForMemo = teamId;
+    _currentUidForMemo = profile.uid;
     const headerUserInfo = document.getElementById("headerUserInfo");
     headerUserInfo.hidden = false;
-    document.getElementById("headerUserName").textContent = profile.displayName;
+    updateHeaderUser(profile);
     document.getElementById("headerTeamName").textContent = teamName;
+    try {
+      const team = await getTeamById(teamId);
+      if (team) {
+        const memberProfiles = await getUsersByIds(team.memberIds);
+        _teamMemberProfiles = memberProfiles;
+        replaceMembers(memberProfiles.map((p) => p.displayName));
+      }
+    } catch {
+    }
     render();
   };
   document.getElementById("switchTeamBtn")?.addEventListener("click", goToTeamScreen);
+  document.getElementById("headerUserName")?.addEventListener("click", () => {
+    if (!_activeProfile) return;
+    showProfileEditModal(_activeProfile, false, (updated) => {
+      _activeProfile = updated;
+      updateHeaderUser(updated);
+    });
+  });
   if (!isFirebaseConfigured) {
     render();
   } else {
@@ -23828,11 +24188,20 @@ They will be removed from all teams and lose access. Their Auth account remains 
       async (user) => {
         try {
           _activeUser = user;
-          const profile = await ensureUserProfile(user);
+          const { profile, isNew } = await ensureUserProfile(user);
           _activeProfile = profile;
-          showTeamScreen(user, profile, (teamId, teamName) => {
-            startApp(teamId, profile, teamName);
-          });
+          if (isNew) {
+            showProfileEditModal(profile, true, (updated) => {
+              _activeProfile = updated;
+              showTeamScreen(user, updated, (teamId, teamName) => {
+                startApp(teamId, updated, teamName);
+              });
+            });
+          } else {
+            showTeamScreen(user, profile, (teamId, teamName) => {
+              startApp(teamId, profile, teamName);
+            });
+          }
         } catch (e) {
           console.error("Auth error:", e);
           showLoginScreen();
@@ -23841,6 +24210,8 @@ They will be removed from all teams and lose access. Their Auth account remains 
       () => {
         _activeUser = null;
         _activeProfile = null;
+        _currentTeamIdForMemo = null;
+        _currentUidForMemo = null;
         hideApp();
         const headerUserInfo = document.getElementById("headerUserInfo");
         if (headerUserInfo) headerUserInfo.hidden = true;

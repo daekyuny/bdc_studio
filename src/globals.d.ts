@@ -16,7 +16,7 @@ interface FlatpickrOptions {
   minDate?: string | Date | null;
   maxDate?: string | Date | null;
   disableMobile?: boolean;
-  disable?: Array<((date: Date) => boolean) | { from: string; to: string }>;
+  disable?: Array<((date: Date) => boolean) | { from: string; to: string } | string>;
   allowInput?: boolean;
   onChange?: (selectedDates: Date[], dateStr: string, instance: FlatpickrInstance) => void;
   onOpen?: (selectedDates: Date[], dateStr: string, instance: FlatpickrInstance) => void;

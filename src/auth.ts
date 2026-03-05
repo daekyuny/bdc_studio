@@ -53,9 +53,11 @@ export const signOut = async (): Promise<void> => {
   await firebaseSignOut(auth);
 };
 
-export const ensureUserProfile = async (user: User): Promise<UserProfile> => {
+export const ensureUserProfile = async (
+  user: User,
+): Promise<{ profile: UserProfile; isNew: boolean }> => {
   const existing = await getUserProfile(user.uid);
-  if (existing) return existing;
+  if (existing) return { profile: existing, isNew: false };
 
   const profile: UserProfile = {
     uid: user.uid,
@@ -65,5 +67,5 @@ export const ensureUserProfile = async (user: User): Promise<UserProfile> => {
     createdAt: new Date().toISOString(),
   };
   await createUserProfile(profile);
-  return profile;
+  return { profile, isNew: true };
 };

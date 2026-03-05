@@ -1,7 +1,7 @@
 # Burndown Studio — Project Roadmap
 
-**Version:** 0.9
-**Last updated:** 2026-03-03
+**Version:** 1.0
+**Last updated:** 2026-03-06
 **Status:** Draft — open for review
 
 ---
@@ -9,7 +9,7 @@
 ## Roadmap Overview
 
 ```
-Phase 0 (Done)     Phase 1 (Done)     Phase 2 (Active)   Phase 3            Phase 4
+Phase 0 (Done)     Phase 1 (Done)     Phase 2 (Done)     Phase 3            Phase 4 (Done)
 ──────────────     ────────────       ────────────       ────────────       ────────────
 MVP baseline       Data Safety        Daily Usability    Insights           Multi-user
 + Tech Foundation  & Accuracy                            & History          & Integrations
@@ -86,7 +86,7 @@ MVP baseline       Data Safety        Daily Usability    Insights           Mult
 
 ---
 
-## Phase 2 — Daily Usability (ACTIVE)
+## Phase 2 — Daily Usability (DONE)
 
 **Goal:** Make the tool pleasant enough for daily standup use.
 
@@ -142,22 +142,30 @@ MVP baseline       Data Safety        Daily Usability    Insights           Mult
 
 ---
 
-## Phase 4 — Multi-user & Integrations (Deferred)
+## Phase 4 — Multi-user & Integrations (DONE)
 
 **Goal:** Support team usage with shared data and external tool integration.
 
 ### Features
 
-| ID | Feature | Priority | Effort | Description |
-|---|---|---|---|---|
-| F-401 | Backend storage | P1 | Large | REST API + database (SQLite or PostgreSQL) |
-| F-402 | User authentication | P2 | Large | Email/password or OAuth login |
-| F-403 | Multi-team support | P2 | Medium | Organize sprints by team |
-| F-404 | Issue tracker integration | P3 | Large | Sync tasks from Jira, Linear, or GitHub Issues |
+| ID | Feature | Priority | Effort | Status | Description |
+|---|---|---|---|---|---|
+| F-401 | Backend storage | P1 | Large | **Done** | Firebase Firestore real-time sync per team; localStorage as write-through cache |
+| F-402 | User authentication | P2 | Large | **Done** | Firebase Auth: Google Sign-In + dev fake email login |
+| F-403 | Multi-team support | P2 | Medium | **Done** | Teams with member management, role-based access (super_manager / product_manager / member), admin screen |
+| F-404 | Issue tracker integration | P3 | Large | Open | Sync tasks from Jira, Linear, or GitHub Issues |
+
+### Also Delivered
+- User profiles (name + phone; first-time registration; edit via header button)
+- Member profile popup in Preferences (read-only list auto-synced from Firebase)
+- Private per-user memo (Markdown, auto-save, stored per teamId, cleaned up on team delete)
+- Backlog multi-select assignee (`string[]`) with popup picker
+- Holiday/work-weekend pickers disable already-added dates (predicate function)
+- Sign-in button: quiet ghost style
 
 ### Exit Criteria
-- Multiple users can access their own sprints from any browser.
-- At least one issue tracker integration works end-to-end.
+- Multiple users can access their team's sprints from any browser. **(Done)**
+- Team data is shared in real time. **(Done)**
 
 ---
 
@@ -185,3 +193,4 @@ MVP baseline       Data Safety        Daily Usability    Insights           Mult
 | 2026-02-26 | 0.7 | Marked F-102 (Holiday/PTO exclusions) as Done with global scope. Updated exit criteria. Removed F-102 from remaining work. |
 | 2026-02-27 | 0.8 | Phase 2 progress: marked F-201, F-202, F-204, T-201 as Done. Deferred F-203. Added Status column to Phase 2 tables. Updated exit criteria. Phase 1 marked DONE, Phase 2 now ACTIVE. |
 | 2026-03-03 | 0.9 | Marked T-302 (TypeScript migration) as Done. Updated F-204 description: scope line uses per-task workedLog/remainLog instead of sprint-level scopeLog. |
+| 2026-03-06 | 1.0 | Phase 4 shipped: F-401/F-402/F-403 marked Done. Phase 2 marked Done. Updated roadmap overview. Added "Also Delivered" section for Phase 4 extras (user profiles, memos, multi-assign, pickers, sign-in UX). |

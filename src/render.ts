@@ -238,7 +238,7 @@ const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Se
       for (const story of backlog.stories) {
         const bt = story.tasks.find((t) => t.id === task.backlogTaskId);
         if (bt) {
-          currentAssigned = bt.assignedTo || "";
+          currentAssigned = bt.assignedTo.length > 0 ? bt.assignedTo.join(", ") : "";
           parentStoryDesc = story.description || "";
           break;
         }
@@ -438,7 +438,7 @@ const renderBacklogPanel = (sprint: Sprint, isSprintActive: boolean): void => {
     if (parentStory?.description) bpTaskId.title = parentStory.description;
     const bpDesc = row.querySelector(".bp-description") as HTMLElement;
     bpDesc.textContent = task.description;
-    if (task.assignedTo) bpDesc.title = task.assignedTo;
+    if (task.assignedTo.length > 0) bpDesc.title = task.assignedTo.join(", ");
     (row.querySelector(".bp-estimate") as HTMLElement).textContent = String(task.estimate ?? "");
 
     if (!isSprintActive) {
@@ -467,6 +467,79 @@ const renderBacklogPanel = (sprint: Sprint, isSprintActive: boolean): void => {
 };
 
 const STORY_SORT_KEYS = new Set(["storyId", "description", "priority"]);
+
+const openAssignedPicker = (
+  current: string[],
+  members: string[],
+  onDone: (selected: string[]) => void,
+): void => {
+  const overlay = document.createElement("div");
+  overlay.className = "team-modal-overlay";
+  overlay.style.zIndex = "1100";
+
+  const modal = document.createElement("div");
+  modal.className = "team-modal";
+  modal.style.cssText = "max-width:300px;padding:20px;max-height:80vh;overflow-y:auto;";
+
+  const title = document.createElement("h3");
+  title.textContent = "Assign Members";
+  title.style.cssText = "margin:0 0 14px;font-size:1rem;";
+  modal.appendChild(title);
+
+  const currentSet = new Set(current);
+  const checkboxes: { cb: HTMLInputElement; value: string }[] = [];
+
+  const makeRow = (value: string, label: string, checked: boolean): HTMLLabelElement => {
+    const wrap = document.createElement("label");
+    wrap.className = "assigned-cb-label";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.value = value;
+    cb.checked = checked;
+    wrap.appendChild(cb);
+    wrap.append(" " + label);
+    return wrap;
+  };
+
+  const noneRow = makeRow("", "None", current.length === 0);
+  const noneCb = noneRow.querySelector("input")!;
+  modal.appendChild(noneRow);
+
+  for (const m of members) {
+    const row = makeRow(m, m, currentSet.has(m));
+    const cb = row.querySelector("input")!;
+    checkboxes.push({ cb, value: m });
+    modal.appendChild(row);
+  }
+
+  noneCb.addEventListener("change", () => {
+    if (noneCb.checked) checkboxes.forEach(({ cb }) => { cb.checked = false; });
+  });
+  checkboxes.forEach(({ cb }) => {
+    cb.addEventListener("change", () => {
+      noneCb.checked = !checkboxes.some(({ cb: c }) => c.checked);
+    });
+  });
+
+  const footer = document.createElement("div");
+  footer.style.cssText = "display:flex;justify-content:flex-end;margin-top:16px;";
+  const doneBtn = document.createElement("button");
+  doneBtn.className = "btn btn-primary";
+  doneBtn.textContent = "Done";
+  footer.appendChild(doneBtn);
+  modal.appendChild(footer);
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  const close = (): void => { document.body.removeChild(overlay); };
+
+  doneBtn.addEventListener("click", () => {
+    onDone(checkboxes.filter(({ cb }) => cb.checked).map(({ value }) => value));
+    close();
+  });
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+};
 
 const renderBacklog = (): void => {
   const backlog = getBacklog();
@@ -606,7 +679,7 @@ const renderBacklog = (): void => {
         const taskEstView = taskRow.querySelector(".task-estimate-view") as HTMLElement;
         const taskEstEdit = taskRow.querySelector(".task-estimate-edit") as HTMLInputElement;
         const taskAssignedView = taskRow.querySelector(".task-assigned-view") as HTMLElement;
-        const taskAssignedEdit = taskRow.querySelector(".task-assigned-edit") as HTMLSelectElement;
+        const taskAssignedDropdown = taskRow.querySelector(".task-assigned-dropdown") as HTMLElement;
         const taskEditBtn = taskRow.querySelector(".task-edit-btn") as HTMLButtonElement;
         const taskSaveBtn = taskRow.querySelector(".task-save-btn") as HTMLButtonElement;
         const taskCancelBtn = taskRow.querySelector(".task-cancel-btn") as HTMLButtonElement;
@@ -615,9 +688,11 @@ const renderBacklog = (): void => {
         taskIdView.textContent = task.taskId || "";
         taskDescView.textContent = task.description || "";
         taskEstView.textContent = String(task.estimate ?? "");
-        taskAssignedView.textContent = task.assignedTo || "";
+        taskAssignedView.textContent = task.assignedTo.length > 0 ? task.assignedTo.join(", ") : "—";
 
         if (assignedIds.has(task.id)) taskRow.classList.add("assigned");
+
+        let _assignedSelection: string[] = [...task.assignedTo];
 
         if (isTaskEditing) {
           taskRow.classList.add('row-editing');
@@ -634,26 +709,16 @@ const renderBacklog = (): void => {
           taskEstEdit.value = String(task.estimate ?? "");
 
           taskAssignedView.hidden = true;
-          taskAssignedEdit.hidden = false;
-          taskAssignedEdit.innerHTML = "";
-          const members = getMembers();
-          const emptyOpt = document.createElement("option");
-          emptyOpt.value = "";
-          emptyOpt.textContent = "\u2014";
-          taskAssignedEdit.appendChild(emptyOpt);
-          for (const m of members) {
-            const opt = document.createElement("option");
-            opt.value = m;
-            opt.textContent = m;
-            taskAssignedEdit.appendChild(opt);
-          }
-          if (task.assignedTo && !members.includes(task.assignedTo)) {
-            const legacyOpt = document.createElement("option");
-            legacyOpt.value = task.assignedTo;
-            legacyOpt.textContent = task.assignedTo;
-            taskAssignedEdit.appendChild(legacyOpt);
-          }
-          taskAssignedEdit.value = task.assignedTo || "";
+          taskAssignedDropdown.hidden = false;
+          taskAssignedDropdown.className = "task-assigned-clickable";
+          taskAssignedDropdown.textContent = _assignedSelection.length > 0 ? _assignedSelection.join(", ") : "—";
+
+          taskAssignedDropdown.addEventListener("click", () => {
+            openAssignedPicker(_assignedSelection, getMembers(), (selected) => {
+              _assignedSelection = selected;
+              taskAssignedDropdown.textContent = _assignedSelection.length > 0 ? _assignedSelection.join(", ") : "—";
+            });
+          });
 
           taskEditBtn.hidden = true;
           taskSaveBtn.hidden = false;
@@ -673,7 +738,7 @@ const renderBacklog = (): void => {
             taskId: taskIdEdit.value.trim(),
             description: taskDescEdit.value.trim(),
             estimate: Number(taskEstEdit.value) || 0,
-            assignedTo: taskAssignedEdit.value.trim(),
+            assignedTo: _assignedSelection,
           });
         });
 

@@ -126,11 +126,23 @@ The **project TODAY** field (leftmost in the sprint toolbar) is the authoritativ
 
 Resets all progress (Worked, Remain, status, doneDate, workedLog, remainLog) back to initial state while **keeping all tasks**. Clears scope drop history. Browse date returns to project TODAY.
 
+### User Profiles & Members
+
+- **Profile registration**: on first login a modal prompts for display name (required) and phone number (optional); email shown as read-only
+- **Edit profile**: click the user name in the app header to reopen the profile modal at any time
+- **Member list in Preferences**: read-only; auto-synced from Firebase team membership; click any member row to see their full profile (name, email, phone, role, avatar)
+
+### Private Memo
+
+- **My Notes** section in Preferences: per-user, per-team text area with basic Markdown formatting (bold, italic, headings, lists)
+- Auto-saves 800 ms after typing stops; flushed on preferences close
+- Stored at `users/{uid}.memos.{teamId}` — private, never shared with other team members
+
 ### Preferences
 
-- **Holidays**: date + optional name; excluded from working-day counts and date pickers
-- **Work weekends**: specific weekend dates that count as working days
-- **Team members**: used to populate the assignee selector in the backlog and as the default developer count for the first sprint
+- **Holidays**: date + optional name; excluded from working-day counts and date pickers; already-added dates (and weekends) are greyed out in the picker
+- **Work weekends**: specific weekend dates that count as working days; already-added dates are greyed out in the picker
+- **Team members**: read-only list auto-synced from Firebase; used to populate the assignee selector in the backlog and as the default developer count for the first sprint
 
 ### Data & Export
 
@@ -176,10 +188,12 @@ bdc/
 ## Firestore Collections
 
 ```
-/users/{userId}        — email, displayName, role, createdAt
+/users/{userId}        — email, displayName, phoneNumber?, role, createdAt, memos: { [teamId]: string }
 /teams/{teamId}        — name, ownerId, memberIds[], createdAt
 /appdata/{teamId}      — full AppState (sprints, backlog, preferences, …)
 ```
+
+`memos` is a private per-user map keyed by `teamId`. Memos are deleted automatically when a team is deleted.
 
 ## Data Model (AppState)
 
@@ -200,7 +214,7 @@ bdc/
             "taskId": "0.1.1",
             "description": "...",
             "estimate": 3,
-            "assignedTo": "..."
+            "assignedTo": ["Alice", "Bob"]
           }
         ]
       }
@@ -228,7 +242,7 @@ bdc/
           "backlogTaskId": "uuid",
           "taskId": "0.1.1",
           "name": "...",
-          "assignedTo": "...",
+          "assignedTo": "Alice, Bob",
           "estimate": 3,
           "worked": 1,
           "remain": 2,
@@ -279,3 +293,4 @@ See `docs/` for detailed project documents:
 | 2026-03-04 | Burndown fixes: remove extra day; chart Today marker and actual line use project TODAY |
 | 2026-03-05 | Browse date toggle on past/future sprint charts; sprint reset keeps all tasks; add/remove same task cancels scope history |
 | 2026-03-05 | Multi-user: Firebase Auth (Google + dev fake email), Firestore real-time sync, team management, role-based access (super_manager / product_manager / member), admin screen, Switch Team button, Firestore security rules |
+| 2026-03-06 | User profiles (name + phone, first-time registration modal, edit via header button); member profile popup in Preferences; private per-user memo (Markdown, auto-save); holiday/work-weekend pickers disable already-added dates; backlog assignedTo changed to multi-select string[] with popup picker; team delete cleans up member memos in Firestore; sign-in button redesigned (quiet ghost style) |

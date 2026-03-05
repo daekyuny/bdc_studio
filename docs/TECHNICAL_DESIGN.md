@@ -1,7 +1,7 @@
 # Burndown Studio — Technical Design Document
 
-**Version:** 1.2
-**Last updated:** 2026-03-05
+**Version:** 1.3
+**Last updated:** 2026-03-06
 **Status:** Current
 
 ---
@@ -96,12 +96,14 @@ src/*.ts  ──esbuild──▶  app.js  ──browser──▶  runs in any mo
 When Firebase is configured, the following Firestore collections are used:
 
 ```
-/users/{userId}       — UserProfile: email, displayName, role, createdAt
+/users/{userId}       — UserProfile: email, displayName, phoneNumber?, role, createdAt, memos: { [teamId]: string }
 /teams/{teamId}       — Team: name, ownerId, memberIds[], createdAt
 /appdata/{teamId}     — AppState (full sprint/backlog/preferences JSON blob)
 ```
 
 **Roles:** `super_manager` (full access + admin), `product_manager` (create/manage teams), `member` (read/write sprint data for assigned teams). The email `dkyoon@gmail.com` is assigned `super_manager` automatically on first login.
+
+**`memos`** is a map stored as a nested field on the user document (`users/{uid}.memos.{teamId}`). Written via `updateDoc` with dot-notation key; deleted via `deleteField()` when a team is deleted. Reading uses `getDoc` on the user doc and extracting the nested map.
 
 ### 4.1 AppState
 
@@ -133,7 +135,7 @@ AppState
 │           ├── taskId: string (e.g. "0.1.1")
 │           ├── description: string
 │           ├── estimate: number (days)
-│           └── assignedTo: string
+│           └── assignedTo: string[]  (multi-select; denormalized to sprint tasks as comma-separated string)
 ├── preferences
 │   ├── holidays: { date: YYYY-MM-DD, name: string }[]
 │   ├── workWeekends: string[] (YYYY-MM-DD — specific weekend dates that count as working)
@@ -375,14 +377,15 @@ Add/remove cancellation: `addTaskFromBacklog` checks `sprint.scopeDrops` for a m
 | `dom.ts` | Queries and exports all DOM element references |
 | `firebase.ts` | Firebase app initialization; exports `auth`, `db`, `isFirebaseConfigured` flag |
 | `auth.ts` | `initAuth(onLogin, onLogout)`, `signInWithGoogle()`, `signInWithFakeEmail(email)` (localhost only), `signOut()`, `ensureUserProfile(user)` |
-| `db.ts` | Firestore CRUD: `getUserProfile`, `createUserProfile`; `getTeamsForUser`, `createTeam`, `addMemberToTeam`, `removeMemberFromTeam`, `deleteTeam`; `loadTeamState`, `saveTeamState`, `subscribeToTeamState`; `getAllUsers`, `setUserRole`, `deleteUserProfile` |
-| `screens.ts` | Dynamic DOM overlays: `showLoginScreen()`, `showTeamScreen()`, `showAdminScreen()`, `showManageMembers()`, `hideAllScreens()` |
+| `db.ts` | Firestore CRUD: `getUserProfile`, `createUserProfile`, `updateUserProfile` (handles `phoneNumber: null` → `deleteField()`); `getTeamsForUser`, `createTeam`, `addMemberToTeamWithPrefs`, `removeMemberFromTeamWithPrefs`, `deleteTeam` (cleans team doc + appdata + all member memos); `loadTeamState`, `saveTeamState`, `subscribeToTeamState`; `getAllUsers`, `setUserRole`, `deleteUserProfile`; `getUserMemo`, `saveUserMemo`, `getTeamById`, `getUsersByIds` |
+| `auth.ts` | `initAuth(onLogin, onLogout)`, `signInWithGoogle()`, `signInWithFakeEmail(email)` (localhost only), `signOut()`, `ensureUserProfile(user)` → returns `{ profile, isNew }` |
+| `screens.ts` | Dynamic DOM overlays: `showLoginScreen()` (quiet ghost sign-in button), `showTeamScreen()`, `showAdminScreen()`, `showManageMembers()`, `showProfileEditModal(profile, isNew, onSaved)`, `hideAllScreens()` |
 | `state.ts` | State CRUD for sprints and backlog; localStorage + Firestore load/save/sync; `setCurrentTeam(teamId)` async; echo suppression; `projectToday` preservation on remote snapshots; change callback; `getProjectToday`/`setProjectToday`; `finalizeSprintPlan` |
 | `burndown.ts` | Pure burndown calculation: ideal/actual/scope lines, scope drop contribution, log-aware point-in-time queries |
 | `chart.ts` | SVG chart rendering: grid, ideal/actual/scope lines, Today marker (indigo), browse marker (gray), scope drop triangles, clickable date labels |
-| `render.ts` | Full DOM rebuild: sprint list, task table (Update/Save UX, auto-status display, isSprintActive gating), backlog panel, stats card, planning modal, project TODAY Flatpickr picker |
-| `io.ts` | JSON export/import; sprint Excel export; backlog Excel export and import; sprint↔backlog re-linking; import confirmation dialogs |
-| `main.ts` | Entry point: auth gate (`initAuth`), `startApp(teamId)`, Switch Team / Sign Out wiring; tab/toolbar event wiring; sprint modal; planning modal; preferences modal; delete/reset confirm dialogs |
+| `render.ts` | Full DOM rebuild: sprint list, task table (Update/Save UX, auto-status display, isSprintActive gating), backlog panel (assigned popup picker via `openAssignedPicker()`), stats card, planning modal, project TODAY Flatpickr picker |
+| `io.ts` | JSON export/import; sprint Excel export; backlog Excel export and import (`assignedTo` round-trips as comma-separated string); sprint↔backlog re-linking; import confirmation dialogs |
+| `main.ts` | Entry point: auth gate (`initAuth`), `startApp(teamId)` (fetches team members → `replaceMembers()`), Switch Team / Sign Out wiring; tab/toolbar event wiring; sprint modal; planning modal; preferences modal (holidays/workweekend disable predicates, read-only member list, private memo with 800 ms debounce + Markdown preview); delete/reset confirm dialogs |
 
 ### Module Dependency Graph
 
@@ -455,3 +458,4 @@ No circular dependencies. `state.ts` communicates with `render.ts` via a callbac
 | 2026-03-03 | 1.0 | TypeScript migration; `worked`/`remain`/`workedLog`/`remainLog` data model; log-aware burndown queries; Update/Save UX; auto-status; scope drop model |
 | 2026-03-05 | 1.1 | Project TODAY field and semantics; `plannedPoints` and `finalizeSprintPlan`; `addedDate` field and planned-vs-mid-sprint distinction; `isSprintActive` gate; `chartToday` vs `effectiveToday` vs `browseIndex`; chart browse marker; chart click behaviour by sprint type; scope drop add/remove cancellation; sprint reset keeps tasks; `updateGapBounds` for non-overlapping date pickers; project TODAY resets to real date on load |
 | 2026-03-05 | 1.2 | Multi-user: Firebase Auth + Firestore; `firebase.ts`, `auth.ts`, `db.ts`, `screens.ts` new modules; `UserRole`, `UserProfile`, `Team` types; `setCurrentTeam` async in `state.ts`; echo suppression + `projectToday` preservation on remote snapshots; role-based Firestore security rules; login/team-selection/admin screen overlays; Switch Team button; team management (create/manage members/delete); admin user management (roles/delete); TD-10, TD-11 added |
+| 2026-03-06 | 1.3 | `BacklogTask.assignedTo` changed to `string[]`; `openAssignedPicker()` popup in `render.ts`; `updateUserProfile` handles `phoneNumber: null` → `deleteField()`; `ensureUserProfile` returns `{ profile, isNew }`; `showProfileEditModal` in `screens.ts`; `getUserMemo`/`saveUserMemo`/`getTeamById`/`getUsersByIds` in `db.ts`; `deleteTeam` now fetches memberIds and cleans up memos via `deleteField()`; `addMemberToTeamWithPrefs`/`removeMemberFromTeamWithPrefs` replace old add/remove helpers; flatpickr disable switched to predicate functions for holidays and work weekends; memo stored at `users/{uid}.memos.{teamId}`; `UserProfile.phoneNumber?` and `memos` fields added; sign-in button redesigned as ghost style |

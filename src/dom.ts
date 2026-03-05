@@ -117,8 +117,11 @@ export const dom = {
   prefWeekendDate: $<HTMLInputElement>("prefWeekendDate"),
   prefWeekendAddBtn: $<HTMLButtonElement>("prefWeekendAddBtn"),
   prefWeekendList: $<HTMLElement>("prefWeekendList"),
-  // Members
-  prefMemberName: $<HTMLInputElement>("prefMemberName"),
-  prefMemberAddBtn: $<HTMLButtonElement>("prefMemberAddBtn"),
+  // Members (read-only in preferences, managed via Team screen)
   prefMemberList: $<HTMLElement>("prefMemberList"),
+  // Memo
+  prefMemoTextarea: $<HTMLTextAreaElement>("prefMemoTextarea"),
+  prefMemoPreview: $<HTMLElement>("prefMemoPreview"),
+  prefMemoTogglePreview: $<HTMLButtonElement>("prefMemoTogglePreview"),
+  prefMemoStatus: $<HTMLElement>("prefMemoStatus"),
 };

@@ -11,6 +11,7 @@ import {
   where,
   arrayUnion,
   arrayRemove,
+  deleteField,
   type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "./firebase.ts";
@@ -27,8 +28,15 @@ export const createUserProfile = async (profile: UserProfile): Promise<void> => 
   await setDoc(doc(db, "users", profile.uid), profile);
 };
 
-export const updateUserProfile = async (uid: string, updates: Partial<UserProfile>): Promise<void> => {
-  await updateDoc(doc(db, "users", uid), updates as Record<string, unknown>);
+export const updateUserProfile = async (
+  uid: string,
+  updates: Partial<UserProfile> & { phoneNumber?: string | null },
+): Promise<void> => {
+  const firestoreUpdates: Record<string, unknown> = { ...updates };
+  if ("phoneNumber" in updates && updates.phoneNumber === null) {
+    firestoreUpdates.phoneNumber = deleteField();
+  }
+  await updateDoc(doc(db, "users", uid), firestoreUpdates);
 };
 
 // --- Teams ---
@@ -72,10 +80,67 @@ export const removeMemberFromTeam = async (teamId: string, userId: string): Prom
   await updateDoc(doc(db, "teams", teamId), { memberIds: arrayRemove(userId) });
 };
 
+// Adds a member to the team AND adds their displayName to preferences.members in AppState
+export const addMemberToTeamWithPrefs = async (
+  teamId: string,
+  userId: string,
+  displayName: string,
+): Promise<void> => {
+  await updateDoc(doc(db, "teams", teamId), { memberIds: arrayUnion(userId) });
+  const appState = await loadTeamState(teamId);
+  if (appState) {
+    const name = displayName.trim();
+    if (name && !appState.preferences.members.includes(name)) {
+      appState.preferences.members.push(name);
+      appState.preferences.members.sort((a, b) => a.localeCompare(b));
+      await saveTeamState(teamId, appState);
+    }
+  }
+};
+
+// Removes a member from the team AND removes their displayName from preferences.members
+export const removeMemberFromTeamWithPrefs = async (
+  teamId: string,
+  userId: string,
+  displayName: string,
+): Promise<void> => {
+  await updateDoc(doc(db, "teams", teamId), { memberIds: arrayRemove(userId) });
+  const appState = await loadTeamState(teamId);
+  if (appState) {
+    appState.preferences.members = appState.preferences.members.filter(
+      (m) => m !== displayName.trim(),
+    );
+    await saveTeamState(teamId, appState);
+  }
+};
+
+export const getTeamById = async (teamId: string): Promise<Team | null> => {
+  const snap = await getDoc(doc(db, "teams", teamId));
+  return snap.exists() ? ({ id: snap.id, ...snap.data() } as Team) : null;
+};
+
+export const getUsersByIds = async (uids: string[]): Promise<UserProfile[]> => {
+  if (uids.length === 0) return [];
+  const profiles = await Promise.all(uids.map((uid) => getUserProfile(uid)));
+  return profiles.filter((p): p is UserProfile => p !== null);
+};
+
 export const deleteTeam = async (teamId: string): Promise<void> => {
+  // Fetch member list before deleting the team doc
+  const teamSnap = await getDoc(doc(db, "teams", teamId));
+  const memberIds: string[] = teamSnap.exists() ? (teamSnap.data().memberIds ?? []) : [];
+
   await deleteDoc(doc(db, "teams", teamId));
+
   // Best-effort cleanup of shared appdata
   try { await deleteDoc(doc(db, "appdata", teamId)); } catch { /* ignore */ }
+
+  // Clean up each member's memo for this team
+  await Promise.allSettled(
+    memberIds.map((uid) =>
+      updateDoc(doc(db, "users", uid), { [`memos.${teamId}`]: deleteField() })
+    )
+  );
 };
 
 // --- AppState ---
@@ -122,4 +187,18 @@ export const deleteUserProfile = async (userId: string): Promise<void> => {
   );
   // Delete the user profile document
   await deleteDoc(doc(db, "users", userId));
+};
+
+// --- Private Memos (per-user, per-team, not shared) ---
+
+export const getUserMemo = async (uid: string, teamId: string): Promise<string> => {
+  const snap = await getDoc(doc(db, "users", uid));
+  if (!snap.exists()) return "";
+  const data = snap.data() as Record<string, unknown>;
+  const memos = data.memos as Record<string, string> | undefined;
+  return memos?.[teamId] ?? "";
+};
+
+export const saveUserMemo = async (uid: string, teamId: string, text: string): Promise<void> => {
+  await updateDoc(doc(db, "users", uid), { [`memos.${teamId}`]: text });
 };

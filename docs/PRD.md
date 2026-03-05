@@ -1,7 +1,7 @@
 # Burndown Studio — Product Requirements Document
 
-**Version:** 0.8
-**Last updated:** 2026-03-03
+**Version:** 0.9
+**Last updated:** 2026-03-06
 **Author:** [Your Name]
 **Status:** Draft — open for review
 
@@ -78,7 +78,7 @@ Key pain points:
 | Edit mode per row | Dedicated Edit/Save/Cancel/Delete buttons per story and task row | Done |
 | Add Story / Add Task | Add new stories; tasks can only be added to expanded stories | Done |
 | Priority field | Integer priority per story (default 100, min 0); arrow keys snap to nearest 10 | Done |
-| Assigned To | Each backlog task carries an assignee field (denormalized to sprint tasks) | Done |
+| Assigned To | Each backlog task carries a multi-select assignee list (`string[]`); clicking the field in edit mode opens a popup picker with checkboxes; denormalized to sprint tasks as comma-separated string | Done |
 | Delete All | Wipe entire backlog with a warning confirmation | Done |
 | Excel import | Import backlog from `.xlsx`/`.xls` file (SheetJS); re-links sprint tasks by Task ID; two-step custom confirmation with orphan warning | Done |
 | Excel export | Export backlog to `.xlsx` file with 7-column format | Done |
@@ -96,17 +96,29 @@ Key pain points:
 | Sprint Excel export | Export active sprint task list to `.xlsx` | Done |
 | JSON export/import | Download full state as `.json` file; import to restore; custom confirm dialog | Done |
 
+### Multi-user & Authentication
+
+| Feature | Description | Status |
+|---|---|---|
+| Google Sign-In | Firebase Auth; quiet ghost-style sign-in button | Done |
+| Team management | PM/SM: create teams, manage members, delete teams (cleans up all Firestore data incl. member memos) | Done |
+| Role-based access | super_manager / product_manager / member roles with Firestore security rules | Done |
+| Admin screen | Super Manager: view all users, change roles, delete profiles | Done |
+| User profiles | Name + phone; first-time registration modal; edit via header button | Done |
+| Member list in Preferences | Read-only, auto-synced from Firebase; click row for full profile popup | Done |
+| Private memo | Per-user, per-team Markdown notes in Preferences; auto-saved; deleted when team is deleted | Done |
+
 ### General
 
 | Feature | Description | Status |
 |---|---|---|
 | Sprint/Backlog tab navigation | Top-level tab bar switches between Sprint view and Backlog view | Done |
 | Input commit on blur/Enter | No mid-typing recalculations | Done |
-| localStorage persistence | All data stored in browser localStorage | Done |
-| Data migration | Old `points` field auto-migrated to `estimate` on load; `worked`/`remain` initialized for pre-migration tasks | Done |
-| TypeScript | Full codebase migrated to TypeScript; strict typing for data model and all modules | Done |
+| Firestore + localStorage | Primary: Firestore real-time sync per team. Fallback: localStorage-only when Firebase not configured | Done |
+| Data migration | Old `points` → `estimate`; `worked`/`remain` initialized; `assignedTo` string → string[] | Done |
+| TypeScript | Full codebase; strict typing for all modules and data model | Done |
 | Graceful error recovery | Corrupt localStorage data is detected and reset to defaults | Done |
-| Modular codebase | Source split into 8 ES modules, bundled via esbuild | Done |
+| Modular codebase | Source split into 13 ES modules, bundled via esbuild | Done |
 
 ## 5. Planned Features
 
@@ -136,21 +148,22 @@ Key pain points:
 | F-302 | Sprint archive / completion | P2 | Open | Mark a sprint as "completed." Completed sprints are visually distinct and read-only. |
 | F-303 | Burndown chart tooltips | P2 | Open | Hover over a data point on the chart to see the date, ideal value, and actual value. |
 
-### 5.4 Phase 4 — Multi-user & Integrations (deferred)
+### 5.4 Phase 4 — Multi-user & Integrations
 
 | ID | Feature | Priority | Status | Description |
 |---|---|---|---|---|
-| F-401 | Backend storage | P1 | Open | Move from localStorage to a server-side store (or file-based sync) for durability and sharing. |
-| F-402 | User authentication | P2 | Open | Simple auth (email/password or OAuth) to support per-user data. |
-| F-403 | Multi-team support | P2 | Open | Organize sprints by team. Each team sees only its own sprints. |
+| F-401 | Backend storage | P1 | **Done** | Firebase Firestore real-time sync per team; localStorage as write-through cache. |
+| F-402 | User authentication | P2 | **Done** | Firebase Auth: Google Sign-In (production) + fake email (localhost dev). |
+| F-403 | Multi-team support | P2 | **Done** | Teams with member management, role-based access, admin screen. |
 | F-404 | Issue tracker integration | P3 | Open | Pull tasks from Jira, Linear, or GitHub Issues. |
 
 ## 6. Out of Scope (for now)
 
-- Real-time collaboration (multiple users editing the same sprint simultaneously).
+- Simultaneous cell-level editing (two users on the same task at once) — last-writer-wins currently.
 - Mobile native app.
 - Notifications / email alerts.
 - Story-point estimation tools (planning poker, etc.).
+- Firebase Auth account deletion (requires Admin SDK / Cloud Function).
 
 ## 7. Success Metrics
 
@@ -181,3 +194,4 @@ Key pain points:
 | 2026-02-26 | 0.6 | Marked F-102 (Holiday/PTO exclusions) as Done. Holidays are managed as a global preferences list; excluded from working-day calculations, ideal burn line, and sprint date pickers. |
 | 2026-02-27 | 0.7 | Phase 2 features: marked F-201 (drag-and-drop), F-202 (progress %), F-204 (scope tracking) as Done. Deferred F-203. Updated current features (stats dashboard, burndown chart descriptions). |
 | 2026-03-03 | 0.8 | TypeScript migration complete. Updated task tracking: Change/Save button UX, status toggle span, auto-Done on remain=0, Done Date as read-only span, daily workedLog/remainLog, Remove button hidden for non-Todo tasks. Updated chart: scope line now green dashed using per-task logs, clickable date labels to set TODAY. Updated F-204 description. |
+| 2026-03-06 | 0.9 | Phase 4 features shipped: F-401/F-402/F-403 marked Done. Added Multi-user & Authentication and General feature tables. Updated Assigned To to multi-select string[]. Added user profiles, member list, private memo features. Updated Out of Scope. |

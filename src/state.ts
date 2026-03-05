@@ -85,6 +85,16 @@ const migrateState = (parsed: any): AppState => {
     }
     sprint.tasks = sprint.tasks.filter((t: any) => !t._delete);
   }
+  // Migrate BacklogTask.assignedTo from legacy string → string[]
+  for (const story of parsed.backlog?.stories ?? []) {
+    for (const task of story.tasks ?? []) {
+      if (typeof task.assignedTo === "string") {
+        task.assignedTo = task.assignedTo ? [task.assignedTo] : [];
+      } else if (!Array.isArray(task.assignedTo)) {
+        task.assignedTo = [];
+      }
+    }
+  }
   return parsed as AppState;
 };
 
@@ -357,7 +367,7 @@ export const addTaskFromBacklog = (backlogTaskId: string): void => {
     id: createId(), backlogTaskId,
     taskId: foundTask.taskId,
     name: foundTask.description,
-    assignedTo: foundTask.assignedTo,
+    assignedTo: foundTask.assignedTo.join(", "),
     estimate,
     worked: 0,
     remain: estimate,
@@ -469,7 +479,7 @@ export const addBacklogTask = (storyId: string): string | null => {
     taskId: `${story.storyId}.${taskNum}`,
     description: "",
     estimate: 0,
-    assignedTo: "",
+    assignedTo: [],
   });
   save(); onChange(H_BACKLOG_DATA);
   return id;
@@ -532,7 +542,7 @@ export const relinkSprintTasks = (): void => {
       t.backlogTaskId = bt.id;
       t.name = bt.description;
       t.estimate = Number(bt.estimate) || 0;
-      t.assignedTo = bt.assignedTo || "";
+      t.assignedTo = bt.assignedTo.join(", ");
       return true;
     });
   }
@@ -582,6 +592,11 @@ export const addMember = (name: string): void => {
 
 export const removeMember = (name: string): void => {
   state.preferences.members = state.preferences.members.filter((m) => m !== name);
+  save(); onChange(H_ALL);
+};
+
+export const replaceMembers = (names: string[]): void => {
+  state.preferences.members = [...names].sort((a, b) => a.localeCompare(b));
   save(); onChange(H_ALL);
 };
 

@@ -127,9 +127,9 @@ export const exportBacklogExcel = (): void => {
     } else {
       story.tasks.forEach((task, i) => {
         if (i === 0) {
-          aoa.push([story.storyId, story.description, story.priority ?? 100, task.taskId, task.description, task.estimate, task.assignedTo]);
+          aoa.push([story.storyId, story.description, story.priority ?? 100, task.taskId, task.description, task.estimate, task.assignedTo.join(", ")]);
         } else {
-          aoa.push(["", "", "", task.taskId, task.description, task.estimate, task.assignedTo]);
+          aoa.push(["", "", "", task.taskId, task.description, task.estimate, task.assignedTo.join(", ")]);
         }
       });
     }
@@ -173,7 +173,8 @@ export const importBacklogExcel = (file: File): void => {
       const taskDesc   = String(cols[4] ?? "").trim();
       const estimateRaw = parseFloat(String(cols[5] ?? ""));
       const estimate   = isNaN(estimateRaw) ? 0 : estimateRaw;
-      const assignedTo = String(cols[6] ?? "").trim();
+      const assignedToRaw = String(cols[6] ?? "").trim();
+      const assignedTo = assignedToRaw ? assignedToRaw.split(",").map((s) => s.trim()).filter(Boolean) : [];
 
       if (storyId) {
         currentStory = { id: createId(), storyId, description: storyDesc, priority, tasks: [] };
@@ -219,7 +220,7 @@ export const importBacklogExcel = (file: File): void => {
     relinkSprintTasks();
 
     const uniqueNames = [...new Set(
-      stories.flatMap(s => s.tasks.map(t => t.assignedTo)).filter(Boolean)
+      stories.flatMap(s => s.tasks.flatMap(t => t.assignedTo)).filter(Boolean)
     )];
     if (uniqueNames.length > 0) addMembersFromImport(uniqueNames);
   };

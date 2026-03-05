@@ -2,12 +2,13 @@ import { signInWithGoogle, signInWithFakeEmail, signOut } from "./auth.ts";
 import {
   getTeamsForUser,
   createTeam,
-  addMemberToTeamById,
-  removeMemberFromTeam,
+  addMemberToTeamWithPrefs,
+  removeMemberFromTeamWithPrefs,
   getAllUsers,
   setUserRole,
   deleteUserProfile,
   deleteTeam,
+  updateUserProfile,
 } from "./db.ts";
 import type { User } from "firebase/auth";
 import type { UserProfile, Team, UserRole } from "./types.ts";
@@ -52,12 +53,12 @@ export const showLoginScreen = (): void => {
         <h1 class="screen-title">Burndown Studio</h1>
         <p class="screen-subtitle">Track your team's sprint progress in real time.</p>
         <div class="login-actions">
-          <button class="btn login-google-btn" id="loginGoogleBtn">
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908C16.658 14.234 17.64 11.926 17.64 9.2z" fill="#4285F4"/>
-              <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/>
-              <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
-              <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+          <button class="login-google-btn" id="loginGoogleBtn">
+            <svg width="16" height="16" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908C16.658 14.234 17.64 11.926 17.64 9.2z" fill="#888"/>
+              <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#888"/>
+              <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#888"/>
+              <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#888"/>
             </svg>
             Sign in with Google
           </button>
@@ -337,26 +338,34 @@ const showManageMembers = (team: Team, profile: UserProfile): void => {
     const members = allUsers.filter((u) => team.memberIds.includes(u.uid));
     const available = allUsers.filter((u) => !team.memberIds.includes(u.uid));
 
+    const memberRow = (u: typeof allUsers[0], isRemovable: boolean) => {
+      const phone = u.phoneNumber ? `<span class="member-phone">${escapeHtml(u.phoneNumber)}</span>` : "";
+      return `
+        <div class="manage-member-row" data-uid="${u.uid}" data-name="${escapeHtml(u.displayName)}">
+          <div class="manage-member-info">
+            <span class="member-name">${escapeHtml(u.displayName)}</span>
+            <span class="member-email">${escapeHtml(u.email)}</span>
+            ${phone}
+          </div>
+          ${isRemovable ? `<button class="btn ghost small danger member-remove-btn"
+            data-uid="${u.uid}" data-name="${escapeHtml(u.displayName)}"
+            ${u.uid === profile.uid ? "disabled title='Cannot remove yourself'" : ""}>Remove</button>` : ""}
+        </div>
+      `;
+    };
+
     // Current members
     if (members.length === 0) {
       currentEl.innerHTML = "<em>No members yet.</em>";
     } else {
-      currentEl.innerHTML = members.map((u) => `
-        <div class="manage-member-row" data-uid="${u.uid}">
-          <div class="manage-member-info">
-            <span class="member-email">${escapeHtml(u.email)}</span>
-            <span class="member-name">${escapeHtml(u.displayName)}</span>
-          </div>
-          <button class="btn ghost small danger member-remove-btn"
-            data-uid="${u.uid}" ${u.uid === profile.uid ? "disabled title='Cannot remove yourself'" : ""}>Remove</button>
-        </div>
-      `).join("");
+      currentEl.innerHTML = members.map((u) => memberRow(u, true)).join("");
       currentEl.querySelectorAll<HTMLButtonElement>(".member-remove-btn").forEach((btn) => {
         btn.addEventListener("click", async () => {
           const uid = btn.dataset.uid!;
+          const displayName = btn.dataset.name!;
           errEl.hidden = true;
           try {
-            await removeMemberFromTeam(team.id, uid);
+            await removeMemberFromTeamWithPrefs(team.id, uid, displayName);
             team.memberIds = team.memberIds.filter((id) => id !== uid);
             refresh();
           } catch (e: unknown) {
@@ -372,20 +381,22 @@ const showManageMembers = (team: Team, profile: UserProfile): void => {
       availableEl.innerHTML = "<em>All registered users are already members.</em>";
     } else {
       availableEl.innerHTML = available.map((u) => `
-        <div class="manage-member-row available" data-uid="${u.uid}">
+        <div class="manage-member-row available" data-uid="${u.uid}" data-name="${escapeHtml(u.displayName)}">
           <div class="manage-member-info">
-            <span class="member-email">${escapeHtml(u.email)}</span>
             <span class="member-name">${escapeHtml(u.displayName)}</span>
+            <span class="member-email">${escapeHtml(u.email)}</span>
+            ${u.phoneNumber ? `<span class="member-phone">${escapeHtml(u.phoneNumber)}</span>` : ""}
           </div>
-          <button class="btn small member-add-btn" data-uid="${u.uid}">Add</button>
+          <button class="btn small member-add-btn" data-uid="${u.uid}" data-name="${escapeHtml(u.displayName)}">Add</button>
         </div>
       `).join("");
       availableEl.querySelectorAll<HTMLButtonElement>(".member-add-btn").forEach((btn) => {
         btn.addEventListener("click", async () => {
           const uid = btn.dataset.uid!;
+          const displayName = btn.dataset.name!;
           errEl.hidden = true;
           try {
-            await addMemberToTeamById(team.id, uid);
+            await addMemberToTeamWithPrefs(team.id, uid, displayName);
             team.memberIds.push(uid);
             refresh();
           } catch (e: unknown) {
@@ -500,4 +511,74 @@ const loadAdminUsers = async (): Promise<void> => {
   } catch (e: unknown) {
     tableEl.innerHTML = `<em>Failed to load users: ${e instanceof Error ? escapeHtml(e.message) : "Unknown error"}</em>`;
   }
+};
+
+// ---------------------------------------------------------------------------
+// Profile Edit Modal (accessible by clicking user name in header)
+// ---------------------------------------------------------------------------
+
+export const showProfileEditModal = (
+  profile: UserProfile,
+  isNew: boolean,
+  onSaved: (updatedProfile: UserProfile) => void,
+): void => {
+  document.getElementById("profileEditModal")?.remove();
+
+  const modal = document.createElement("div");
+  modal.id = "profileEditModal";
+  modal.className = "team-modal-overlay";
+  modal.innerHTML = `
+    <div class="team-modal">
+      <h3>${isNew ? "Complete Your Profile" : "Edit Profile"}</h3>
+      ${isNew ? '<p class="pref-hint">Welcome! Please confirm your name and optionally add your phone number.</p>' : ""}
+      <div class="profile-email-row">${escapeHtml(profile.email)}</div>
+      <label class="screen-label">
+        Name
+        <input type="text" id="profileNameInput" class="screen-input" value="${isNew ? "" : escapeHtml(profile.displayName)}" placeholder="Your name" />
+      </label>
+      <label class="screen-label">
+        Phone Number <span class="label-optional">(optional)</span>
+        <input type="tel" id="profilePhoneInput" class="screen-input" value="${escapeHtml(profile.phoneNumber ?? "")}" placeholder="e.g. 010-1234-5678" />
+      </label>
+      <div class="screen-error" id="profileEditError" hidden></div>
+      <div class="team-modal-footer">
+        ${isNew ? "" : '<button class="btn ghost" id="profileEditCancel">Cancel</button>'}
+        <button class="btn" id="profileEditSave">Save</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  if (!isNew) {
+    modal.addEventListener("click", (e) => { if (e.target === modal) modal.remove(); });
+    document.getElementById("profileEditCancel")!.addEventListener("click", () => modal.remove());
+  }
+
+  const doSave = async () => {
+    const name = (document.getElementById("profileNameInput") as HTMLInputElement).value.trim();
+    const phone = (document.getElementById("profilePhoneInput") as HTMLInputElement).value.trim();
+    const errEl = document.getElementById("profileEditError")!;
+    errEl.hidden = true;
+    if (!name) {
+      errEl.textContent = "Name cannot be empty.";
+      errEl.hidden = false;
+      return;
+    }
+    try {
+      await updateUserProfile(profile.uid, { displayName: name, phoneNumber: phone || null } as Parameters<typeof updateUserProfile>[1]);
+      const updated: UserProfile = { ...profile, displayName: name };
+      if (phone) updated.phoneNumber = phone; else delete updated.phoneNumber;
+      modal.remove();
+      onSaved(updated);
+    } catch (e: unknown) {
+      errEl.textContent = e instanceof Error ? e.message : "Failed to save profile.";
+      errEl.hidden = false;
+    }
+  };
+
+  document.getElementById("profileEditSave")!.addEventListener("click", doSave);
+  (document.getElementById("profileNameInput") as HTMLInputElement).addEventListener("keydown", (e) => {
+    if (e.key === "Enter") doSave();
+  });
+  setTimeout(() => (document.getElementById("profileNameInput") as HTMLInputElement).focus(), 50);
 };

@@ -24,7 +24,7 @@
         <div id="headerUserInfo" class="header-user-info" hidden>
           <span id="headerTeamName" class="header-team-name"></span>
           <button class="btn ghost small" id="switchTeamBtn">← Teams</button>
-          <span id="headerUserName" class="header-user-name"></span>
+          <button id="headerUserName" class="header-user-name header-user-name-btn" title="Edit profile"></button>
           <button class="btn ghost small" id="signOutBtn">Sign Out</button>
         </div>
       </header>
@@ -190,7 +190,7 @@
                     <th class="bl-col-user-stories sortable" data-sort-key="description">User Stories<span class="col-resizer" aria-hidden="true"></span></th>
                     <th class="bl-col-priority sortable" data-sort-key="priority">Priority<span class="col-resizer" aria-hidden="true"></span></th>
                     <th class="bl-col-task-id sortable" data-sort-key="taskId">Task ID<span class="col-resizer" aria-hidden="true"></span></th>
-                    <th class="bl-col-task-desc sortable" data-sort-key="taskDesc">Task Description<span class="col-resizer" aria-hidden="true"></span></th>
+                    <th class="bl-col-task-desc sortable" data-sort-key="taskDesc">Description<span class="col-resizer" aria-hidden="true"></span></th>
                     <th class="bl-col-estimate sortable" data-sort-key="estimate">Est. Days<span class="col-resizer" aria-hidden="true"></span></th>
                     <th class="bl-col-assigned sortable" data-sort-key="assignedTo">Assigned To<span class="col-resizer" aria-hidden="true"></span></th>
                     <th class="bl-col-actions"></th>
@@ -325,11 +325,22 @@
           </div>
           <div class="pref-section">
             <h4>Members</h4>
-            <div class="pref-add-row">
-              <input type="text" id="prefMemberName" placeholder="Member name" />
-              <button class="btn small" id="prefMemberAddBtn">Add</button>
-            </div>
+            <p class="pref-hint">Members are managed via the Team screen. Add or remove members there.</p>
             <div class="pref-list" id="prefMemberList"></div>
+          </div>
+          <div class="pref-section pref-section-memo">
+            <h4>My Notes <span class="pref-memo-private-badge">Private</span></h4>
+            <p class="pref-hint">Only you can see this. Supports basic Markdown (** bold **, * italic *, # heading, - list).</p>
+            <div class="pref-memo-toolbar">
+              <button class="btn ghost small" id="prefMemoTogglePreview">Preview</button>
+              <button class="btn ghost small pref-memo-format-btn" data-format="bold" title="Bold">B</button>
+              <button class="btn ghost small pref-memo-format-btn" data-format="italic" title="Italic"><em>I</em></button>
+              <button class="btn ghost small pref-memo-format-btn" data-format="heading" title="Heading">H</button>
+              <button class="btn ghost small pref-memo-format-btn" data-format="list" title="List">–</button>
+            </div>
+            <textarea id="prefMemoTextarea" class="pref-memo-textarea" placeholder="Write anything…" rows="8" spellcheck="true"></textarea>
+            <div id="prefMemoPreview" class="pref-memo-preview" hidden></div>
+            <div class="pref-memo-status" id="prefMemoStatus"></div>
           </div>
         </div>
         <div class="modal-footer">
@@ -541,7 +552,7 @@
         </td>
         <td class="bl-col-assigned">
           <span class="task-assigned-view"></span>
-          <select class="task-assigned-edit" hidden></select>
+          <div class="task-assigned-dropdown" hidden></div>
         </td>
         <td class="bl-col-actions">
           <button class="btn ghost small task-edit-btn">Edit</button>
