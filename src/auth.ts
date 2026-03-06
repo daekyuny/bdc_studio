@@ -53,12 +53,15 @@ export const signOut = async (): Promise<void> => {
   await firebaseSignOut(auth);
 };
 
+// Returns the existing profile, or null if the user has never registered.
 export const ensureUserProfile = async (
   user: User,
-): Promise<{ profile: UserProfile; isNew: boolean }> => {
-  const existing = await getUserProfile(user.uid);
-  if (existing) return { profile: existing, isNew: false };
+): Promise<UserProfile | null> => {
+  return await getUserProfile(user.uid);
+};
 
+// Called only after the user explicitly confirms registration.
+export const createNewUserProfile = async (user: User): Promise<UserProfile> => {
   const profile: UserProfile = {
     uid: user.uid,
     email: user.email ?? "",
@@ -67,5 +70,5 @@ export const ensureUserProfile = async (
     createdAt: new Date().toISOString(),
   };
   await createUserProfile(profile);
-  return { profile, isNew: true };
+  return profile;
 };

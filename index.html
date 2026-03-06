@@ -280,6 +280,48 @@
       </div>
     </div>
 
+    <!-- Move Task modal -->
+    <div class="modal-overlay" id="moveTaskModal" hidden>
+      <div class="modal confirm-dialog">
+        <div class="modal-header">
+          <h3 class="confirm-dialog-title">Move Task to Another Sprint</h3>
+        </div>
+        <div class="modal-body">
+          <p class="confirm-dialog-warning">Moving <strong id="moveTaskName"></strong> to another sprint.</p>
+          <p>The current sprint scope will decrease. The target sprint scope will increase.</p>
+          <div style="margin-top:12px">
+            <label style="display:block;margin-bottom:4px;font-weight:500">Target Sprint</label>
+            <select id="moveTaskSprintSelect" class="input" style="width:100%"></select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn ghost" id="moveTaskCancel">Cancel</button>
+          <button class="btn primary" id="moveTaskConfirm">Move</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Split Task modal -->
+    <div class="modal-overlay" id="splitTaskModal" hidden>
+      <div class="modal confirm-dialog">
+        <div class="modal-header">
+          <h3 class="confirm-dialog-title">Split Task</h3>
+        </div>
+        <div class="modal-body">
+          <div id="splitTaskInfo" style="margin-bottom:12px;padding:10px;background:var(--bg-secondary,#f5f5f5);border-radius:6px;font-size:0.9em"></div>
+          <div style="margin-top:12px">
+            <label style="display:block;margin-bottom:4px;font-weight:500">Move remaining work to Sprint</label>
+            <select id="splitTaskSprintSelect" class="input" style="width:100%"></select>
+          </div>
+          <p class="confirm-dialog-warning" style="margin-top:12px">&#9888; This action cannot be undone.</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn ghost" id="splitTaskCancel">Cancel</button>
+          <button class="btn danger-solid" id="splitTaskConfirm">Split</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Reusable import confirm dialog -->
     <div class="modal-overlay" id="importConfirmModal" hidden>
       <div class="modal confirm-dialog">
@@ -492,6 +534,8 @@
         </td>
         <td class="col-actions">
           <button class="btn ghost small task-remove">Remove</button>
+          <button class="btn ghost small task-move" hidden>Move</button>
+          <button class="btn ghost small task-split" hidden>Split</button>
         </td>
       </tr>
     </template>

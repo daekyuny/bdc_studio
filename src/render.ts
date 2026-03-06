@@ -6,6 +6,8 @@ import {
   setActiveSprint,
   updateTask,
   removeTaskFromSprint,
+  moveTaskToSprint,
+  splitTaskToSprint,
   reorderTasks,
   addTaskFromBacklog,
   updateToday,
@@ -160,6 +162,7 @@ const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Se
 
   const viewDate = sprint.today || todayIso();
   const projectTodayNow = getProjectToday();
+  const isLastDay = isSprintActive && projectTodayNow === sprint.endDate;
 
   const isSorted = taskSort.key !== null;
   const tasks = sortItems(
@@ -227,6 +230,8 @@ const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Se
     const statusToggle = row.querySelector(".task-status-toggle") as HTMLElement;
     const doneSpan = row.querySelector(".task-done") as HTMLElement;
     const removeBtn = row.querySelector(".task-remove") as HTMLButtonElement;
+    const moveBtn = row.querySelector(".task-move") as HTMLButtonElement;
+    const splitBtn = row.querySelector(".task-split") as HTMLButtonElement;
 
     taskIdSpan.textContent = task.taskId || "";
     nameSpan.textContent = task.name;
@@ -326,7 +331,20 @@ const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Se
 
 
 
-    removeBtn.hidden = !isSprintActive || !task.existsNow || task.worked > 0;
+    // On the last day: Todo tasks get Move, In Progress tasks get Split; Remove is hidden.
+    // Otherwise: Remove shows normally (only for Todo tasks in an active sprint).
+    const isTodo = task.worked === 0 && task.status !== "Done";
+    const isInProgress = task.worked > 0 && task.remain > 0 && task.status !== "Done";
+
+    if (isLastDay && task.existsNow) {
+      removeBtn.hidden = true;
+      moveBtn.hidden = !isTodo;
+      splitBtn.hidden = !isInProgress;
+    } else {
+      removeBtn.hidden = !isSprintActive || !task.existsNow || task.worked > 0;
+      moveBtn.hidden = true;
+      splitBtn.hidden = true;
+    }
 
     removeBtn.addEventListener("click", () => {
       const label = task.taskId ? `[${task.taskId}] ${task.name}` : task.name || "this task";
@@ -344,6 +362,70 @@ const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Se
       };
       dom.confirmRemoveTaskConfirm.addEventListener("click", onConfirm);
       dom.confirmRemoveTaskCancel.addEventListener("click", onCancel);
+    });
+
+    const buildSprintOptions = (select: HTMLSelectElement): void => {
+      select.innerHTML = "";
+      const allSprints = getState().sprints;
+      allSprints.forEach((s, i) => {
+        if (s.id === sprint.id) return;
+        if (s.endDate < projectTodayNow) return;
+        const workingDays = getWorkingDates(s.startDate, s.endDate, holidaySet, workWeekendSet).length;
+        const totalPts = s.tasks.reduce((sum, t) => sum + Number(t.estimate || 0), 0);
+        const avail = Math.max(0, Number(s.developers || 0)) * workingDays * Math.min(1, Math.max(0, Number(s.efficiency || 0))) - totalPts;
+        const label = s.description ? `Sprint ${i + 1} — ${s.description}` : `Sprint ${i + 1}`;
+        const pts = totalPts.toFixed(1).replace(/\.0$/, "");
+        const availStr = avail.toFixed(1).replace(/\.0$/, "");
+        const opt = document.createElement("option");
+        opt.value = s.id;
+        opt.textContent = `${label}  [${pts} pts, ${availStr} avail days]`;
+        select.appendChild(opt);
+      });
+    };
+
+    moveBtn.addEventListener("click", () => {
+      const label = task.taskId ? `[${task.taskId}] ${task.name}` : task.name || "this task";
+      dom.moveTaskName.textContent = label;
+      buildSprintOptions(dom.moveTaskSprintSelect);
+      dom.moveTaskModal.hidden = false;
+      const onConfirm = (): void => {
+        const targetId = dom.moveTaskSprintSelect.value;
+        if (targetId) moveTaskToSprint(task.id, targetId);
+        cleanup();
+      };
+      const onCancel = (): void => cleanup();
+      const cleanup = (): void => {
+        dom.moveTaskModal.hidden = true;
+        dom.moveTaskConfirm.removeEventListener("click", onConfirm);
+        dom.moveTaskCancel.removeEventListener("click", onCancel);
+      };
+      dom.moveTaskConfirm.addEventListener("click", onConfirm);
+      dom.moveTaskCancel.addEventListener("click", onCancel);
+    });
+
+    splitBtn.addEventListener("click", () => {
+      const label = task.taskId ? `[${task.taskId}] ${task.name}` : task.name || "this task";
+      const aId = task.taskId ? `${task.taskId}a` : "(original)";
+      const bId = task.taskId ? `${task.taskId}b` : "(new)";
+      dom.splitTaskInfo.innerHTML =
+        `<strong>${label}</strong><br>` +
+        `<span style="color:var(--text-muted,#888)">${aId}: worked ${task.histWorked} days — remain set to 0 (closed in this sprint)</span><br>` +
+        `<span style="color:var(--text-muted,#888)">${bId}: ${task.histRemain} days remaining — moved to target sprint</span>`;
+      buildSprintOptions(dom.splitTaskSprintSelect);
+      dom.splitTaskModal.hidden = false;
+      const onConfirm = (): void => {
+        const targetId = dom.splitTaskSprintSelect.value;
+        if (targetId) splitTaskToSprint(task.id, targetId);
+        cleanup();
+      };
+      const onCancel = (): void => cleanup();
+      const cleanup = (): void => {
+        dom.splitTaskModal.hidden = true;
+        dom.splitTaskConfirm.removeEventListener("click", onConfirm);
+        dom.splitTaskCancel.removeEventListener("click", onCancel);
+      };
+      dom.splitTaskConfirm.addEventListener("click", onConfirm);
+      dom.splitTaskCancel.addEventListener("click", onCancel);
     });
 
     row.addEventListener("dragover", (e) => {
@@ -524,6 +606,7 @@ const openAssignedPicker = (
   const footer = document.createElement("div");
   footer.style.cssText = "display:flex;justify-content:flex-end;margin-top:16px;";
   const doneBtn = document.createElement("button");
+  doneBtn.type = "button";
   doneBtn.className = "btn btn-primary";
   doneBtn.textContent = "Done";
   footer.appendChild(doneBtn);
@@ -534,11 +617,12 @@ const openAssignedPicker = (
 
   const close = (): void => { document.body.removeChild(overlay); };
 
-  doneBtn.addEventListener("click", () => {
+  doneBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
     onDone(checkboxes.filter(({ cb }) => cb.checked).map(({ value }) => value));
     close();
   });
-  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) { e.stopPropagation(); close(); } });
 };
 
 const renderBacklog = (): void => {
@@ -713,10 +797,20 @@ const renderBacklog = (): void => {
           taskAssignedDropdown.className = "task-assigned-clickable";
           taskAssignedDropdown.textContent = _assignedSelection.length > 0 ? _assignedSelection.join(", ") : "—";
 
+          const saveTask = (): void => {
+            editingIds.delete(task.id);
+            updateBacklogTask(story.id, task.id, {
+              taskId: taskIdEdit.value.trim(),
+              description: taskDescEdit.value.trim(),
+              estimate: Number(taskEstEdit.value) || 0,
+              assignedTo: _assignedSelection,
+            });
+          };
+
           taskAssignedDropdown.addEventListener("click", () => {
             openAssignedPicker(_assignedSelection, getMembers(), (selected) => {
               _assignedSelection = selected;
-              taskAssignedDropdown.textContent = _assignedSelection.length > 0 ? _assignedSelection.join(", ") : "—";
+              saveTask();
             });
           });
 

@@ -39,12 +39,19 @@ export const calculateBurndown = (
   const manDays = developers * workingDays;
   const effectiveManDays = manDays * efficiency;
   const idealDailyBurn = workingDays > 0 ? effectiveManDays / workingDays : 0;
-  const ideal = dates.map((_, index) => {
-    if (dates.length <= 1) return plannedPoints;
-    const remaining = plannedPoints - idealDailyBurn * index;
-    return Math.round(Math.max(remaining, 0) * 100) / 100;
-  });
+
+  // N+1 plot borders: border 0 = sprint start (before any work), border N = sprint end.
+  // Each working day i occupies the band between border i and border i+1.
+  // ideal[i] is plotted at border i; ideal goes from plannedPoints → 0 exactly.
+  const N = workingDays;
+  const idealLineBurn = N > 0 ? plannedPoints / N : 0;
+  const ideal = Array.from({ length: N + 1 }, (_, i) =>
+    Math.round(Math.max(0, plannedPoints - idealLineBurn * i) * 100) / 100
+  );
+
+  // todayIndex: 0-based band index (dates[todayIndex] is the current working day)
   const todayIndex = dates.reduce((last, date, i) => (date <= today ? i : last), -1);
+
   const taskActiveAt = (task: SprintTask, date: string): boolean =>
     !task.addedDate || task.addedDate <= date;
 
@@ -53,30 +60,51 @@ export const calculateBurndown = (
       .filter(d => d.addedDate <= date && d.removedDate > date)
       .reduce((sum, d) => sum + d.estimate, 0);
 
-  const actual = dates.map((date, i): number | null => {
-    if (todayIndex < 0 || i > todayIndex) return null;
-    const taskPart = sprint.tasks
-      .filter(t => taskActiveAt(t, date))
-      .reduce((sum, task) => sum + getRemainAtDate(task, date), 0);
-    return taskPart + scopeDropContribAt(date);
-  });
+  // Initial scope at border 0: sum of estimates for tasks present at sprint start,
+  // plus scope-drop contributions (planned tasks removed mid-sprint that were in scope at start).
+  // This may exceed plannedPoints when tasks are moved in from other sprints.
+  const initialScope = sprint.tasks
+    .filter(t => !t.addedDate || t.addedDate <= sprint.startDate)
+    .reduce((sum, t) => sum + (t.estimate ?? 0), 0)
+    + scopeDropContribAt(sprint.startDate);
 
-  const scope = dates.map((date, i): number | null => {
-    if (todayIndex < 0 || i > todayIndex) return null;
-    const taskPart = sprint.tasks
-      .filter(t => taskActiveAt(t, date))
-      .reduce((sum, task) => sum + getWorkedAtDate(task, date) + getRemainAtDate(task, date), 0);
-    return taskPart + scopeDropContribAt(date);
-  });
+  // actual[0] = initialScope (border 0: before any work)
+  // actual[i+1] = remaining recorded at end of dates[i], for i <= todayIndex
+  const actual: (number | null)[] = Array(N + 1).fill(null);
+  if (todayIndex >= 0) {
+    actual[0] = initialScope;
+    for (let i = 0; i <= todayIndex; i++) {
+      const date = dates[i];
+      const taskPart = sprint.tasks
+        .filter(t => taskActiveAt(t, date))
+        .reduce((sum, task) => sum + getRemainAtDate(task, date), 0);
+      actual[i + 1] = taskPart + scopeDropContribAt(date);
+    }
+  }
 
-  // Build scope drop markers grouped by date index
+  // scope[0] = initialScope (border 0: worked=0, remain=estimate for all tasks at sprint start)
+  // scope[i+1] = worked + remain recorded at end of dates[i], for i <= todayIndex
+  const scope: (number | null)[] = Array(N + 1).fill(null);
+  if (todayIndex >= 0) {
+    scope[0] = initialScope;
+    for (let i = 0; i <= todayIndex; i++) {
+      const date = dates[i];
+      const taskPart = sprint.tasks
+        .filter(t => taskActiveAt(t, date))
+        .reduce((sum, task) => sum + getWorkedAtDate(task, date) + getRemainAtDate(task, date), 0);
+      scope[i + 1] = taskPart + scopeDropContribAt(date);
+    }
+  }
+
+  // Scope drop markers: plotted at the RIGHT border of the drop day (dateIdx + 1)
   const markerMap = new Map<number, string[]>();
   for (const drop of sprint.scopeDrops ?? []) {
-    const idx = dates.indexOf(drop.removedDate);
-    if (idx < 0 || idx > todayIndex) continue;
+    const dateIdx = dates.indexOf(drop.removedDate);
+    if (dateIdx < 0 || dateIdx > todayIndex) continue;
+    const borderIdx = dateIdx + 1;
     const label = `${drop.taskId ? `[${drop.taskId}] ` : ""}${drop.name} (−${drop.estimate})`;
-    if (!markerMap.has(idx)) markerMap.set(idx, []);
-    markerMap.get(idx)!.push(label);
+    if (!markerMap.has(borderIdx)) markerMap.set(borderIdx, []);
+    markerMap.get(borderIdx)!.push(label);
   }
   const scopeDropMarkers: ScopeDropMarker[] = Array.from(markerMap.entries())
     .map(([dateIndex, labels]) => ({ dateIndex, label: labels.join("\n") }));

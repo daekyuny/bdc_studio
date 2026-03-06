@@ -1,7 +1,7 @@
 # Burndown Studio — Product Requirements Document
 
-**Version:** 0.9
-**Last updated:** 2026-03-06
+**Version:** 1.0
+**Last updated:** 2026-03-07
 **Author:** [Your Name]
 **Status:** Draft — open for review
 
@@ -38,7 +38,7 @@ Key pain points:
 - Needs cross-sprint velocity trends and team-level dashboards.
 - Requires multi-user access and shared data.
 
-## 4. Current Features (v0.8)
+## 4. Current Features (v1.0)
 
 ### Sprint Management
 
@@ -87,7 +87,7 @@ Key pain points:
 
 | Feature | Description | Status |
 |---|---|---|
-| Burndown chart | SVG ideal (blue), actual (red), and scope (green dashed) line chart; actual and scope clip at today; dashed today marker; click x-axis date label to set TODAY | Done |
+| Burndown chart | SVG ideal (blue), actual (red), and scope (green dashed) line chart with N+1 border model; ideal reaches exactly 0; Today shown as shaded band (current sprint only); browse marker (past/future sprints); click x-axis date label to set TODAY | Done |
 | Side-by-side layout | Sprint summary and burndown chart displayed side by side; tasks below | Done |
 | Stats dashboard | Duration, working days, total points, remaining, done tasks, available days, progress % | Done |
 | Available Days indicator | `effectiveManDays - totalPoints`, color-coded green/red | Done |
@@ -101,12 +101,14 @@ Key pain points:
 | Feature | Description | Status |
 |---|---|---|
 | Google Sign-In | Firebase Auth; quiet ghost-style sign-in button | Done |
-| Team management | PM/SM: create teams, manage members, delete teams (cleans up all Firestore data incl. member memos) | Done |
+| Team management | PM/SM: create teams, manage members, delete teams (cleans up all Firestore data incl. member memos); member count badge refreshes after Manage closes | Done |
 | Role-based access | super_manager / product_manager / member roles with Firestore security rules | Done |
-| Admin screen | Super Manager: view all users, change roles, delete profiles | Done |
-| User profiles | Name + phone; first-time registration modal; edit via header button | Done |
+| Admin screen | Super Manager: view all users (sortable by Email/Name), change roles, delete profiles; deletion blocked if user owns teams or is assigned to tasks across any team; always shows custom confirm dialog | Done |
+| Member removal guard | Removing a member blocked if assigned to tasks in the team (PM) or across all teams (SM); also blocked if member owns any teams | Done |
+| User profiles | Name + phone; first-time "register?" prompt on unknown login; registration modal; edit via header button | Done |
 | Member list in Preferences | Read-only, auto-synced from Firebase; click row for full profile popup | Done |
 | Private memo | Per-user, per-team Markdown notes in Preferences; auto-saved; deleted when team is deleted | Done |
+| Last-day Move / Split | On the last working day of the current sprint: Todo tasks get a Move button (ScopeDrop + add to target sprint); In Progress tasks get a Split button (mark Done + create continuation task with suffix b in target sprint) | Done |
 
 ### General
 
@@ -195,3 +197,4 @@ Key pain points:
 | 2026-02-27 | 0.7 | Phase 2 features: marked F-201 (drag-and-drop), F-202 (progress %), F-204 (scope tracking) as Done. Deferred F-203. Updated current features (stats dashboard, burndown chart descriptions). |
 | 2026-03-03 | 0.8 | TypeScript migration complete. Updated task tracking: Change/Save button UX, status toggle span, auto-Done on remain=0, Done Date as read-only span, daily workedLog/remainLog, Remove button hidden for non-Todo tasks. Updated chart: scope line now green dashed using per-task logs, clickable date labels to set TODAY. Updated F-204 description. |
 | 2026-03-06 | 0.9 | Phase 4 features shipped: F-401/F-402/F-403 marked Done. Added Multi-user & Authentication and General feature tables. Updated Assigned To to multi-select string[]. Added user profiles, member list, private memo features. Updated Out of Scope. |
+| 2026-03-07 | 1.0 | Updated to v1.0. Added Last-day Move/Split feature. Updated burndown chart description (N+1 border model, Today band). Updated Admin screen (sortable table, confirm dialog, PM-owns-teams guard). Added Member removal guard row. Updated User profiles (register prompt). |

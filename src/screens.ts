@@ -1,6 +1,8 @@
 import { signInWithGoogle, signInWithFakeEmail, signOut } from "./auth.ts";
 import {
   getTeamsForUser,
+  getTeamsManagedBy,
+  loadTeamState,
   createTeam,
   addMemberToTeamWithPrefs,
   removeMemberFromTeamWithPrefs,
@@ -106,6 +108,43 @@ export const showLoginScreen = (): void => {
 };
 
 // ---------------------------------------------------------------------------
+// Register Prompt
+// ---------------------------------------------------------------------------
+
+export const showRegisterPrompt = (
+  email: string,
+  onConfirm: () => void,
+  onCancel: () => void,
+): void => {
+  document.getElementById("registerPromptModal")?.remove();
+
+  const modal = document.createElement("div");
+  modal.id = "registerPromptModal";
+  modal.className = "team-modal-overlay";
+  modal.innerHTML = `
+    <div class="team-modal">
+      <h3>Account Not Found</h3>
+      <p class="pref-hint">No account exists for <strong>${escapeHtml(email)}</strong>.</p>
+      <p class="pref-hint">Would you like to register as a new user?</p>
+      <div class="team-modal-footer">
+        <button class="btn ghost" id="registerPromptCancel">Cancel</button>
+        <button class="btn" id="registerPromptConfirm">Register</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  document.getElementById("registerPromptCancel")!.addEventListener("click", () => {
+    modal.remove();
+    onCancel();
+  });
+  document.getElementById("registerPromptConfirm")!.addEventListener("click", () => {
+    modal.remove();
+    onConfirm();
+  });
+};
+
+// ---------------------------------------------------------------------------
 // Team Selection Screen
 // ---------------------------------------------------------------------------
 
@@ -190,7 +229,9 @@ const renderTeamGrid = (grid: HTMLElement, teams: Team[], profile: UserProfile):
       manageBtn.textContent = "Manage";
       manageBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        showManageMembers(team, profile);
+        showManageMembers(team, profile, () => {
+          if (_currentUser && _currentProfile) loadAndRenderTeams(_currentUser, _currentProfile);
+        });
       });
       card.appendChild(manageBtn);
     }
@@ -290,7 +331,123 @@ const showCreateTeam = (profile: UserProfile): void => {
 // Manage Members inline modal
 // ---------------------------------------------------------------------------
 
-const showManageMembers = (team: Team, profile: UserProfile): void => {
+const findAssignedTasksInState = (displayName: string, appState: { sprints: { tasks: { assignedTo?: string; name?: string; taskId?: string }[] }[]; backlog?: { stories: { storyId: string; tasks: { assignedTo?: string[]; description?: string; taskId?: string }[] }[] } }, label: string): string[] => {
+  const found: string[] = [];
+  appState.sprints.forEach((sprint, i) => {
+    for (const task of sprint.tasks) {
+      const names = (task.assignedTo ?? "").split(",").map(s => s.trim()).filter(Boolean);
+      if (names.includes(displayName)) {
+        found.push(`${label} › Sprint ${i + 1}: ${task.name || task.taskId || "(unnamed)"}`);
+      }
+    }
+  });
+  for (const story of (appState.backlog?.stories ?? [])) {
+    for (const task of story.tasks) {
+      if ((task.assignedTo ?? []).includes(displayName)) {
+        found.push(`${label} › Backlog [${story.storyId}]: ${task.description || task.taskId || "(unnamed)"}`);
+      }
+    }
+  }
+  return found;
+};
+
+// PM: checks only the current team being managed
+const findAssignedTasksInTeam = async (displayName: string, teamId: string, teamName: string): Promise<string[]> => {
+  const appState = await loadTeamState(teamId);
+  if (!appState) return [];
+  return findAssignedTasksInState(displayName, appState, teamName);
+};
+
+// SM: checks across ALL teams the member belongs to
+const findAssignedTasksAcrossTeams = async (displayName: string, userUid: string): Promise<string[]> => {
+  const found: string[] = [];
+  let teams: Team[] = [];
+  try {
+    teams = await getTeamsForUser(userUid, "member");
+  } catch {
+    return found;
+  }
+  await Promise.all(teams.map(async (t) => {
+    const appState = await loadTeamState(t.id);
+    if (!appState) return;
+    found.push(...findAssignedTasksInState(displayName, appState, t.name || t.id));
+  }));
+  return found;
+};
+
+const showSmRemoveBlockedDialog = (displayName: string, assignedTasks: string[]): void => {
+  document.getElementById("smRemoveBlockedDialog")?.remove();
+  const modal = document.createElement("div");
+  modal.id = "smRemoveBlockedDialog";
+  modal.className = "team-modal-overlay";
+  const listItems = assignedTasks.slice(0, 5).map(t => `<li>${escapeHtml(t)}</li>`).join("");
+  const more = assignedTasks.length > 5 ? `<li style="color:var(--text-muted,#888)">… and ${assignedTasks.length - 5} more</li>` : "";
+  modal.innerHTML = `
+    <div class="team-modal">
+      <h3 style="color:#ef4444">&#9888; Cannot Remove Member</h3>
+      <p><strong>${escapeHtml(displayName)}</strong> is still assigned to the following tasks:</p>
+      <ul style="margin:10px 0;padding-left:20px;font-size:0.88em;line-height:1.6">${listItems}${more}</ul>
+      <p class="pref-hint">All task assignments must be cleared before this member can be removed from any team.</p>
+      <div class="team-modal-footer">
+        <button class="btn" id="smRemoveBlockedOk">OK</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  document.getElementById("smRemoveBlockedOk")!.addEventListener("click", () => modal.remove());
+  modal.addEventListener("click", (e) => { if (e.target === modal) modal.remove(); });
+};
+
+const showPmManagesTeamsBlockedDialog = (displayName: string, teamNames: string[]): void => {
+  document.getElementById("smRemoveBlockedDialog")?.remove();
+  const modal = document.createElement("div");
+  modal.id = "smRemoveBlockedDialog";
+  modal.className = "team-modal-overlay";
+  const listItems = teamNames.map(n => `<li>${escapeHtml(n)}</li>`).join("");
+  modal.innerHTML = `
+    <div class="team-modal">
+      <h3 style="color:#ef4444">&#9888; Cannot Remove Member</h3>
+      <p><strong>${escapeHtml(displayName)}</strong> is the owner of the following team(s):</p>
+      <ul style="margin:10px 0;padding-left:20px;font-size:0.88em;line-height:1.6">${listItems}</ul>
+      <p class="pref-hint">Transfer or delete all managed teams before removing this member.</p>
+      <div class="team-modal-footer">
+        <button class="btn" id="smRemoveBlockedOk">OK</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  document.getElementById("smRemoveBlockedOk")!.addEventListener("click", () => modal.remove());
+  modal.addEventListener("click", (e) => { if (e.target === modal) modal.remove(); });
+};
+
+const showSmRemoveConfirmDialog = (
+  displayName: string,
+  message: string,
+  onConfirm: () => void,
+  onCancel: () => void,
+): void => {
+  document.getElementById("smRemoveConfirmDialog")?.remove();
+  const modal = document.createElement("div");
+  modal.id = "smRemoveConfirmDialog";
+  modal.className = "team-modal-overlay";
+  modal.innerHTML = `
+    <div class="team-modal">
+      <h3>Remove Team Member</h3>
+      <p class="confirm-dialog-warning">${message}</p>
+      <div class="team-modal-footer">
+        <button class="btn ghost" id="smRemoveConfirmCancel">Cancel</button>
+        <button class="btn danger-solid" id="smRemoveConfirmOk">Remove</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  const cleanup = () => modal.remove();
+  document.getElementById("smRemoveConfirmCancel")!.addEventListener("click", () => { cleanup(); onCancel(); });
+  document.getElementById("smRemoveConfirmOk")!.addEventListener("click", () => { cleanup(); onConfirm(); });
+  modal.addEventListener("click", (e) => { if (e.target === modal) { cleanup(); onCancel(); } });
+};
+
+const showManageMembers = (team: Team, profile: UserProfile, onDone?: () => void): void => {
   document.getElementById("manageMembersModal")?.remove();
 
   const modal = document.createElement("div");
@@ -317,8 +474,8 @@ const showManageMembers = (team: Team, profile: UserProfile): void => {
   `;
   getContainer().appendChild(modal);
 
-  modal.addEventListener("click", (e) => { if (e.target === modal) modal.remove(); });
-  document.getElementById("manageMembersDone")!.addEventListener("click", () => modal.remove());
+  modal.addEventListener("click", (e) => { if (e.target === modal) { modal.remove(); onDone?.(); } });
+  document.getElementById("manageMembersDone")!.addEventListener("click", () => { modal.remove(); onDone?.(); });
 
   const refresh = async () => {
     const errEl = document.getElementById("manageMemberError")!;
@@ -364,6 +521,36 @@ const showManageMembers = (team: Team, profile: UserProfile): void => {
           const uid = btn.dataset.uid!;
           const displayName = btn.dataset.name!;
           errEl.hidden = true;
+
+          btn.disabled = true;
+          const prevText = btn.textContent;
+          btn.textContent = "Checking…";
+          let assigned: string[] = [];
+          let managedTeams: import("./types.ts").Team[] = [];
+          try {
+            [assigned, managedTeams] = await Promise.all([
+              findAssignedTasksInTeam(displayName, team.id, team.name),
+              getTeamsManagedBy(uid),
+            ]);
+          } finally {
+            btn.disabled = false;
+            btn.textContent = prevText;
+          }
+
+          if (managedTeams.length > 0) {
+            errEl.textContent = `Cannot remove ${displayName}: they manage ${managedTeams.length} team(s) — ${managedTeams.map(t => t.name).join(", ")}. Transfer or delete those teams first.`;
+            errEl.hidden = false;
+            return;
+          }
+
+          if (assigned.length > 0) {
+            const preview = assigned.slice(0, 3).join(", ");
+            const more = assigned.length > 3 ? ` … and ${assigned.length - 3} more` : "";
+            errEl.textContent = `Cannot remove ${displayName}: assigned to ${assigned.length} task(s) — ${preview}${more}. Unassign first.`;
+            errEl.hidden = false;
+            return;
+          }
+
           try {
             await removeMemberFromTeamWithPrefs(team.id, uid, displayName);
             team.memberIds = team.memberIds.filter((id) => id !== uid);
@@ -437,77 +624,145 @@ export const showAdminScreen = (profile: UserProfile, onBack: () => void): void 
   loadAdminUsers();
 };
 
+let _adminUsers: UserProfile[] = [];
+let _adminSort: { key: "email" | "name"; asc: boolean } = { key: "email", asc: true };
+
+const renderAdminTable = (): void => {
+  const tableEl = document.getElementById("adminUserTable");
+  if (!tableEl) return;
+
+  const sorted = [..._adminUsers].sort((a, b) => {
+    const av = _adminSort.key === "email" ? a.email : a.displayName;
+    const bv = _adminSort.key === "email" ? b.email : b.displayName;
+    return _adminSort.asc ? av.localeCompare(bv) : bv.localeCompare(av);
+  });
+
+  const arrow = (key: "email" | "name") =>
+    _adminSort.key === key ? (_adminSort.asc ? " ▲" : " ▼") : "";
+
+  tableEl.innerHTML = `
+    <table class="admin-table">
+      <thead>
+        <tr>
+          <th class="sortable-header" data-sort="email" style="cursor:pointer">Email${arrow("email")}</th>
+          <th class="sortable-header" data-sort="name" style="cursor:pointer">Name${arrow("name")}</th>
+          <th>Role</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${sorted.map((u) => `
+          <tr data-uid="${u.uid}">
+            <td>${escapeHtml(u.email)}</td>
+            <td>${escapeHtml(u.displayName)}</td>
+            <td>
+              <select class="role-select" data-uid="${u.uid}">
+                <option value="member" ${u.role === "member" ? "selected" : ""}>Member</option>
+                <option value="product_manager" ${u.role === "product_manager" ? "selected" : ""}>Product Manager</option>
+                <option value="super_manager" ${u.role === "super_manager" ? "selected" : ""}>Super Manager</option>
+              </select>
+            </td>
+            <td>
+              <button class="btn ghost small danger delete-user-btn"
+                data-uid="${u.uid}" data-email="${escapeHtml(u.email)}"
+                ${u.role === "super_manager" ? "disabled title='Cannot delete Super Manager'" : ""}>
+                Delete
+              </button>
+            </td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+
+  tableEl.querySelectorAll<HTMLElement>(".sortable-header").forEach((th) => {
+    th.addEventListener("click", () => {
+      const key = th.dataset.sort as "email" | "name";
+      if (_adminSort.key === key) _adminSort.asc = !_adminSort.asc;
+      else _adminSort = { key, asc: true };
+      renderAdminTable();
+    });
+  });
+
+  tableEl.querySelectorAll<HTMLSelectElement>(".role-select").forEach((sel) => {
+    sel.addEventListener("change", async () => {
+      const uid = sel.dataset.uid!;
+      const role = sel.value as UserRole;
+      const errEl = document.getElementById("adminError")!;
+      errEl.hidden = true;
+      try {
+        await setUserRole(uid, role);
+        const u = _adminUsers.find(u => u.uid === uid);
+        if (u) u.role = role;
+      } catch (e: unknown) {
+        errEl.textContent = e instanceof Error ? e.message : "Failed to update role.";
+        errEl.hidden = false;
+        renderAdminTable();
+      }
+    });
+  });
+
+  tableEl.querySelectorAll<HTMLButtonElement>(".delete-user-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const uid = btn.dataset.uid!;
+      const email = btn.dataset.email!;
+      const displayName = _adminUsers.find(u => u.uid === uid)?.displayName ?? email;
+      const errEl = document.getElementById("adminError")!;
+      errEl.hidden = true;
+
+      btn.disabled = true;
+      const prevText = btn.textContent;
+      btn.textContent = "Checking…";
+      let assigned: string[] = [];
+      let managedTeams: import("./types.ts").Team[] = [];
+      try {
+        [assigned, managedTeams] = await Promise.all([
+          findAssignedTasksAcrossTeams(displayName, uid),
+          getTeamsManagedBy(uid),
+        ]);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = prevText;
+      }
+
+      if (managedTeams.length > 0) {
+        showPmManagesTeamsBlockedDialog(displayName, managedTeams.map(t => t.name));
+        return;
+      }
+
+      if (assigned.length > 0) {
+        showSmRemoveBlockedDialog(displayName, assigned);
+        return;
+      }
+
+      showSmRemoveConfirmDialog(
+        displayName,
+        `Deleting <strong>${escapeHtml(displayName)}</strong> (${escapeHtml(email)}) will remove them from all teams and revoke their access. Their Auth account remains — if they sign in again they will be re-created as a plain Member.`,
+        async () => {
+          try {
+            await deleteUserProfile(uid);
+            _adminUsers = _adminUsers.filter(u => u.uid !== uid);
+            renderAdminTable();
+          } catch (e: unknown) {
+            errEl.textContent = e instanceof Error ? e.message : "Failed to delete user.";
+            errEl.hidden = false;
+          }
+        },
+        () => {},
+      );
+    });
+  });
+};
+
 const loadAdminUsers = async (): Promise<void> => {
   const tableEl = document.getElementById("adminUserTable");
   if (!tableEl) return;
   try {
-    const users = await getAllUsers();
-    if (users.length === 0) {
+    _adminUsers = await getAllUsers();
+    if (_adminUsers.length === 0) {
       tableEl.innerHTML = "<em>No users found.</em>";
       return;
     }
-    tableEl.innerHTML = `
-      <table class="admin-table">
-        <thead>
-          <tr><th>Email</th><th>Name</th><th>Role</th><th></th></tr>
-        </thead>
-        <tbody>
-          ${users.map((u) => `
-            <tr data-uid="${u.uid}">
-              <td>${escapeHtml(u.email)}</td>
-              <td>${escapeHtml(u.displayName)}</td>
-              <td>
-                <select class="role-select" data-uid="${u.uid}">
-                  <option value="member" ${u.role === "member" ? "selected" : ""}>Member</option>
-                  <option value="product_manager" ${u.role === "product_manager" ? "selected" : ""}>Product Manager</option>
-                  <option value="super_manager" ${u.role === "super_manager" ? "selected" : ""}>Super Manager</option>
-                </select>
-              </td>
-              <td>
-                <button class="btn ghost small danger delete-user-btn"
-                  data-uid="${u.uid}" data-email="${escapeHtml(u.email)}"
-                  ${u.role === "super_manager" ? "disabled title='Cannot delete Super Manager'" : ""}>
-                  Delete
-                </button>
-              </td>
-            </tr>
-          `).join("")}
-        </tbody>
-      </table>
-    `;
-    tableEl.querySelectorAll<HTMLSelectElement>(".role-select").forEach((sel) => {
-      sel.addEventListener("change", async () => {
-        const uid = sel.dataset.uid!;
-        const role = sel.value as UserRole;
-        const errEl = document.getElementById("adminError")!;
-        errEl.hidden = true;
-        try {
-          await setUserRole(uid, role);
-        } catch (e: unknown) {
-          errEl.textContent = e instanceof Error ? e.message : "Failed to update role.";
-          errEl.hidden = false;
-          loadAdminUsers();
-        }
-      });
-    });
-
-    tableEl.querySelectorAll<HTMLButtonElement>(".delete-user-btn").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const uid = btn.dataset.uid!;
-        const email = btn.dataset.email!;
-        if (!confirm(`Delete user "${email}"?\n\nThey will be removed from all teams and lose access. Their Auth account remains — if they log in again, they will be re-created as a plain Member.`)) return;
-        const errEl = document.getElementById("adminError")!;
-        errEl.hidden = true;
-        try {
-          await deleteUserProfile(uid);
-          // Remove the row from the table immediately
-          tableEl.querySelector(`tr[data-uid="${uid}"]`)?.remove();
-        } catch (e: unknown) {
-          errEl.textContent = e instanceof Error ? e.message : "Failed to delete user.";
-          errEl.hidden = false;
-        }
-      });
-    });
+    renderAdminTable();
   } catch (e: unknown) {
     tableEl.innerHTML = `<em>Failed to load users: ${e instanceof Error ? escapeHtml(e.message) : "Unknown error"}</em>`;
   }

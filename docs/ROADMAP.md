@@ -1,7 +1,7 @@
 # Burndown Studio — Project Roadmap
 
 **Version:** 1.0
-**Last updated:** 2026-03-06
+**Last updated:** 2026-03-07
 **Status:** Draft — open for review
 
 ---
@@ -162,6 +162,12 @@ MVP baseline       Data Safety        Daily Usability    Insights           Mult
 - Backlog multi-select assignee (`string[]`) with popup picker
 - Holiday/work-weekend pickers disable already-added dates (predicate function)
 - Sign-in button: quiet ghost style
+- **Burndown N+1 border model**: ideal reaches exactly 0; Today shown as shaded band; actual/scope at right border of each day; initial scope at border 0
+- **Last-day Move/Split**: Move (Todo) and Split (In Progress) buttons on the last working day of the current sprint; sprint selector shows Total Points + Available Days; excludes past sprints
+- **Login register prompt**: unknown users see "register as new user?" before profile creation
+- **projectToday skips non-working days** on page load
+- **Admin enhancements**: sortable user table (Email/Name); developer count capped at team member count; member count badge refreshes after Manage closes
+- **Member removal guards**: blocked if assigned to tasks (PM: current team; SM: all teams) or if user owns any teams; SM always sees custom confirm dialog in Admin
 
 ### Exit Criteria
 - Multiple users can access their team's sprints from any browser. **(Done)**
@@ -194,3 +200,4 @@ MVP baseline       Data Safety        Daily Usability    Insights           Mult
 | 2026-02-27 | 0.8 | Phase 2 progress: marked F-201, F-202, F-204, T-201 as Done. Deferred F-203. Added Status column to Phase 2 tables. Updated exit criteria. Phase 1 marked DONE, Phase 2 now ACTIVE. |
 | 2026-03-03 | 0.9 | Marked T-302 (TypeScript migration) as Done. Updated F-204 description: scope line uses per-task workedLog/remainLog instead of sprint-level scopeLog. |
 | 2026-03-06 | 1.0 | Phase 4 shipped: F-401/F-402/F-403 marked Done. Phase 2 marked Done. Updated roadmap overview. Added "Also Delivered" section for Phase 4 extras (user profiles, memos, multi-assign, pickers, sign-in UX). |
+| 2026-03-07 | 1.1 | Extended "Also Delivered" for Phase 4: burndown N+1 border model, last-day Move/Split, login register prompt, projectToday holiday skip, admin enhancements, member removal guards. |

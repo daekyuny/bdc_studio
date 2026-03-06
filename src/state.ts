@@ -1,4 +1,4 @@
-import { todayIso, addWorkingDays, createId, getNextWorkingDay } from "./utils.ts";
+import { todayIso, addDays, addWorkingDays, createId, getNextWorkingDay } from "./utils.ts";
 import type { AppState, Sprint, SprintTask, Backlog, BacklogStory, BacklogTask, Preferences, ScopeDrop } from "./types.ts";
 import { isFirebaseConfigured } from "./firebase.ts";
 import { loadTeamState, saveTeamState, subscribeToTeamState } from "./db.ts";
@@ -123,11 +123,12 @@ const defaultState = (): AppState => {
 };
 
 const fixLoadedState = (appState: AppState): AppState => {
-  // Always reset project TODAY to real system date on every load
-  const today = todayIso();
-  appState.projectToday = today;
   const holidaySet = new Set(appState.preferences.holidays.map((h: any) => h.date));
   const workWeekendSet = new Set(appState.preferences.workWeekends);
+  // Reset project TODAY to real system date, skipping holidays/weekends.
+  // getNextWorkingDay(yesterday) = first working day on or after today.
+  const today = getNextWorkingDay(addDays(todayIso(), -1), holidaySet, workWeekendSet);
+  appState.projectToday = today;
   for (const sprint of appState.sprints) {
     if (sprint.endDate < today) {
       sprint.today = getNextWorkingDay(sprint.endDate, holidaySet, workWeekendSet);
@@ -331,6 +332,95 @@ export const removeTaskFromSprint = (taskId: string): void => {
     } as ScopeDrop);
   }
   sprint.tasks = sprint.tasks.filter((t) => t.id !== taskId);
+  save();
+  onChange(H_SPRINT_TASKS);
+};
+
+export const moveTaskToSprint = (taskId: string, targetSprintId: string): void => {
+  const sprint = getActiveSprint();
+  if (!sprint) return;
+  const task = sprint.tasks.find((t) => t.id === taskId);
+  if (!task || task.worked > 0) return;
+  const targetSprint = state.sprints.find((s) => s.id === targetSprintId);
+  if (!targetSprint) return;
+
+  // Create ScopeDrop in current sprint (same logic as removeTaskFromSprint)
+  const removedDate = getProjectToday();
+  const isPlanned = !task.addedDate || task.addedDate < sprint.startDate;
+  if (isPlanned) {
+    if (!sprint.scopeDrops) sprint.scopeDrops = [];
+    sprint.scopeDrops.push({
+      addedDate: task.addedDate || sprint.startDate,
+      removedDate,
+      estimate: task.estimate ?? 0,
+      taskId: task.taskId,
+      name: task.name,
+    } as ScopeDrop);
+  }
+
+  // Remove from current sprint
+  sprint.tasks = sprint.tasks.filter((t) => t.id !== taskId);
+
+  // Add to target sprint as a planned task (no addedDate → treated as originally planned)
+  const estimate = task.estimate ?? 0;
+  targetSprint.tasks.push({
+    id: createId(),
+    backlogTaskId: task.backlogTaskId,
+    taskId: task.taskId,
+    name: task.name,
+    assignedTo: task.assignedTo,
+    estimate,
+    worked: 0,
+    remain: estimate,
+    status: "Todo",
+    doneDate: "",
+    remainLog: [],
+    workedLog: [],
+  });
+  save();
+  onChange(H_SPRINT_TASKS);
+};
+
+export const splitTaskToSprint = (taskId: string, targetSprintId: string): void => {
+  const sprint = getActiveSprint();
+  if (!sprint) return;
+  const task = sprint.tasks.find((t) => t.id === taskId);
+  if (!task || task.worked === 0 || task.remain === 0) return;
+  const targetSprint = state.sprints.find((s) => s.id === targetSprintId);
+  if (!targetSprint) return;
+
+  const today = getProjectToday();
+  const originalRemain = task.remain;
+  const originalTaskId = task.taskId;
+
+  // Update original task: suffix 'a', remain → 0, status → Done
+  const newRemainLog = [
+    ...(task.remainLog ?? []).filter((e) => e.date !== today),
+    { date: today, remain: 0 },
+  ];
+  Object.assign(task, {
+    taskId: originalTaskId ? `${originalTaskId}a` : task.taskId,
+    remain: 0,
+    status: "Done" as const,
+    doneDate: today,
+    remainLog: newRemainLog,
+  });
+
+  // Add new task (suffix 'b') to target sprint as planned
+  targetSprint.tasks.push({
+    id: createId(),
+    backlogTaskId: task.backlogTaskId,
+    taskId: originalTaskId ? `${originalTaskId}b` : undefined,
+    name: task.name,
+    assignedTo: task.assignedTo,
+    estimate: originalRemain,
+    worked: 0,
+    remain: originalRemain,
+    status: "Todo",
+    doneDate: "",
+    remainLog: [],
+    workedLog: [],
+  });
   save();
   onChange(H_SPRINT_TASKS);
 };

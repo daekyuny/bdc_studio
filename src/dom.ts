@@ -98,6 +98,18 @@ export const dom = {
   confirmRemoveTaskName: $<HTMLElement>("confirmRemoveTaskName"),
   confirmRemoveTaskCancel: $<HTMLButtonElement>("confirmRemoveTaskCancel"),
   confirmRemoveTaskConfirm: $<HTMLButtonElement>("confirmRemoveTaskConfirm"),
+  // Move Task modal
+  moveTaskModal: $<HTMLElement>("moveTaskModal"),
+  moveTaskName: $<HTMLElement>("moveTaskName"),
+  moveTaskSprintSelect: $<HTMLSelectElement>("moveTaskSprintSelect"),
+  moveTaskCancel: $<HTMLButtonElement>("moveTaskCancel"),
+  moveTaskConfirm: $<HTMLButtonElement>("moveTaskConfirm"),
+  // Split Task modal
+  splitTaskModal: $<HTMLElement>("splitTaskModal"),
+  splitTaskInfo: $<HTMLElement>("splitTaskInfo"),
+  splitTaskSprintSelect: $<HTMLSelectElement>("splitTaskSprintSelect"),
+  splitTaskCancel: $<HTMLButtonElement>("splitTaskCancel"),
+  splitTaskConfirm: $<HTMLButtonElement>("splitTaskConfirm"),
   // Import confirm dialog (reusable)
   importConfirmModal: $<HTMLElement>("importConfirmModal"),
   importConfirmTitle: $<HTMLElement>("importConfirmTitle"),

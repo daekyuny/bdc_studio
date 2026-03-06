@@ -99,6 +99,18 @@
     confirmRemoveTaskName: $("confirmRemoveTaskName"),
     confirmRemoveTaskCancel: $("confirmRemoveTaskCancel"),
     confirmRemoveTaskConfirm: $("confirmRemoveTaskConfirm"),
+    // Move Task modal
+    moveTaskModal: $("moveTaskModal"),
+    moveTaskName: $("moveTaskName"),
+    moveTaskSprintSelect: $("moveTaskSprintSelect"),
+    moveTaskCancel: $("moveTaskCancel"),
+    moveTaskConfirm: $("moveTaskConfirm"),
+    // Split Task modal
+    splitTaskModal: $("splitTaskModal"),
+    splitTaskInfo: $("splitTaskInfo"),
+    splitTaskSprintSelect: $("splitTaskSprintSelect"),
+    splitTaskCancel: $("splitTaskCancel"),
+    splitTaskConfirm: $("splitTaskConfirm"),
     // Import confirm dialog (reusable)
     importConfirmModal: $("importConfirmModal"),
     importConfirmTitle: $("importConfirmTitle"),
@@ -135,6 +147,11 @@
     return `${y}-${m}-${d}`;
   };
   var todayIso = () => localIso(/* @__PURE__ */ new Date());
+  var addDays = (isoDate, days) => {
+    const d = /* @__PURE__ */ new Date(isoDate + "T00:00:00");
+    d.setDate(d.getDate() + days);
+    return localIso(d);
+  };
   var toShortDate = (isoDate) => {
     if (!isoDate) return "";
     const date = /* @__PURE__ */ new Date(isoDate + "T00:00:00");
@@ -20957,6 +20974,12 @@ This typically indicates that your device does not have a healthy Internet conne
     }
     await updateDoc(doc(db, "users", uid), firestoreUpdates);
   };
+  var getTeamsManagedBy = async (userId) => {
+    const snap = await getDocs(
+      query(collection(db, "teams"), where("ownerId", "==", userId))
+    );
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  };
   var getTeamsForUser = async (userId, role) => {
     if (role === "super_manager") {
       const snap2 = await getDocs(collection(db, "teams"));
@@ -21170,10 +21193,10 @@ This typically indicates that your device does not have a healthy Internet conne
     };
   };
   var fixLoadedState = (appState) => {
-    const today = todayIso();
-    appState.projectToday = today;
     const holidaySet = new Set(appState.preferences.holidays.map((h) => h.date));
     const workWeekendSet = new Set(appState.preferences.workWeekends);
+    const today = getNextWorkingDay(addDays(todayIso(), -1), holidaySet, workWeekendSet);
+    appState.projectToday = today;
     for (const sprint of appState.sprints) {
       if (sprint.endDate < today) {
         sprint.today = getNextWorkingDay(sprint.endDate, holidaySet, workWeekendSet);
@@ -21347,6 +21370,82 @@ This typically indicates that your device does not have a healthy Internet conne
       });
     }
     sprint.tasks = sprint.tasks.filter((t) => t.id !== taskId);
+    save();
+    onChange(H_SPRINT_TASKS);
+  };
+  var moveTaskToSprint = (taskId, targetSprintId) => {
+    const sprint = getActiveSprint();
+    if (!sprint) return;
+    const task = sprint.tasks.find((t) => t.id === taskId);
+    if (!task || task.worked > 0) return;
+    const targetSprint = state.sprints.find((s) => s.id === targetSprintId);
+    if (!targetSprint) return;
+    const removedDate = getProjectToday();
+    const isPlanned = !task.addedDate || task.addedDate < sprint.startDate;
+    if (isPlanned) {
+      if (!sprint.scopeDrops) sprint.scopeDrops = [];
+      sprint.scopeDrops.push({
+        addedDate: task.addedDate || sprint.startDate,
+        removedDate,
+        estimate: task.estimate ?? 0,
+        taskId: task.taskId,
+        name: task.name
+      });
+    }
+    sprint.tasks = sprint.tasks.filter((t) => t.id !== taskId);
+    const estimate = task.estimate ?? 0;
+    targetSprint.tasks.push({
+      id: createId(),
+      backlogTaskId: task.backlogTaskId,
+      taskId: task.taskId,
+      name: task.name,
+      assignedTo: task.assignedTo,
+      estimate,
+      worked: 0,
+      remain: estimate,
+      status: "Todo",
+      doneDate: "",
+      remainLog: [],
+      workedLog: []
+    });
+    save();
+    onChange(H_SPRINT_TASKS);
+  };
+  var splitTaskToSprint = (taskId, targetSprintId) => {
+    const sprint = getActiveSprint();
+    if (!sprint) return;
+    const task = sprint.tasks.find((t) => t.id === taskId);
+    if (!task || task.worked === 0 || task.remain === 0) return;
+    const targetSprint = state.sprints.find((s) => s.id === targetSprintId);
+    if (!targetSprint) return;
+    const today = getProjectToday();
+    const originalRemain = task.remain;
+    const originalTaskId = task.taskId;
+    const newRemainLog = [
+      ...(task.remainLog ?? []).filter((e) => e.date !== today),
+      { date: today, remain: 0 }
+    ];
+    Object.assign(task, {
+      taskId: originalTaskId ? `${originalTaskId}a` : task.taskId,
+      remain: 0,
+      status: "Done",
+      doneDate: today,
+      remainLog: newRemainLog
+    });
+    targetSprint.tasks.push({
+      id: createId(),
+      backlogTaskId: task.backlogTaskId,
+      taskId: originalTaskId ? `${originalTaskId}b` : void 0,
+      name: task.name,
+      assignedTo: task.assignedTo,
+      estimate: originalRemain,
+      worked: 0,
+      remain: originalRemain,
+      status: "Todo",
+      doneDate: "",
+      remainLog: [],
+      workedLog: []
+    });
     save();
     onChange(H_SPRINT_TASKS);
   };
@@ -21623,31 +21722,42 @@ This typically indicates that your device does not have a healthy Internet conne
     const manDays = developers * workingDays;
     const effectiveManDays = manDays * efficiency;
     const idealDailyBurn = workingDays > 0 ? effectiveManDays / workingDays : 0;
-    const ideal = dates.map((_, index) => {
-      if (dates.length <= 1) return plannedPoints;
-      const remaining = plannedPoints - idealDailyBurn * index;
-      return Math.round(Math.max(remaining, 0) * 100) / 100;
-    });
+    const N2 = workingDays;
+    const idealLineBurn = N2 > 0 ? plannedPoints / N2 : 0;
+    const ideal = Array.from(
+      { length: N2 + 1 },
+      (_, i) => Math.round(Math.max(0, plannedPoints - idealLineBurn * i) * 100) / 100
+    );
     const todayIndex = dates.reduce((last, date, i) => date <= today ? i : last, -1);
     const taskActiveAt = (task, date) => !task.addedDate || task.addedDate <= date;
     const scopeDropContribAt = (date) => (sprint.scopeDrops ?? []).filter((d) => d.addedDate <= date && d.removedDate > date).reduce((sum, d) => sum + d.estimate, 0);
-    const actual = dates.map((date, i) => {
-      if (todayIndex < 0 || i > todayIndex) return null;
-      const taskPart = sprint.tasks.filter((t) => taskActiveAt(t, date)).reduce((sum, task) => sum + getRemainAtDate(task, date), 0);
-      return taskPart + scopeDropContribAt(date);
-    });
-    const scope = dates.map((date, i) => {
-      if (todayIndex < 0 || i > todayIndex) return null;
-      const taskPart = sprint.tasks.filter((t) => taskActiveAt(t, date)).reduce((sum, task) => sum + getWorkedAtDate(task, date) + getRemainAtDate(task, date), 0);
-      return taskPart + scopeDropContribAt(date);
-    });
+    const initialScope = sprint.tasks.filter((t) => !t.addedDate || t.addedDate <= sprint.startDate).reduce((sum, t) => sum + (t.estimate ?? 0), 0) + scopeDropContribAt(sprint.startDate);
+    const actual = Array(N2 + 1).fill(null);
+    if (todayIndex >= 0) {
+      actual[0] = initialScope;
+      for (let i = 0; i <= todayIndex; i++) {
+        const date = dates[i];
+        const taskPart = sprint.tasks.filter((t) => taskActiveAt(t, date)).reduce((sum, task) => sum + getRemainAtDate(task, date), 0);
+        actual[i + 1] = taskPart + scopeDropContribAt(date);
+      }
+    }
+    const scope = Array(N2 + 1).fill(null);
+    if (todayIndex >= 0) {
+      scope[0] = initialScope;
+      for (let i = 0; i <= todayIndex; i++) {
+        const date = dates[i];
+        const taskPart = sprint.tasks.filter((t) => taskActiveAt(t, date)).reduce((sum, task) => sum + getWorkedAtDate(task, date) + getRemainAtDate(task, date), 0);
+        scope[i + 1] = taskPart + scopeDropContribAt(date);
+      }
+    }
     const markerMap = /* @__PURE__ */ new Map();
     for (const drop of sprint.scopeDrops ?? []) {
-      const idx = dates.indexOf(drop.removedDate);
-      if (idx < 0 || idx > todayIndex) continue;
+      const dateIdx = dates.indexOf(drop.removedDate);
+      if (dateIdx < 0 || dateIdx > todayIndex) continue;
+      const borderIdx = dateIdx + 1;
       const label = `${drop.taskId ? `[${drop.taskId}] ` : ""}${drop.name} (\u2212${drop.estimate})`;
-      if (!markerMap.has(idx)) markerMap.set(idx, []);
-      markerMap.get(idx).push(label);
+      if (!markerMap.has(borderIdx)) markerMap.set(borderIdx, []);
+      markerMap.get(borderIdx).push(label);
     }
     const scopeDropMarkers = Array.from(markerMap.entries()).map(([dateIndex, labels]) => ({ dateIndex, label: labels.join("\n") }));
     return { dates, totalPoints, ideal, actual, scope, scopeDropMarkers, manDays, effectiveManDays, idealDailyBurn, todayIndex };
@@ -21677,8 +21787,9 @@ This typically indicates that your device does not have a healthy Internet conne
     const range = maxValue - minValue;
     const plotWidth = width - padding * 2;
     const plotHeight = height - padding * 2;
+    const N2 = dates.length;
     const toPoint = (value, index) => {
-      const x2 = padding + plotWidth * (dates.length === 1 ? 0 : index / (dates.length - 1));
+      const x2 = padding + plotWidth * (N2 === 0 ? 0 : index / N2);
       const y = padding + plotHeight * (1 - (value - minValue) / range);
       return `${x2},${y}`;
     };
@@ -21714,8 +21825,29 @@ This typically indicates that your device does not have a healthy Internet conne
       dom.chart.appendChild(zeroLine);
     }
     const effectiveBrowseIndex = browseIndex !== void 0 ? browseIndex : todayIndex;
-    if (effectiveBrowseIndex >= 0 && effectiveBrowseIndex !== todayIndex) {
-      const bx = padding + plotWidth * (dates.length === 1 ? 0 : effectiveBrowseIndex / (dates.length - 1));
+    if (showTodayLabel && todayIndex >= 0 && N2 > 0) {
+      const txLeft = padding + plotWidth * todayIndex / N2;
+      const txRight = padding + plotWidth * (todayIndex + 1) / N2;
+      const todayBand = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      todayBand.setAttribute("x", String(txLeft));
+      todayBand.setAttribute("y", String(padding));
+      todayBand.setAttribute("width", String(txRight - txLeft));
+      todayBand.setAttribute("height", String(plotHeight));
+      todayBand.setAttribute("fill", "rgba(92, 103, 242, 0.07)");
+      dom.chart.appendChild(todayBand);
+      if (showTodayLabel) {
+        const todayLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        todayLabel.setAttribute("x", String((txLeft + txRight) / 2));
+        todayLabel.setAttribute("y", String(padding + 12));
+        todayLabel.setAttribute("text-anchor", "middle");
+        todayLabel.setAttribute("fill", "rgba(92, 103, 242, 0.65)");
+        todayLabel.setAttribute("font-size", "10");
+        todayLabel.textContent = "Today";
+        dom.chart.appendChild(todayLabel);
+      }
+    }
+    if (effectiveBrowseIndex >= 0 && N2 > 0 && (!showTodayLabel || effectiveBrowseIndex !== todayIndex)) {
+      const bx = padding + plotWidth * (effectiveBrowseIndex + 1) / N2;
       const browseLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
       browseLine.setAttribute("x1", String(bx));
       browseLine.setAttribute("x2", String(bx));
@@ -21725,27 +21857,6 @@ This typically indicates that your device does not have a healthy Internet conne
       browseLine.setAttribute("stroke-width", "1.5");
       browseLine.setAttribute("stroke-dasharray", "4 3");
       dom.chart.appendChild(browseLine);
-    }
-    if (todayIndex >= 0) {
-      const tx = padding + plotWidth * (dates.length === 1 ? 0 : todayIndex / (dates.length - 1));
-      const todayLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
-      todayLine.setAttribute("x1", String(tx));
-      todayLine.setAttribute("x2", String(tx));
-      todayLine.setAttribute("y1", String(padding));
-      todayLine.setAttribute("y2", String(height - padding));
-      todayLine.setAttribute("stroke", "rgba(92, 103, 242, 0.45)");
-      todayLine.setAttribute("stroke-width", "1.5");
-      todayLine.setAttribute("stroke-dasharray", "4 3");
-      dom.chart.appendChild(todayLine);
-      if (showTodayLabel) {
-        const todayLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        todayLabel.setAttribute("x", String(tx + 4));
-        todayLabel.setAttribute("y", String(padding + 12));
-        todayLabel.setAttribute("fill", "rgba(92, 103, 242, 0.65)");
-        todayLabel.setAttribute("font-size", "10");
-        todayLabel.textContent = "Today";
-        dom.chart.appendChild(todayLabel);
-      }
     }
     const idealLine = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
     idealLine.setAttribute("fill", "none");
@@ -21826,7 +21937,7 @@ ${marker.label}`;
     labels.setAttribute("fill", "#6b7080");
     const showDays = dom.showDayNumbers.checked;
     dates.forEach((date, index) => {
-      const x2 = padding + plotWidth * (dates.length === 1 ? 0 : index / (dates.length - 1));
+      const x2 = padding + plotWidth * (N2 === 0 ? 0 : (index + 0.5) / N2);
       const isToday = index === todayIndex;
       const isBrowse = index === effectiveBrowseIndex && effectiveBrowseIndex !== todayIndex;
       const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
@@ -21836,7 +21947,7 @@ ${marker.label}`;
       label.setAttribute("fill", isToday ? "rgba(92, 103, 242, 0.85)" : isBrowse ? "rgba(107, 114, 128, 0.9)" : "#6b7080");
       if (isToday) label.setAttribute("font-weight", "bold");
       if (isBrowse) label.setAttribute("font-weight", "600");
-      label.textContent = showDays ? `D${index}` : toShortDate(date);
+      label.textContent = showDays ? `D${index + 1}` : toShortDate(date);
       if (onDateClick) {
         label.style.cursor = "pointer";
         label.addEventListener("click", () => onDateClick(date));
@@ -21975,6 +22086,7 @@ ${marker.label}`;
     if (taskTable) applySortClasses(taskTable, taskSort);
     const viewDate = sprint.today || todayIso();
     const projectTodayNow = getProjectToday();
+    const isLastDay = isSprintActive && projectTodayNow === sprint.endDate;
     const isSorted = taskSort.key !== null;
     const tasks = sortItems(
       sprint.tasks.map((t) => {
@@ -22037,6 +22149,8 @@ ${marker.label}`;
       const statusToggle = row.querySelector(".task-status-toggle");
       const doneSpan = row.querySelector(".task-done");
       const removeBtn = row.querySelector(".task-remove");
+      const moveBtn = row.querySelector(".task-move");
+      const splitBtn = row.querySelector(".task-split");
       taskIdSpan.textContent = task.taskId || "";
       nameSpan.textContent = task.name;
       let currentAssigned = task.assignedTo || "";
@@ -22126,7 +22240,17 @@ ${marker.label}`;
           commitSave();
         }
       });
-      removeBtn.hidden = !isSprintActive || !task.existsNow || task.worked > 0;
+      const isTodo = task.worked === 0 && task.status !== "Done";
+      const isInProgress = task.worked > 0 && task.remain > 0 && task.status !== "Done";
+      if (isLastDay && task.existsNow) {
+        removeBtn.hidden = true;
+        moveBtn.hidden = !isTodo;
+        splitBtn.hidden = !isInProgress;
+      } else {
+        removeBtn.hidden = !isSprintActive || !task.existsNow || task.worked > 0;
+        moveBtn.hidden = true;
+        splitBtn.hidden = true;
+      }
       removeBtn.addEventListener("click", () => {
         const label = task.taskId ? `[${task.taskId}] ${task.name}` : task.name || "this task";
         dom.confirmRemoveTaskName.textContent = label;
@@ -22143,6 +22267,64 @@ ${marker.label}`;
         };
         dom.confirmRemoveTaskConfirm.addEventListener("click", onConfirm);
         dom.confirmRemoveTaskCancel.addEventListener("click", onCancel);
+      });
+      const buildSprintOptions = (select) => {
+        select.innerHTML = "";
+        const allSprints = getState().sprints;
+        allSprints.forEach((s, i) => {
+          if (s.id === sprint.id) return;
+          if (s.endDate < projectTodayNow) return;
+          const workingDays = getWorkingDates(s.startDate, s.endDate, holidaySet, workWeekendSet).length;
+          const totalPts = s.tasks.reduce((sum, t) => sum + Number(t.estimate || 0), 0);
+          const avail = Math.max(0, Number(s.developers || 0)) * workingDays * Math.min(1, Math.max(0, Number(s.efficiency || 0))) - totalPts;
+          const label = s.description ? `Sprint ${i + 1} \u2014 ${s.description}` : `Sprint ${i + 1}`;
+          const pts = totalPts.toFixed(1).replace(/\.0$/, "");
+          const availStr = avail.toFixed(1).replace(/\.0$/, "");
+          const opt = document.createElement("option");
+          opt.value = s.id;
+          opt.textContent = `${label}  [${pts} pts, ${availStr} avail days]`;
+          select.appendChild(opt);
+        });
+      };
+      moveBtn.addEventListener("click", () => {
+        const label = task.taskId ? `[${task.taskId}] ${task.name}` : task.name || "this task";
+        dom.moveTaskName.textContent = label;
+        buildSprintOptions(dom.moveTaskSprintSelect);
+        dom.moveTaskModal.hidden = false;
+        const onConfirm = () => {
+          const targetId = dom.moveTaskSprintSelect.value;
+          if (targetId) moveTaskToSprint(task.id, targetId);
+          cleanup();
+        };
+        const onCancel = () => cleanup();
+        const cleanup = () => {
+          dom.moveTaskModal.hidden = true;
+          dom.moveTaskConfirm.removeEventListener("click", onConfirm);
+          dom.moveTaskCancel.removeEventListener("click", onCancel);
+        };
+        dom.moveTaskConfirm.addEventListener("click", onConfirm);
+        dom.moveTaskCancel.addEventListener("click", onCancel);
+      });
+      splitBtn.addEventListener("click", () => {
+        const label = task.taskId ? `[${task.taskId}] ${task.name}` : task.name || "this task";
+        const aId = task.taskId ? `${task.taskId}a` : "(original)";
+        const bId = task.taskId ? `${task.taskId}b` : "(new)";
+        dom.splitTaskInfo.innerHTML = `<strong>${label}</strong><br><span style="color:var(--text-muted,#888)">${aId}: worked ${task.histWorked} days \u2014 remain set to 0 (closed in this sprint)</span><br><span style="color:var(--text-muted,#888)">${bId}: ${task.histRemain} days remaining \u2014 moved to target sprint</span>`;
+        buildSprintOptions(dom.splitTaskSprintSelect);
+        dom.splitTaskModal.hidden = false;
+        const onConfirm = () => {
+          const targetId = dom.splitTaskSprintSelect.value;
+          if (targetId) splitTaskToSprint(task.id, targetId);
+          cleanup();
+        };
+        const onCancel = () => cleanup();
+        const cleanup = () => {
+          dom.splitTaskModal.hidden = true;
+          dom.splitTaskConfirm.removeEventListener("click", onConfirm);
+          dom.splitTaskCancel.removeEventListener("click", onCancel);
+        };
+        dom.splitTaskConfirm.addEventListener("click", onConfirm);
+        dom.splitTaskCancel.addEventListener("click", onCancel);
       });
       row.addEventListener("dragover", (e) => {
         e.preventDefault();
@@ -22295,6 +22477,7 @@ ${marker.label}`;
     const footer = document.createElement("div");
     footer.style.cssText = "display:flex;justify-content:flex-end;margin-top:16px;";
     const doneBtn = document.createElement("button");
+    doneBtn.type = "button";
     doneBtn.className = "btn btn-primary";
     doneBtn.textContent = "Done";
     footer.appendChild(doneBtn);
@@ -22304,12 +22487,16 @@ ${marker.label}`;
     const close = () => {
       document.body.removeChild(overlay);
     };
-    doneBtn.addEventListener("click", () => {
+    doneBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
       onDone(checkboxes.filter(({ cb }) => cb.checked).map(({ value }) => value));
       close();
     });
     overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) close();
+      if (e.target === overlay) {
+        e.stopPropagation();
+        close();
+      }
     });
   };
   var renderBacklog = () => {
@@ -22455,10 +22642,19 @@ ${marker.label}`;
             taskAssignedDropdown.hidden = false;
             taskAssignedDropdown.className = "task-assigned-clickable";
             taskAssignedDropdown.textContent = _assignedSelection.length > 0 ? _assignedSelection.join(", ") : "\u2014";
+            const saveTask = () => {
+              editingIds.delete(task.id);
+              updateBacklogTask(story.id, task.id, {
+                taskId: taskIdEdit.value.trim(),
+                description: taskDescEdit.value.trim(),
+                estimate: Number(taskEstEdit.value) || 0,
+                assignedTo: _assignedSelection
+              });
+            };
             taskAssignedDropdown.addEventListener("click", () => {
               openAssignedPicker(_assignedSelection, getMembers(), (selected) => {
                 _assignedSelection = selected;
-                taskAssignedDropdown.textContent = _assignedSelection.length > 0 ? _assignedSelection.join(", ") : "\u2014";
+                saveTask();
               });
             });
             taskEditBtn.hidden = true;
@@ -22986,8 +23182,9 @@ ${marker.label}`;
     await signOut(auth);
   };
   var ensureUserProfile = async (user) => {
-    const existing = await getUserProfile(user.uid);
-    if (existing) return { profile: existing, isNew: false };
+    return await getUserProfile(user.uid);
+  };
+  var createNewUserProfile = async (user) => {
     const profile = {
       uid: user.uid,
       email: user.email ?? "",
@@ -22996,7 +23193,7 @@ ${marker.label}`;
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     await createUserProfile(profile);
-    return { profile, isNew: true };
+    return profile;
   };
 
   // src/screens.ts
@@ -23079,6 +23276,32 @@ ${marker.label}`;
       });
     }
   };
+  var showRegisterPrompt = (email, onConfirm, onCancel) => {
+    document.getElementById("registerPromptModal")?.remove();
+    const modal = document.createElement("div");
+    modal.id = "registerPromptModal";
+    modal.className = "team-modal-overlay";
+    modal.innerHTML = `
+    <div class="team-modal">
+      <h3>Account Not Found</h3>
+      <p class="pref-hint">No account exists for <strong>${escapeHtml(email)}</strong>.</p>
+      <p class="pref-hint">Would you like to register as a new user?</p>
+      <div class="team-modal-footer">
+        <button class="btn ghost" id="registerPromptCancel">Cancel</button>
+        <button class="btn" id="registerPromptConfirm">Register</button>
+      </div>
+    </div>
+  `;
+    document.body.appendChild(modal);
+    document.getElementById("registerPromptCancel").addEventListener("click", () => {
+      modal.remove();
+      onCancel();
+    });
+    document.getElementById("registerPromptConfirm").addEventListener("click", () => {
+      modal.remove();
+      onConfirm();
+    });
+  };
   var showTeamScreen = (user, profile, onTeamSelected) => {
     _currentUser = user;
     _currentProfile = profile;
@@ -23148,7 +23371,9 @@ ${marker.label}`;
         manageBtn.textContent = "Manage";
         manageBtn.addEventListener("click", (e) => {
           e.stopPropagation();
-          showManageMembers(team, profile);
+          showManageMembers(team, profile, () => {
+            if (_currentUser && _currentProfile) loadAndRenderTeams(_currentUser, _currentProfile);
+          });
         });
         card.appendChild(manageBtn);
       }
@@ -23235,7 +23460,125 @@ All shared sprint data for this team will be permanently removed.`)) return;
     });
     setTimeout(() => document.getElementById("newTeamName").focus(), 50);
   };
-  var showManageMembers = (team, profile) => {
+  var findAssignedTasksInState = (displayName, appState, label) => {
+    const found = [];
+    appState.sprints.forEach((sprint, i) => {
+      for (const task of sprint.tasks) {
+        const names = (task.assignedTo ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+        if (names.includes(displayName)) {
+          found.push(`${label} \u203A Sprint ${i + 1}: ${task.name || task.taskId || "(unnamed)"}`);
+        }
+      }
+    });
+    for (const story of appState.backlog?.stories ?? []) {
+      for (const task of story.tasks) {
+        if ((task.assignedTo ?? []).includes(displayName)) {
+          found.push(`${label} \u203A Backlog [${story.storyId}]: ${task.description || task.taskId || "(unnamed)"}`);
+        }
+      }
+    }
+    return found;
+  };
+  var findAssignedTasksInTeam = async (displayName, teamId, teamName) => {
+    const appState = await loadTeamState(teamId);
+    if (!appState) return [];
+    return findAssignedTasksInState(displayName, appState, teamName);
+  };
+  var findAssignedTasksAcrossTeams = async (displayName, userUid) => {
+    const found = [];
+    let teams = [];
+    try {
+      teams = await getTeamsForUser(userUid, "member");
+    } catch {
+      return found;
+    }
+    await Promise.all(teams.map(async (t) => {
+      const appState = await loadTeamState(t.id);
+      if (!appState) return;
+      found.push(...findAssignedTasksInState(displayName, appState, t.name || t.id));
+    }));
+    return found;
+  };
+  var showSmRemoveBlockedDialog = (displayName, assignedTasks) => {
+    document.getElementById("smRemoveBlockedDialog")?.remove();
+    const modal = document.createElement("div");
+    modal.id = "smRemoveBlockedDialog";
+    modal.className = "team-modal-overlay";
+    const listItems = assignedTasks.slice(0, 5).map((t) => `<li>${escapeHtml(t)}</li>`).join("");
+    const more = assignedTasks.length > 5 ? `<li style="color:var(--text-muted,#888)">\u2026 and ${assignedTasks.length - 5} more</li>` : "";
+    modal.innerHTML = `
+    <div class="team-modal">
+      <h3 style="color:#ef4444">&#9888; Cannot Remove Member</h3>
+      <p><strong>${escapeHtml(displayName)}</strong> is still assigned to the following tasks:</p>
+      <ul style="margin:10px 0;padding-left:20px;font-size:0.88em;line-height:1.6">${listItems}${more}</ul>
+      <p class="pref-hint">All task assignments must be cleared before this member can be removed from any team.</p>
+      <div class="team-modal-footer">
+        <button class="btn" id="smRemoveBlockedOk">OK</button>
+      </div>
+    </div>
+  `;
+    document.body.appendChild(modal);
+    document.getElementById("smRemoveBlockedOk").addEventListener("click", () => modal.remove());
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) modal.remove();
+    });
+  };
+  var showPmManagesTeamsBlockedDialog = (displayName, teamNames) => {
+    document.getElementById("smRemoveBlockedDialog")?.remove();
+    const modal = document.createElement("div");
+    modal.id = "smRemoveBlockedDialog";
+    modal.className = "team-modal-overlay";
+    const listItems = teamNames.map((n) => `<li>${escapeHtml(n)}</li>`).join("");
+    modal.innerHTML = `
+    <div class="team-modal">
+      <h3 style="color:#ef4444">&#9888; Cannot Remove Member</h3>
+      <p><strong>${escapeHtml(displayName)}</strong> is the owner of the following team(s):</p>
+      <ul style="margin:10px 0;padding-left:20px;font-size:0.88em;line-height:1.6">${listItems}</ul>
+      <p class="pref-hint">Transfer or delete all managed teams before removing this member.</p>
+      <div class="team-modal-footer">
+        <button class="btn" id="smRemoveBlockedOk">OK</button>
+      </div>
+    </div>
+  `;
+    document.body.appendChild(modal);
+    document.getElementById("smRemoveBlockedOk").addEventListener("click", () => modal.remove());
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) modal.remove();
+    });
+  };
+  var showSmRemoveConfirmDialog = (displayName, message, onConfirm, onCancel) => {
+    document.getElementById("smRemoveConfirmDialog")?.remove();
+    const modal = document.createElement("div");
+    modal.id = "smRemoveConfirmDialog";
+    modal.className = "team-modal-overlay";
+    modal.innerHTML = `
+    <div class="team-modal">
+      <h3>Remove Team Member</h3>
+      <p class="confirm-dialog-warning">${message}</p>
+      <div class="team-modal-footer">
+        <button class="btn ghost" id="smRemoveConfirmCancel">Cancel</button>
+        <button class="btn danger-solid" id="smRemoveConfirmOk">Remove</button>
+      </div>
+    </div>
+  `;
+    document.body.appendChild(modal);
+    const cleanup = () => modal.remove();
+    document.getElementById("smRemoveConfirmCancel").addEventListener("click", () => {
+      cleanup();
+      onCancel();
+    });
+    document.getElementById("smRemoveConfirmOk").addEventListener("click", () => {
+      cleanup();
+      onConfirm();
+    });
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) {
+        cleanup();
+        onCancel();
+      }
+    });
+  };
+  var showManageMembers = (team, profile, onDone) => {
     document.getElementById("manageMembersModal")?.remove();
     const modal = document.createElement("div");
     modal.id = "manageMembersModal";
@@ -23261,9 +23604,15 @@ All shared sprint data for this team will be permanently removed.`)) return;
   `;
     getContainer().appendChild(modal);
     modal.addEventListener("click", (e) => {
-      if (e.target === modal) modal.remove();
+      if (e.target === modal) {
+        modal.remove();
+        onDone?.();
+      }
     });
-    document.getElementById("manageMembersDone").addEventListener("click", () => modal.remove());
+    document.getElementById("manageMembersDone").addEventListener("click", () => {
+      modal.remove();
+      onDone?.();
+    });
     const refresh = async () => {
       const errEl = document.getElementById("manageMemberError");
       errEl.hidden = true;
@@ -23303,6 +23652,32 @@ All shared sprint data for this team will be permanently removed.`)) return;
             const uid = btn.dataset.uid;
             const displayName = btn.dataset.name;
             errEl.hidden = true;
+            btn.disabled = true;
+            const prevText = btn.textContent;
+            btn.textContent = "Checking\u2026";
+            let assigned = [];
+            let managedTeams = [];
+            try {
+              [assigned, managedTeams] = await Promise.all([
+                findAssignedTasksInTeam(displayName, team.id, team.name),
+                getTeamsManagedBy(uid)
+              ]);
+            } finally {
+              btn.disabled = false;
+              btn.textContent = prevText;
+            }
+            if (managedTeams.length > 0) {
+              errEl.textContent = `Cannot remove ${displayName}: they manage ${managedTeams.length} team(s) \u2014 ${managedTeams.map((t) => t.name).join(", ")}. Transfer or delete those teams first.`;
+              errEl.hidden = false;
+              return;
+            }
+            if (assigned.length > 0) {
+              const preview = assigned.slice(0, 3).join(", ");
+              const more = assigned.length > 3 ? ` \u2026 and ${assigned.length - 3} more` : "";
+              errEl.textContent = `Cannot remove ${displayName}: assigned to ${assigned.length} task(s) \u2014 ${preview}${more}. Unassign first.`;
+              errEl.hidden = false;
+              return;
+            }
             try {
               await removeMemberFromTeamWithPrefs(team.id, uid, displayName);
               team.memberIds = team.memberIds.filter((id) => id !== uid);
@@ -23365,77 +23740,133 @@ All shared sprint data for this team will be permanently removed.`)) return;
     document.getElementById("adminBackBtn").addEventListener("click", onBack);
     loadAdminUsers();
   };
+  var _adminUsers = [];
+  var _adminSort = { key: "email", asc: true };
+  var renderAdminTable = () => {
+    const tableEl = document.getElementById("adminUserTable");
+    if (!tableEl) return;
+    const sorted = [..._adminUsers].sort((a, b) => {
+      const av = _adminSort.key === "email" ? a.email : a.displayName;
+      const bv = _adminSort.key === "email" ? b.email : b.displayName;
+      return _adminSort.asc ? av.localeCompare(bv) : bv.localeCompare(av);
+    });
+    const arrow = (key) => _adminSort.key === key ? _adminSort.asc ? " \u25B2" : " \u25BC" : "";
+    tableEl.innerHTML = `
+    <table class="admin-table">
+      <thead>
+        <tr>
+          <th class="sortable-header" data-sort="email" style="cursor:pointer">Email${arrow("email")}</th>
+          <th class="sortable-header" data-sort="name" style="cursor:pointer">Name${arrow("name")}</th>
+          <th>Role</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${sorted.map((u) => `
+          <tr data-uid="${u.uid}">
+            <td>${escapeHtml(u.email)}</td>
+            <td>${escapeHtml(u.displayName)}</td>
+            <td>
+              <select class="role-select" data-uid="${u.uid}">
+                <option value="member" ${u.role === "member" ? "selected" : ""}>Member</option>
+                <option value="product_manager" ${u.role === "product_manager" ? "selected" : ""}>Product Manager</option>
+                <option value="super_manager" ${u.role === "super_manager" ? "selected" : ""}>Super Manager</option>
+              </select>
+            </td>
+            <td>
+              <button class="btn ghost small danger delete-user-btn"
+                data-uid="${u.uid}" data-email="${escapeHtml(u.email)}"
+                ${u.role === "super_manager" ? "disabled title='Cannot delete Super Manager'" : ""}>
+                Delete
+              </button>
+            </td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+    tableEl.querySelectorAll(".sortable-header").forEach((th) => {
+      th.addEventListener("click", () => {
+        const key = th.dataset.sort;
+        if (_adminSort.key === key) _adminSort.asc = !_adminSort.asc;
+        else _adminSort = { key, asc: true };
+        renderAdminTable();
+      });
+    });
+    tableEl.querySelectorAll(".role-select").forEach((sel) => {
+      sel.addEventListener("change", async () => {
+        const uid = sel.dataset.uid;
+        const role = sel.value;
+        const errEl = document.getElementById("adminError");
+        errEl.hidden = true;
+        try {
+          await setUserRole(uid, role);
+          const u = _adminUsers.find((u2) => u2.uid === uid);
+          if (u) u.role = role;
+        } catch (e) {
+          errEl.textContent = e instanceof Error ? e.message : "Failed to update role.";
+          errEl.hidden = false;
+          renderAdminTable();
+        }
+      });
+    });
+    tableEl.querySelectorAll(".delete-user-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const uid = btn.dataset.uid;
+        const email = btn.dataset.email;
+        const displayName = _adminUsers.find((u) => u.uid === uid)?.displayName ?? email;
+        const errEl = document.getElementById("adminError");
+        errEl.hidden = true;
+        btn.disabled = true;
+        const prevText = btn.textContent;
+        btn.textContent = "Checking\u2026";
+        let assigned = [];
+        let managedTeams = [];
+        try {
+          [assigned, managedTeams] = await Promise.all([
+            findAssignedTasksAcrossTeams(displayName, uid),
+            getTeamsManagedBy(uid)
+          ]);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = prevText;
+        }
+        if (managedTeams.length > 0) {
+          showPmManagesTeamsBlockedDialog(displayName, managedTeams.map((t) => t.name));
+          return;
+        }
+        if (assigned.length > 0) {
+          showSmRemoveBlockedDialog(displayName, assigned);
+          return;
+        }
+        showSmRemoveConfirmDialog(
+          displayName,
+          `Deleting <strong>${escapeHtml(displayName)}</strong> (${escapeHtml(email)}) will remove them from all teams and revoke their access. Their Auth account remains \u2014 if they sign in again they will be re-created as a plain Member.`,
+          async () => {
+            try {
+              await deleteUserProfile(uid);
+              _adminUsers = _adminUsers.filter((u) => u.uid !== uid);
+              renderAdminTable();
+            } catch (e) {
+              errEl.textContent = e instanceof Error ? e.message : "Failed to delete user.";
+              errEl.hidden = false;
+            }
+          },
+          () => {
+          }
+        );
+      });
+    });
+  };
   var loadAdminUsers = async () => {
     const tableEl = document.getElementById("adminUserTable");
     if (!tableEl) return;
     try {
-      const users = await getAllUsers();
-      if (users.length === 0) {
+      _adminUsers = await getAllUsers();
+      if (_adminUsers.length === 0) {
         tableEl.innerHTML = "<em>No users found.</em>";
         return;
       }
-      tableEl.innerHTML = `
-      <table class="admin-table">
-        <thead>
-          <tr><th>Email</th><th>Name</th><th>Role</th><th></th></tr>
-        </thead>
-        <tbody>
-          ${users.map((u) => `
-            <tr data-uid="${u.uid}">
-              <td>${escapeHtml(u.email)}</td>
-              <td>${escapeHtml(u.displayName)}</td>
-              <td>
-                <select class="role-select" data-uid="${u.uid}">
-                  <option value="member" ${u.role === "member" ? "selected" : ""}>Member</option>
-                  <option value="product_manager" ${u.role === "product_manager" ? "selected" : ""}>Product Manager</option>
-                  <option value="super_manager" ${u.role === "super_manager" ? "selected" : ""}>Super Manager</option>
-                </select>
-              </td>
-              <td>
-                <button class="btn ghost small danger delete-user-btn"
-                  data-uid="${u.uid}" data-email="${escapeHtml(u.email)}"
-                  ${u.role === "super_manager" ? "disabled title='Cannot delete Super Manager'" : ""}>
-                  Delete
-                </button>
-              </td>
-            </tr>
-          `).join("")}
-        </tbody>
-      </table>
-    `;
-      tableEl.querySelectorAll(".role-select").forEach((sel) => {
-        sel.addEventListener("change", async () => {
-          const uid = sel.dataset.uid;
-          const role = sel.value;
-          const errEl = document.getElementById("adminError");
-          errEl.hidden = true;
-          try {
-            await setUserRole(uid, role);
-          } catch (e) {
-            errEl.textContent = e instanceof Error ? e.message : "Failed to update role.";
-            errEl.hidden = false;
-            loadAdminUsers();
-          }
-        });
-      });
-      tableEl.querySelectorAll(".delete-user-btn").forEach((btn) => {
-        btn.addEventListener("click", async () => {
-          const uid = btn.dataset.uid;
-          const email = btn.dataset.email;
-          if (!confirm(`Delete user "${email}"?
-
-They will be removed from all teams and lose access. Their Auth account remains \u2014 if they log in again, they will be re-created as a plain Member.`)) return;
-          const errEl = document.getElementById("adminError");
-          errEl.hidden = true;
-          try {
-            await deleteUserProfile(uid);
-            tableEl.querySelector(`tr[data-uid="${uid}"]`)?.remove();
-          } catch (e) {
-            errEl.textContent = e instanceof Error ? e.message : "Failed to delete user.";
-            errEl.hidden = false;
-          }
-        });
-      });
+      renderAdminTable();
     } catch (e) {
       tableEl.innerHTML = `<em>Failed to load users: ${e instanceof Error ? escapeHtml(e.message) : "Unknown error"}</em>`;
     }
@@ -23611,7 +24042,13 @@ They will be removed from all teams and lose access. Their Auth account remains 
     dom.modalTitle.textContent = mode === "create" ? "New Sprint" : "Edit Sprint";
     dom.modalSave.textContent = mode === "create" ? "Save & Add Tasks" : mode === "plan-edit" ? "Add/Remove Tasks" : "Save";
     dom.modalDescription.value = sprint.description || "";
-    dom.modalDevelopers.value = String(sprint.developers ?? 4);
+    const memberCount = getMembers().length;
+    if (memberCount > 0) {
+      dom.modalDevelopers.max = String(memberCount);
+    } else {
+      dom.modalDevelopers.removeAttribute("max");
+    }
+    dom.modalDevelopers.value = String(Math.min(sprint.developers ?? 4, memberCount || Infinity));
     dom.modalEfficiency.value = String(sprint.efficiency ?? 0.8);
     dom.modalError.hidden = true;
     dom.sprintModal.hidden = false;
@@ -23637,7 +24074,8 @@ They will be removed from all teams and lose access. Their Auth account remains 
     const description = dom.modalDescription.value.trim();
     const startDate = dom.modalStartDate.value;
     const endDate = dom.modalEndDate.value;
-    const developers = Number(dom.modalDevelopers.value);
+    const memberCount = getMembers().length;
+    const developers = memberCount > 0 ? Math.min(Number(dom.modalDevelopers.value), memberCount) : Number(dom.modalDevelopers.value);
     const efficiency = Number(dom.modalEfficiency.value);
     if (!startDate || !endDate) return;
     const updates = { description, startDate, endDate, developers, efficiency };
@@ -24188,20 +24626,31 @@ They will be removed from all teams and lose access. Their Auth account remains 
       async (user) => {
         try {
           _activeUser = user;
-          const { profile, isNew } = await ensureUserProfile(user);
-          _activeProfile = profile;
-          if (isNew) {
-            showProfileEditModal(profile, true, (updated) => {
-              _activeProfile = updated;
-              showTeamScreen(user, updated, (teamId, teamName) => {
-                startApp(teamId, updated, teamName);
-              });
+          const profile = await ensureUserProfile(user);
+          if (!profile) {
+            showRegisterPrompt(user.email ?? "", async () => {
+              try {
+                const newProfile = await createNewUserProfile(user);
+                _activeProfile = newProfile;
+                showProfileEditModal(newProfile, true, (updated) => {
+                  _activeProfile = updated;
+                  showTeamScreen(user, updated, (teamId, teamName) => {
+                    startApp(teamId, updated, teamName);
+                  });
+                });
+              } catch (e) {
+                console.error("Registration error:", e);
+                showLoginScreen();
+              }
+            }, async () => {
+              await signOut2();
             });
-          } else {
-            showTeamScreen(user, profile, (teamId, teamName) => {
-              startApp(teamId, profile, teamName);
-            });
+            return;
           }
+          _activeProfile = profile;
+          showTeamScreen(user, profile, (teamId, teamName) => {
+            startApp(teamId, profile, teamName);
+          });
         } catch (e) {
           console.error("Auth error:", e);
           showLoginScreen();

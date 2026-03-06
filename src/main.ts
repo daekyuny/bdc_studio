@@ -28,8 +28,8 @@ import { exportData, exportSprintExcel, importData, exportBacklogExcel, importBa
 import { getNextWorkingDay, addWorkingDays, findGaps, todayIso, getWorkingDates, localIso } from "./utils.ts";
 import type { Sprint } from "./types.ts";
 import { isFirebaseConfigured } from "./firebase.ts";
-import { initAuth, ensureUserProfile, signOut, type User } from "./auth.ts";
-import { showLoginScreen, showTeamScreen, hideAllScreens, showProfileEditModal } from "./screens.ts";
+import { initAuth, ensureUserProfile, createNewUserProfile, signOut, type User } from "./auth.ts";
+import { showLoginScreen, showTeamScreen, hideAllScreens, showProfileEditModal, showRegisterPrompt } from "./screens.ts";
 import { getUserMemo, saveUserMemo, getTeamById, getUsersByIds } from "./db.ts";
 import type { UserProfile } from "./types.ts";
 
@@ -172,7 +172,13 @@ const openModal = (mode: "edit" | "create" | "plan-edit", sprint: ModalSprint): 
   dom.modalTitle.textContent = mode === "create" ? "New Sprint" : "Edit Sprint";
   dom.modalSave.textContent = mode === "create" ? "Save & Add Tasks" : mode === "plan-edit" ? "Add/Remove Tasks" : "Save";
   dom.modalDescription.value = sprint.description || "";
-  dom.modalDevelopers.value = String(sprint.developers ?? 4);
+  const memberCount = getMembers().length;
+  if (memberCount > 0) {
+    dom.modalDevelopers.max = String(memberCount);
+  } else {
+    dom.modalDevelopers.removeAttribute("max");
+  }
+  dom.modalDevelopers.value = String(Math.min(sprint.developers ?? 4, memberCount || Infinity));
   dom.modalEfficiency.value = String(sprint.efficiency ?? 0.8);
   dom.modalError.hidden = true;
   dom.sprintModal.hidden = false;
@@ -196,7 +202,10 @@ dom.modalSave.addEventListener("click", () => {
   const description = dom.modalDescription.value.trim();
   const startDate = dom.modalStartDate.value;
   const endDate = dom.modalEndDate.value;
-  const developers = Number(dom.modalDevelopers.value);
+  const memberCount = getMembers().length;
+  const developers = memberCount > 0
+    ? Math.min(Number(dom.modalDevelopers.value), memberCount)
+    : Number(dom.modalDevelopers.value);
   const efficiency = Number(dom.modalEfficiency.value);
 
   if (!startDate || !endDate) return;
@@ -797,21 +806,32 @@ if (!isFirebaseConfigured) {
     async (user) => {
       try {
         _activeUser = user;
-        const { profile, isNew } = await ensureUserProfile(user);
-        _activeProfile = profile;
-        if (isNew) {
-          // Show profile completion modal for first-time users
-          showProfileEditModal(profile, true, (updated) => {
-            _activeProfile = updated;
-            showTeamScreen(user, updated, (teamId, teamName) => {
-              startApp(teamId, updated, teamName);
-            });
+        const profile = await ensureUserProfile(user);
+        if (!profile) {
+          // No account found — ask the user to confirm registration
+          showRegisterPrompt(user.email ?? "", async () => {
+            try {
+              const newProfile = await createNewUserProfile(user);
+              _activeProfile = newProfile;
+              showProfileEditModal(newProfile, true, (updated) => {
+                _activeProfile = updated;
+                showTeamScreen(user, updated, (teamId, teamName) => {
+                  startApp(teamId, updated, teamName);
+                });
+              });
+            } catch (e) {
+              console.error("Registration error:", e);
+              showLoginScreen();
+            }
+          }, async () => {
+            await signOut();
           });
-        } else {
-          showTeamScreen(user, profile, (teamId, teamName) => {
-            startApp(teamId, profile, teamName);
-          });
+          return;
         }
+        _activeProfile = profile;
+        showTeamScreen(user, profile, (teamId, teamName) => {
+          startApp(teamId, profile, teamName);
+        });
       } catch (e) {
         console.error("Auth error:", e);
         showLoginScreen();

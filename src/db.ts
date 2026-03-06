@@ -41,6 +41,13 @@ export const updateUserProfile = async (
 
 // --- Teams ---
 
+export const getTeamsManagedBy = async (userId: string): Promise<Team[]> => {
+  const snap = await getDocs(
+    query(collection(db, "teams"), where("ownerId", "==", userId)),
+  );
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Team));
+};
+
 export const getTeamsForUser = async (userId: string, role: UserRole): Promise<Team[]> => {
   if (role === "super_manager") {
     const snap = await getDocs(collection(db, "teams"));

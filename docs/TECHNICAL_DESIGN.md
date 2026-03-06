@@ -1,7 +1,7 @@
 # Burndown Studio — Technical Design Document
 
-**Version:** 1.3
-**Last updated:** 2026-03-06
+**Version:** 1.4
+**Last updated:** 2026-03-07
 **Status:** Current
 
 ---
@@ -242,14 +242,19 @@ All date arithmetic uses `getFullYear() / getMonth() / getDate()` (local time). 
 
 Accepts `(sprint, chartToday, holidays?, workWeekends?)`.
 
-- **`dates`**: working days from `startDate` to `endDate`.
+Uses an **N+1 border model**: N working days form N bands; the chart has N+1 plot borders (border 0 = before any work, border N = after the last day).
+
+- **`dates`**: working days from `startDate` to `endDate` (length = N).
 - **`plannedPoints`**: `sprint.plannedPoints ?? sum(task.estimate)` — the ideal line baseline.
-- **`effectiveManDays`**: `developers × workingDays × efficiency`.
-- **`idealDailyBurn`**: `effectiveManDays / workingDays`.
-- **Ideal line**: starts at `plannedPoints`, decreases by `idealDailyBurn` per day. Never changes after `finalizeSprintPlan()` locks `plannedPoints`.
-- **`todayIndex`**: last date index ≤ `chartToday`.
-- **Actual line**: for each day up to `todayIndex`, sums `getRemainAtDate(task, date)` for active tasks + `scopeDropContribAt(date)`.
-- **Scope line**: same as actual but sums `getWorkedAtDate + getRemainAtDate` per task.
+- **`effectiveManDays`**: `developers × N × efficiency`.
+- **`idealDailyBurn`**: `effectiveManDays / N` (used for stats only).
+- **Ideal line** (`ideal[0..N]`): `ideal[i] = max(0, plannedPoints × (1 − i/N))`. Reaches exactly 0 at border N. Never changes after `finalizeSprintPlan()` locks `plannedPoints`.
+- **`todayIndex`**: last band index `i` where `dates[i] ≤ chartToday` (0-based).
+- **`initialScope`**: sum of estimates for tasks active at sprint start + `scopeDropContribAt(startDate)`. Used as `actual[0]` and `scope[0]` (border 0).
+- **Actual line** (`actual[0..todayIndex+1]`): `actual[0] = initialScope`; `actual[i+1]` = sum of `getRemainAtDate(task, dates[i])` for active tasks + `scopeDropContribAt(dates[i])`.
+- **Scope line** (`scope[0..todayIndex+1]`): same layout but sums `getWorkedAtDate + getRemainAtDate` per task.
+- **Scope drop markers**: plotted at `borderIdx = dateIdx + 1` (right border of the drop day).
+- **`toPoint` in chart.ts**: x-coordinate denominator is `dates.length` (= N), not N+1.
 
 ### 5.5 Log-Aware Point-in-Time Queries (`burndown.ts`)
 
@@ -284,11 +289,16 @@ Two dates drive the chart and task table:
 | `projectToday` | `getProjectToday()` | Recording date; authoritative for logs and the actual/scope lines |
 | `chartToday` | `projectToday` clamped to `[startDate, maxToday]` | Passed to `calculateBurndown`; determines where the actual line stops |
 | `effectiveToday` | `sprint.today` clamped to `[startDate, maxToday]` | Browse date for the task table historical view |
-| `browseIndex` | index of `effectiveToday` in dates array | Position of the gray browse marker on the chart |
+| `todayIndex` | index of `chartToday` in dates array | Band index of today; shaded rect spans `[todayIndex/N, (todayIndex+1)/N]` |
+| `effectiveBrowseIndex` | index of `effectiveToday` in dates array | Position of the gray browse marker (right border = `(index+1)/N`) |
 
 Chart click behaviour:
 - **Current sprint** (`isSprintActive`): clicking a date calls `setProjectToday(date)`, updating project TODAY and all sprint browse dates.
-- **Past/future sprint**: clicking a date toggles the gray browse marker; clicking the same date again clears it.
+- **Past/future sprint**: clicking a date toggles the gray browse marker at the right border of that day; clicking the same date again clears it.
+
+**Today band** (`showTodayLabel = chartToday === projectToday`): shown only when project TODAY is within the current sprint. Rendered as a shaded `<rect>` from `todayIndex/N` to `(todayIndex+1)/N`.
+
+**isLastDay** (`render.ts`): `isSprintActive && projectToday === sprint.endDate`. When true, undone tasks show Move (Todo) or Split (In Progress) buttons.
 
 ### 5.8 isSprintActive (`render.ts`)
 
@@ -376,10 +386,9 @@ Add/remove cancellation: `addTaskFromBacklog` checks `sprint.scopeDrops` for a m
 | `utils.ts` | Pure helpers: timezone-safe date math, working day calculation, overlap/gap detection, UUID, formatting |
 | `dom.ts` | Queries and exports all DOM element references |
 | `firebase.ts` | Firebase app initialization; exports `auth`, `db`, `isFirebaseConfigured` flag |
-| `auth.ts` | `initAuth(onLogin, onLogout)`, `signInWithGoogle()`, `signInWithFakeEmail(email)` (localhost only), `signOut()`, `ensureUserProfile(user)` |
-| `db.ts` | Firestore CRUD: `getUserProfile`, `createUserProfile`, `updateUserProfile` (handles `phoneNumber: null` → `deleteField()`); `getTeamsForUser`, `createTeam`, `addMemberToTeamWithPrefs`, `removeMemberFromTeamWithPrefs`, `deleteTeam` (cleans team doc + appdata + all member memos); `loadTeamState`, `saveTeamState`, `subscribeToTeamState`; `getAllUsers`, `setUserRole`, `deleteUserProfile`; `getUserMemo`, `saveUserMemo`, `getTeamById`, `getUsersByIds` |
-| `auth.ts` | `initAuth(onLogin, onLogout)`, `signInWithGoogle()`, `signInWithFakeEmail(email)` (localhost only), `signOut()`, `ensureUserProfile(user)` → returns `{ profile, isNew }` |
-| `screens.ts` | Dynamic DOM overlays: `showLoginScreen()` (quiet ghost sign-in button), `showTeamScreen()`, `showAdminScreen()`, `showManageMembers()`, `showProfileEditModal(profile, isNew, onSaved)`, `hideAllScreens()` |
+| `auth.ts` | `initAuth(onLogin, onLogout)`, `signInWithGoogle()`, `signInWithFakeEmail(email)` (localhost only), `signOut()`, `ensureUserProfile(user)` → returns `UserProfile \| null`; `createNewUserProfile(user)` called only after explicit register confirmation |
+| `db.ts` | Firestore CRUD: `getUserProfile`, `createUserProfile`, `updateUserProfile` (handles `phoneNumber: null` → `deleteField()`); `getTeamsForUser`, `getTeamsManagedBy(uid)` (teams where `ownerId === uid`), `createTeam`, `addMemberToTeamWithPrefs`, `removeMemberFromTeamWithPrefs`, `deleteTeam` (cleans team doc + appdata + all member memos); `loadTeamState`, `saveTeamState`, `subscribeToTeamState`; `getAllUsers`, `setUserRole`, `deleteUserProfile`; `getUserMemo`, `saveUserMemo`, `getTeamById`, `getUsersByIds` |
+| `screens.ts` | Dynamic DOM overlays: `showLoginScreen()` (quiet ghost sign-in button), `showTeamScreen()`, `showAdminScreen()` (sortable table, PM-owns-teams block, SM confirm dialog), `showManageMembers()` (task-assignment + owns-teams guard), `showRegisterPrompt()`, `showProfileEditModal(profile, isNew, onSaved)`, `hideAllScreens()` |
 | `state.ts` | State CRUD for sprints and backlog; localStorage + Firestore load/save/sync; `setCurrentTeam(teamId)` async; echo suppression; `projectToday` preservation on remote snapshots; change callback; `getProjectToday`/`setProjectToday`; `finalizeSprintPlan` |
 | `burndown.ts` | Pure burndown calculation: ideal/actual/scope lines, scope drop contribution, log-aware point-in-time queries |
 | `chart.ts` | SVG chart rendering: grid, ideal/actual/scope lines, Today marker (indigo), browse marker (gray), scope drop triangles, clickable date labels |
@@ -459,3 +468,4 @@ No circular dependencies. `state.ts` communicates with `render.ts` via a callbac
 | 2026-03-05 | 1.1 | Project TODAY field and semantics; `plannedPoints` and `finalizeSprintPlan`; `addedDate` field and planned-vs-mid-sprint distinction; `isSprintActive` gate; `chartToday` vs `effectiveToday` vs `browseIndex`; chart browse marker; chart click behaviour by sprint type; scope drop add/remove cancellation; sprint reset keeps tasks; `updateGapBounds` for non-overlapping date pickers; project TODAY resets to real date on load |
 | 2026-03-05 | 1.2 | Multi-user: Firebase Auth + Firestore; `firebase.ts`, `auth.ts`, `db.ts`, `screens.ts` new modules; `UserRole`, `UserProfile`, `Team` types; `setCurrentTeam` async in `state.ts`; echo suppression + `projectToday` preservation on remote snapshots; role-based Firestore security rules; login/team-selection/admin screen overlays; Switch Team button; team management (create/manage members/delete); admin user management (roles/delete); TD-10, TD-11 added |
 | 2026-03-06 | 1.3 | `BacklogTask.assignedTo` changed to `string[]`; `openAssignedPicker()` popup in `render.ts`; `updateUserProfile` handles `phoneNumber: null` → `deleteField()`; `ensureUserProfile` returns `{ profile, isNew }`; `showProfileEditModal` in `screens.ts`; `getUserMemo`/`saveUserMemo`/`getTeamById`/`getUsersByIds` in `db.ts`; `deleteTeam` now fetches memberIds and cleans up memos via `deleteField()`; `addMemberToTeamWithPrefs`/`removeMemberFromTeamWithPrefs` replace old add/remove helpers; flatpickr disable switched to predicate functions for holidays and work weekends; memo stored at `users/{uid}.memos.{teamId}`; `UserProfile.phoneNumber?` and `memos` fields added; sign-in button redesigned as ghost style |
+| 2026-03-07 | 1.4 | Burndown N+1 border model: `ideal[i] = plannedPoints×(1−i/N)`, reaches exactly 0; `actual[0]=scope[0]=initialScope`; scope drop markers at `borderIdx=dateIdx+1`; Today shown as shaded band in current sprint only; browse marker at right border `(index+1)/N`. Move/Split on last sprint day: `moveTaskToSprint` and `splitTaskToSprint` in `state.ts`; `isLastDay` flag in `render.ts`. `projectToday` on page load uses `getNextWorkingDay(addDays(today, -1))` to skip weekends/holidays. Login: `ensureUserProfile` returns `null` for unknown users → `showRegisterPrompt` → `createNewUserProfile`. Admin table sortable by Email/Name. Developer count in sprint modal capped at team member count. Member removal guard: `findAssignedTasksInTeam` (Manage/PM), `findAssignedTasksAcrossTeams` (Admin/SM); `getTeamsManagedBy` blocks removal if user owns teams. SM Admin deletion always shows `showSmRemoveConfirmDialog` with custom message. `showSmRemoveConfirmDialog` updated to accept `message` parameter. |

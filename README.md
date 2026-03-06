@@ -63,8 +63,8 @@ The email `dkyoon@gmail.com` is automatically assigned `super_manager` on first 
 - Team selection screen after login — users see only their assigned teams
 - Real-time Firestore sync: all team members see changes instantly
 - **"← Teams" button** in the app header to switch between teams without signing out
-- **Admin screen** (Super Manager only): view all users, change roles, delete user profiles
-- **Team management** (PM/SM): create teams, add/remove members from a user list, delete teams
+- **Admin screen** (Super Manager only): view all users (sortable by Email/Name), change roles, delete user profiles; always shows custom confirm dialog before deletion; blocked if user owns teams or is assigned to tasks across any team
+- **Team management** (PM/SM): create teams, add/remove members from a user list, delete teams; member removal blocked if member has task assignments in this team or owns any teams; member count badge refreshes immediately after Manage closes
 - `projectToday` is per-session — not shared across users; remote updates do not reset it
 
 ### Project TODAY
@@ -107,13 +107,22 @@ The **project TODAY** field (leftmost in the sprint toolbar) is the authoritativ
 
 ### Burndown Chart
 
-- **Ideal line** (blue) — based on `plannedPoints` locked when the planning modal is closed; never changes mid-sprint regardless of task additions or removals
-- **Actual line** (red) — remaining work per working day up to project TODAY, reconstructed from per-task `remainLog`
+- **N+1 border model** — N working days form N bands with N+1 plot borders; the ideal line runs exactly from `plannedPoints` at border 0 to 0 at border N; actual/scope values are plotted at the right border of each completed day
+- **Ideal line** (blue) — based on `plannedPoints` locked when the planning modal is closed; never changes mid-sprint regardless of task additions or removals; reaches exactly 0 at the last border
+- **Actual line** (red) — remaining work per working day up to project TODAY, reconstructed from per-task `remainLog`; starts at `initialScope` (tasks active at sprint start + scope-drop contributions)
 - **Scope line** (green dashed) — Worked + Remain per working day up to project TODAY; reflects mid-sprint scope changes
 - **Scope drop markers** (amber triangle) — annotate dates when planned tasks were removed from scope
-- **Today marker** (indigo vertical line + "Today" label) — drawn only when project TODAY falls within the sprint
-- **Browse marker** (gray vertical line) — shown in past/future sprints when a date is clicked; same date click removes it
-- Show day numbers toggle (D0/D1/… vs mm/dd labels on x-axis); unchecked by default
+- **Today band** (indigo shaded rectangle) — drawn only in the current sprint; spans the full width of today's day band
+- **Browse marker** (gray vertical line at right border) — shown in past/future sprints when a date is clicked; same date click removes it
+- Show day numbers toggle (D1/D2/… vs mm/dd labels on x-axis); unchecked by default
+
+### Last-Day Task Handoff (Move / Split)
+
+When project TODAY is the last working day of the current sprint, undone tasks show action buttons:
+
+- **Move** (Todo tasks) — removes the task from the current sprint (records a ScopeDrop if it was a planned task) and adds it to a selected future sprint as a planned task
+- **Split** (In Progress tasks) — marks the current task as Done (remain = 0, suffix `a`), and creates a new task (suffix `b`, estimate = current remain) in a selected future sprint
+- The sprint selector in both dialogs shows each sprint's Total Points and Available Days, and excludes past sprints
 
 ### Stats & Capacity
 
@@ -128,7 +137,7 @@ Resets all progress (Worked, Remain, status, doneDate, workedLog, remainLog) bac
 
 ### User Profiles & Members
 
-- **Profile registration**: on first login a modal prompts for display name (required) and phone number (optional); email shown as read-only
+- **Profile registration**: on first login, if no profile exists a "register as new user?" prompt appears; confirming opens the registration modal for display name (required) and phone number (optional); email shown as read-only
 - **Edit profile**: click the user name in the app header to reopen the profile modal at any time
 - **Member list in Preferences**: read-only; auto-synced from Firebase team membership; click any member row to see their full profile (name, email, phone, role, avatar)
 
@@ -294,3 +303,4 @@ See `docs/` for detailed project documents:
 | 2026-03-05 | Browse date toggle on past/future sprint charts; sprint reset keeps all tasks; add/remove same task cancels scope history |
 | 2026-03-05 | Multi-user: Firebase Auth (Google + dev fake email), Firestore real-time sync, team management, role-based access (super_manager / product_manager / member), admin screen, Switch Team button, Firestore security rules |
 | 2026-03-06 | User profiles (name + phone, first-time registration modal, edit via header button); member profile popup in Preferences; private per-user memo (Markdown, auto-save); holiday/work-weekend pickers disable already-added dates; backlog assignedTo changed to multi-select string[] with popup picker; team delete cleans up member memos in Firestore; sign-in button redesigned (quiet ghost style) |
+| 2026-03-07 | Burndown N+1 border model: Today shown as shaded band, ideal reaches exactly 0, actual/scope plotted at right border of each day; Move/Split for undone tasks on last sprint day; sprint selector shows Total Points and Available Days, excludes past sprints; login shows "register?" prompt for unknown users; projectToday skips holidays/weekends on page load; Admin table sortable by Email/Name; developer count capped at team member count; member removal blocked if assigned to tasks or if user owns teams; SM always gets custom confirm dialog in Admin |

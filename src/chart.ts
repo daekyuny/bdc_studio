@@ -33,8 +33,10 @@ export const drawChart = (
   const plotWidth = width - padding * 2;
   const plotHeight = height - padding * 2;
 
+  // N bands (working days), N+1 borders. index 0..N maps to left..right edge.
+  const N = dates.length;
   const toPoint = (value: number, index: number): string => {
-    const x = padding + plotWidth * (dates.length === 1 ? 0 : index / (dates.length - 1));
+    const x = padding + plotWidth * (N === 0 ? 0 : index / N);
     const y = padding + plotHeight * (1 - (value - minValue) / range);
     return `${x},${y}`;
   };
@@ -75,10 +77,36 @@ export const drawChart = (
     dom.chart.appendChild(zeroLine);
   }
 
-  // Browse marker — shown when browsing a date other than project TODAY
+  // Today band — shaded rectangle, only shown for the current sprint
   const effectiveBrowseIndex = browseIndex !== undefined ? browseIndex : todayIndex;
-  if (effectiveBrowseIndex >= 0 && effectiveBrowseIndex !== todayIndex) {
-    const bx = padding + plotWidth * (dates.length === 1 ? 0 : effectiveBrowseIndex / (dates.length - 1));
+  if (showTodayLabel && todayIndex >= 0 && N > 0) {
+    const txLeft  = padding + plotWidth * todayIndex / N;
+    const txRight = padding + plotWidth * (todayIndex + 1) / N;
+    const todayBand = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    todayBand.setAttribute("x", String(txLeft));
+    todayBand.setAttribute("y", String(padding));
+    todayBand.setAttribute("width", String(txRight - txLeft));
+    todayBand.setAttribute("height", String(plotHeight));
+    todayBand.setAttribute("fill", "rgba(92, 103, 242, 0.07)");
+    dom.chart.appendChild(todayBand);
+
+    if (showTodayLabel) {
+      const todayLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      todayLabel.setAttribute("x", String((txLeft + txRight) / 2));
+      todayLabel.setAttribute("y", String(padding + 12));
+      todayLabel.setAttribute("text-anchor", "middle");
+      todayLabel.setAttribute("fill", "rgba(92, 103, 242, 0.65)");
+      todayLabel.setAttribute("font-size", "10");
+      todayLabel.textContent = "Today";
+      dom.chart.appendChild(todayLabel);
+    }
+  }
+
+  // Browse marker — vertical line at the right border of the browsed day's band.
+  // For the current sprint, suppress when browse == today (today band already shows it).
+  // For other sprints, always show when a date is selected.
+  if (effectiveBrowseIndex >= 0 && N > 0 && (!showTodayLabel || effectiveBrowseIndex !== todayIndex)) {
+    const bx = padding + plotWidth * (effectiveBrowseIndex + 1) / N;
     const browseLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
     browseLine.setAttribute("x1", String(bx));
     browseLine.setAttribute("x2", String(bx));
@@ -88,30 +116,6 @@ export const drawChart = (
     browseLine.setAttribute("stroke-width", "1.5");
     browseLine.setAttribute("stroke-dasharray", "4 3");
     dom.chart.appendChild(browseLine);
-  }
-
-  // Today marker
-  if (todayIndex >= 0) {
-    const tx = padding + plotWidth * (dates.length === 1 ? 0 : todayIndex / (dates.length - 1));
-    const todayLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
-    todayLine.setAttribute("x1", String(tx));
-    todayLine.setAttribute("x2", String(tx));
-    todayLine.setAttribute("y1", String(padding));
-    todayLine.setAttribute("y2", String(height - padding));
-    todayLine.setAttribute("stroke", "rgba(92, 103, 242, 0.45)");
-    todayLine.setAttribute("stroke-width", "1.5");
-    todayLine.setAttribute("stroke-dasharray", "4 3");
-    dom.chart.appendChild(todayLine);
-
-    if (showTodayLabel) {
-      const todayLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      todayLabel.setAttribute("x", String(tx + 4));
-      todayLabel.setAttribute("y", String(padding + 12));
-      todayLabel.setAttribute("fill", "rgba(92, 103, 242, 0.65)");
-      todayLabel.setAttribute("font-size", "10");
-      todayLabel.textContent = "Today";
-      dom.chart.appendChild(todayLabel);
-    }
   }
 
   const idealLine = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
@@ -208,7 +212,8 @@ export const drawChart = (
 
   const showDays = dom.showDayNumbers.checked;
   dates.forEach((date, index) => {
-    const x = padding + plotWidth * (dates.length === 1 ? 0 : index / (dates.length - 1));
+    // Labels sit at the midpoint of each band
+    const x = padding + plotWidth * (N === 0 ? 0 : (index + 0.5) / N);
     const isToday = index === todayIndex;
     const isBrowse = index === effectiveBrowseIndex && effectiveBrowseIndex !== todayIndex;
 
@@ -219,7 +224,7 @@ export const drawChart = (
     label.setAttribute("fill", isToday ? "rgba(92, 103, 242, 0.85)" : isBrowse ? "rgba(107, 114, 128, 0.9)" : "#6b7080");
     if (isToday) label.setAttribute("font-weight", "bold");
     if (isBrowse) label.setAttribute("font-weight", "600");
-    label.textContent = showDays ? `D${index}` : toShortDate(date);
+    label.textContent = showDays ? `D${index + 1}` : toShortDate(date);
 
     if (onDateClick) {
       label.style.cursor = "pointer";
