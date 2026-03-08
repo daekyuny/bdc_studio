@@ -23151,7 +23151,6 @@ ${marker.label}`;
 
   // src/auth.ts
   var DEV_PASSWORD = "dev-local-123";
-  var SUPER_MANAGER_EMAIL = "dkyoon@gmail.com";
   var initAuth = (onLogin, onLogout) => {
     onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -23189,7 +23188,10 @@ ${marker.label}`;
       uid: user.uid,
       email: user.email ?? "",
       displayName: user.displayName ?? user.email ?? "Unknown",
-      role: user.email === SUPER_MANAGER_EMAIL ? "super_manager" : "member",
+      // Always 'member' — Firestore rules enforce this.
+      // To bootstrap the first super_manager, update the role field
+      // directly in the Firebase Console after the user registers.
+      role: "member",
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     await createUserProfile(profile);

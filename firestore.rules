@@ -4,8 +4,14 @@ service cloud.firestore {
 
     // Users can read/write their own profile; super_manager can read all and update roles
     match /users/{uid} {
-      allow read: if request.auth.uid == uid || isSuperManager();
-      allow create, update: if request.auth.uid == uid;
+      allow read: if request.auth.uid == uid || isProductManager();
+      // Self-create: role must be 'member' (bootstrap super_manager via Firebase Console)
+      allow create: if request.auth.uid == uid
+        && request.resource.data.role == 'member';
+      // Self-update: cannot change own role
+      allow update: if request.auth.uid == uid
+        && request.resource.data.role == resource.data.role;
+      // Super manager can update any field (including role) and delete
       allow update, delete: if isSuperManager();
     }
 
@@ -13,7 +19,7 @@ service cloud.firestore {
     match /teams/{teamId} {
       allow read: if request.auth.uid in resource.data.memberIds || isSuperManager();
       allow create: if isProductManager() || isSuperManager();
-      allow update, delete: if request.auth.uid == resource.data.ownerId || isSuperManager();
+      allow update, delete: if request.auth.uid == resource.data.ownerId || isProductManager();
     }
 
     // AppData: only team members can read/write; SM can delete orphaned data

@@ -14,7 +14,6 @@ import type { UserProfile } from "./types.ts";
 export type { User };
 
 const DEV_PASSWORD = "dev-local-123";
-const SUPER_MANAGER_EMAIL = "dkyoon@gmail.com";
 
 export const initAuth = (
   onLogin: (user: User) => void,
@@ -66,7 +65,10 @@ export const createNewUserProfile = async (user: User): Promise<UserProfile> => 
     uid: user.uid,
     email: user.email ?? "",
     displayName: user.displayName ?? user.email ?? "Unknown",
-    role: user.email === SUPER_MANAGER_EMAIL ? "super_manager" : "member",
+    // Always 'member' — Firestore rules enforce this.
+    // To bootstrap the first super_manager, update the role field
+    // directly in the Firebase Console after the user registers.
+    role: "member",
     createdAt: new Date().toISOString(),
   };
   await createUserProfile(profile);
