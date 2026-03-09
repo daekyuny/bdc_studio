@@ -53,7 +53,7 @@ If `src/firebase.ts` still contains the placeholder `"YOUR_API_KEY"`, the app ru
 | `product_manager` | Create teams; manage members of owned teams; delete owned teams |
 | `member` | Access assigned teams; read/write sprint data |
 
-The email `dkyoon@gmail.com` is automatically assigned `super_manager` on first login.
+All new users self-register as `member`. To bootstrap the first `super_manager`, register an account normally, then open the **Firebase Console → Firestore → users/{uid}** and manually set `role` to `"super_manager"`. After that the Admin screen can promote other users.
 
 ## Current Features
 
@@ -304,3 +304,4 @@ See `docs/` for detailed project documents:
 | 2026-03-05 | Multi-user: Firebase Auth (Google + dev fake email), Firestore real-time sync, team management, role-based access (super_manager / product_manager / member), admin screen, Switch Team button, Firestore security rules |
 | 2026-03-06 | User profiles (name + phone, first-time registration modal, edit via header button); member profile popup in Preferences; private per-user memo (Markdown, auto-save); holiday/work-weekend pickers disable already-added dates; backlog assignedTo changed to multi-select string[] with popup picker; team delete cleans up member memos in Firestore; sign-in button redesigned (quiet ghost style) |
 | 2026-03-07 | Burndown N+1 border model: Today shown as shaded band, ideal reaches exactly 0, actual/scope plotted at right border of each day; Move/Split for undone tasks on last sprint day; sprint selector shows Total Points and Available Days, excludes past sprints; login shows "register?" prompt for unknown users; projectToday skips holidays/weekends on page load; Admin table sortable by Email/Name; developer count capped at team member count; member removal blocked if assigned to tasks or if user owns teams; SM always gets custom confirm dialog in Admin |
+| 2026-03-09 | Documentation corrections: super_manager bootstrap clarified (all self-registrations are member; set role manually in Firebase Console); CLAUDE.md module table updated to include firebase.ts, auth.ts, db.ts, screens.ts |

@@ -245,7 +245,7 @@ const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Se
       for (const story of backlog.stories) {
         const bt = story.tasks.find((t) => t.id === task.backlogTaskId);
         if (bt) {
-          currentAssigned = bt.assignedTo.length > 0 ? bt.assignedTo.join(", ") : "";
+          currentAssigned = bt.assignedTo.length > 0 ? bt.assignedTo.map(emailToName).join(", ") : "";
           parentStoryDesc = story.description || "";
           break;
         }

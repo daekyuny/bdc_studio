@@ -16,7 +16,7 @@ npm run typecheck  # run tsc --noEmit (zero errors expected)
 
 ## Architecture
 
-Single-page static app. No framework, no backend. Source lives in `src/` as TypeScript modules; esbuild bundles them into `app.js`. All state is persisted to a single `localStorage` key (`burndown-studio`). Shared types are defined in `src/types.ts`; ambient declarations for CDN globals (flatpickr, XLSX) are in `src/globals.d.ts`.
+Single-page static app. No framework, no backend. Source lives in `src/` as TypeScript modules; esbuild bundles them into `app.js`. When Firebase is configured, shared state is persisted to Firestore (real-time sync); otherwise it falls back to a single `localStorage` key (`burndown-studio`). Shared types are defined in `src/types.ts`; ambient declarations for CDN globals (flatpickr, XLSX) are in `src/globals.d.ts`.
 
 ### Data flow
 
@@ -32,28 +32,35 @@ State mutations pass a **bitmask hint** (`H_SIDEBAR`, `H_HEADER`, `H_TASKS`, `H_
 
 | Module | Role |
 |---|---|
-| `main.ts` | Entry point — wires all event listeners, registers the render callback |
+| `main.ts` | Entry point — wires all event listeners, registers the render callback, auth gate |
 | `dom.ts` | Single source of truth for all DOM element references |
-| `state.ts` | All state mutations, localStorage load/save, render hint constants; fires `onChange(hints)` after every mutation |
+| `state.ts` | All state mutations, localStorage/Firestore load/save, render hint constants; fires `onChange(hints)` after every mutation |
 | `burndown.ts` | Pure functions: ideal/actual burndown line computation, capacity math |
 | `chart.ts` | Builds the SVG chart from burndown data (no external library) |
 | `render.ts` | Selective DOM rebuild: sprint sidebar, header, task table, backlog panel, stats, chart; skips regions not flagged in hints |
 | `io.ts` | JSON file export (download) and import (file read + validation + `replaceState`) |
 | `utils.ts` | Pure helpers: ISO date math, `crypto.randomUUID()` wrapper, number formatting |
+| `firebase.ts` | Firebase app init (`app`, `auth`, `db`); exports `isFirebaseConfigured` flag |
+| `auth.ts` | Google Sign-In, fake email login (localhost only), sign-out, `ensureUserProfile` / `createNewUserProfile` |
+| `db.ts` | Firestore CRUD: user profiles, teams, AppState (`appdata`), private memos, admin operations |
+| `screens.ts` | Full-page overlays: login screen, register prompt, team selection grid, manage members modal, admin screen, profile edit modal |
 
 ### Module dependency graph
 
 ```
 main.ts
 ├── dom.ts
-├── state.ts ← utils.ts
+├── state.ts ← utils.ts, firebase.ts, db.ts
 ├── render.ts
 │   ├── dom.ts
 │   ├── state.ts
 │   ├── burndown.ts ← utils.ts
 │   ├── chart.ts ← dom.ts, utils.ts
 │   └── utils.ts
-└── io.ts ← state.ts, utils.ts, dom.ts
+├── io.ts ← state.ts, utils.ts, dom.ts
+├── auth.ts ← firebase.ts, db.ts
+├── screens.ts ← auth.ts, db.ts
+└── db.ts ← firebase.ts
 ```
 
 No circular dependencies. All date values are stored as `YYYY-MM-DD` strings. Task status is one of `"Todo" | "In Progress" | "Done"`.

@@ -1,7 +1,7 @@
 # Burndown Studio — Product Requirements Document
 
-**Version:** 1.0
-**Last updated:** 2026-03-07
+**Version:** 1.1
+**Last updated:** 2026-03-09
 **Author:** [Your Name]
 **Status:** Draft — open for review
 
@@ -120,7 +120,7 @@ Key pain points:
 | Data migration | Old `points` → `estimate`; `worked`/`remain` initialized; `assignedTo` string → string[] | Done |
 | TypeScript | Full codebase; strict typing for all modules and data model | Done |
 | Graceful error recovery | Corrupt localStorage data is detected and reset to defaults | Done |
-| Modular codebase | Source split into 13 ES modules, bundled via esbuild | Done |
+| Modular codebase | Source split into 14 ES modules (incl. firebase, auth, db, screens), bundled via esbuild | Done |
 
 ## 5. Planned Features
 
@@ -198,3 +198,4 @@ Key pain points:
 | 2026-03-03 | 0.8 | TypeScript migration complete. Updated task tracking: Change/Save button UX, status toggle span, auto-Done on remain=0, Done Date as read-only span, daily workedLog/remainLog, Remove button hidden for non-Todo tasks. Updated chart: scope line now green dashed using per-task logs, clickable date labels to set TODAY. Updated F-204 description. |
 | 2026-03-06 | 0.9 | Phase 4 features shipped: F-401/F-402/F-403 marked Done. Added Multi-user & Authentication and General feature tables. Updated Assigned To to multi-select string[]. Added user profiles, member list, private memo features. Updated Out of Scope. |
 | 2026-03-07 | 1.0 | Updated to v1.0. Added Last-day Move/Split feature. Updated burndown chart description (N+1 border model, Today band). Updated Admin screen (sortable table, confirm dialog, PM-owns-teams guard). Added Member removal guard row. Updated User profiles (register prompt). |
+| 2026-03-09 | 1.1 | Corrected General table: module count updated to 14 (firebase.ts, auth.ts, db.ts, screens.ts added). Clarified super_manager bootstrap: all new users register as member; first super_manager must be set manually via Firebase Console. Firestore rules enforce role = member on self-create. |

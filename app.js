@@ -21672,6 +21672,12 @@ This typically indicates that your device does not have a healthy Internet conne
     save();
     onChange(H_ALL);
   };
+  var _memberPairs = [];
+  var setMemberPairs = (pairs) => {
+    _memberPairs = pairs;
+  };
+  var getMemberPairs = () => _memberPairs;
+  var emailToName = (email) => _memberPairs.find((p) => p.email === email)?.name ?? email;
   var getMembers = () => state.preferences.members;
   var replaceMembers = (names) => {
     state.preferences.members = [...names].sort((a, b) => a.localeCompare(b));
@@ -22164,7 +22170,7 @@ ${marker.label}`;
         for (const story of backlog.stories) {
           const bt2 = story.tasks.find((t) => t.id === task.backlogTaskId);
           if (bt2) {
-            currentAssigned = bt2.assignedTo.length > 0 ? bt2.assignedTo.join(", ") : "";
+            currentAssigned = bt2.assignedTo.length > 0 ? bt2.assignedTo.map(emailToName).join(", ") : "";
             parentStoryDesc = story.description || "";
             break;
           }
@@ -22410,7 +22416,7 @@ ${marker.label}`;
       if (parentStory?.description) bpTaskId.title = parentStory.description;
       const bpDesc = row.querySelector(".bp-description");
       bpDesc.textContent = task.description;
-      if (task.assignedTo.length > 0) bpDesc.title = task.assignedTo.join(", ");
+      if (task.assignedTo.length > 0) bpDesc.title = task.assignedTo.map(emailToName).join(", ");
       row.querySelector(".bp-estimate").textContent = String(task.estimate ?? "");
       if (!isSprintActive) {
         row.draggable = false;
@@ -22463,9 +22469,9 @@ ${marker.label}`;
     const noneCb = noneRow.querySelector("input");
     modal.appendChild(noneRow);
     for (const m of members) {
-      const row = makeRow(m, m, currentSet.has(m));
+      const row = makeRow(m.email, m.name, currentSet.has(m.email));
       const cb = row.querySelector("input");
-      checkboxes.push({ cb, value: m });
+      checkboxes.push({ cb, value: m.email });
       modal.appendChild(row);
     }
     noneCb.addEventListener("change", () => {
@@ -22628,7 +22634,8 @@ ${marker.label}`;
           taskIdView.textContent = task.taskId || "";
           taskDescView.textContent = task.description || "";
           taskEstView.textContent = String(task.estimate ?? "");
-          taskAssignedView.textContent = task.assignedTo.length > 0 ? task.assignedTo.join(", ") : "\u2014";
+          const assignedNames = task.assignedTo.map(emailToName);
+          taskAssignedView.textContent = assignedNames.length > 0 ? assignedNames.join(", ") : "\u2014";
           if (assignedIds.has(task.id)) taskRow.classList.add("assigned");
           let _assignedSelection = [...task.assignedTo];
           if (isTaskEditing) {
@@ -22645,7 +22652,7 @@ ${marker.label}`;
             taskAssignedView.hidden = true;
             taskAssignedDropdown.hidden = false;
             taskAssignedDropdown.className = "task-assigned-clickable";
-            taskAssignedDropdown.textContent = _assignedSelection.length > 0 ? _assignedSelection.join(", ") : "\u2014";
+            taskAssignedDropdown.textContent = _assignedSelection.length > 0 ? _assignedSelection.map(emailToName).join(", ") : "\u2014";
             const saveTask = () => {
               editingIds.delete(task.id);
               updateBacklogTask(story.id, task.id, {
@@ -22656,7 +22663,7 @@ ${marker.label}`;
               });
             };
             taskAssignedDropdown.addEventListener("click", () => {
-              openAssignedPicker(_assignedSelection, getMembers(), (selected) => {
+              openAssignedPicker(_assignedSelection, getMemberPairs(), (selected) => {
                 _assignedSelection = selected;
                 saveTask();
               });
@@ -23053,9 +23060,8 @@ ${marker.label}`;
     };
     reader.readAsText(file);
   };
-  var exportBacklogExcel = (emailToName = /* @__PURE__ */ new Map()) => {
+  var exportBacklogExcel = () => {
     const backlog = getBacklog();
-    const resolveNames = (assigned) => assigned.map((v2) => emailToName.get(v2) ?? v2).join(", ");
     const aoa = [
       ["Story ID", "User Stories", "Priority", "Task ID", "Task Description", "Estimate(days)", "Assigned To"]
     ];
@@ -23065,9 +23071,9 @@ ${marker.label}`;
       } else {
         story.tasks.forEach((task, i) => {
           if (i === 0) {
-            aoa.push([story.storyId, story.description, story.priority ?? 100, task.taskId, task.description, task.estimate, resolveNames(task.assignedTo)]);
+            aoa.push([story.storyId, story.description, story.priority ?? 100, task.taskId, task.description, task.estimate, task.assignedTo.join(", ")]);
           } else {
-            aoa.push(["", "", "", task.taskId, task.description, task.estimate, resolveNames(task.assignedTo)]);
+            aoa.push(["", "", "", task.taskId, task.description, task.estimate, task.assignedTo.join(", ")]);
           }
         });
       }
@@ -23467,7 +23473,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
     });
     setTimeout(() => document.getElementById("newTeamName").focus(), 50);
   };
-  var findAssignedTasksInState = (displayName, appState, label) => {
+  var findAssignedTasksInState = (displayName, email, appState, label) => {
     const found = [];
     appState.sprints.forEach((sprint, i) => {
       for (const task of sprint.tasks) {
@@ -23479,19 +23485,20 @@ All shared sprint data for this team will be permanently removed.`)) return;
     });
     for (const story of appState.backlog?.stories ?? []) {
       for (const task of story.tasks) {
-        if ((task.assignedTo ?? []).includes(displayName)) {
+        const arr = task.assignedTo ?? [];
+        if (arr.includes(email) || arr.includes(displayName)) {
           found.push(`${label} \u203A Backlog [${story.storyId}]: ${task.description || task.taskId || "(unnamed)"}`);
         }
       }
     }
     return found;
   };
-  var findAssignedTasksInTeam = async (displayName, teamId, teamName) => {
+  var findAssignedTasksInTeam = async (displayName, email, teamId, teamName) => {
     const appState = await loadTeamState(teamId);
     if (!appState) return [];
-    return findAssignedTasksInState(displayName, appState, teamName);
+    return findAssignedTasksInState(displayName, email, appState, teamName);
   };
-  var findAssignedTasksAcrossTeams = async (displayName, userUid) => {
+  var findAssignedTasksAcrossTeams = async (displayName, email, userUid) => {
     const found = [];
     let teams = [];
     try {
@@ -23502,7 +23509,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
     await Promise.all(teams.map(async (t) => {
       const appState = await loadTeamState(t.id);
       if (!appState) return;
-      found.push(...findAssignedTasksInState(displayName, appState, t.name || t.id));
+      found.push(...findAssignedTasksInState(displayName, email, appState, t.name || t.id));
     }));
     return found;
   };
@@ -23645,7 +23652,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
             ${phone}
           </div>
           ${isRemovable ? `<button class="btn ghost small danger member-remove-btn"
-            data-uid="${u.uid}" data-name="${escapeHtml(u.displayName)}"
+            data-uid="${u.uid}" data-name="${escapeHtml(u.displayName)}" data-email="${escapeHtml(u.email)}"
             ${u.uid === profile.uid ? "disabled title='Cannot remove yourself'" : ""}>Remove</button>` : ""}
         </div>
       `;
@@ -23658,6 +23665,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
           btn.addEventListener("click", async () => {
             const uid = btn.dataset.uid;
             const displayName = btn.dataset.name;
+            const email = btn.dataset.email;
             errEl.hidden = true;
             btn.disabled = true;
             const prevText = btn.textContent;
@@ -23666,7 +23674,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
             let managedTeams = [];
             try {
               [assigned, managedTeams] = await Promise.all([
-                findAssignedTasksInTeam(displayName, team.id, team.name),
+                findAssignedTasksInTeam(displayName, email, team.id, team.name),
                 getTeamsManagedBy(uid)
               ]);
             } finally {
@@ -23830,7 +23838,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
         let managedTeams = [];
         try {
           [assigned, managedTeams] = await Promise.all([
-            findAssignedTasksAcrossTeams(displayName, uid),
+            findAssignedTasksAcrossTeams(displayName, email, uid),
             getTeamsManagedBy(uid)
           ]);
         } finally {
@@ -24222,10 +24230,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
     const newId = addStory();
     startEditing(newId, true);
   });
-  dom.backlogExportCsvBtn.addEventListener("click", () => {
-    const emailToName = new Map(_teamMemberProfiles.map((p) => [p.email, p.displayName]));
-    exportBacklogExcel(emailToName);
-  });
+  dom.backlogExportCsvBtn.addEventListener("click", exportBacklogExcel);
   dom.backlogDeleteAllBtn.addEventListener("click", () => {
     dom.confirmDeleteBacklogModal.hidden = false;
   });
@@ -24606,6 +24611,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
         const memberProfiles = await getUsersByIds(team.memberIds);
         _teamMemberProfiles = memberProfiles;
         replaceMembers(memberProfiles.map((p) => p.displayName));
+        setMemberPairs(memberProfiles.map((p) => ({ email: p.email, name: p.displayName })));
       }
     } catch {
     }

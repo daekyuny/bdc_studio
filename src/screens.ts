@@ -507,7 +507,7 @@ const showManageMembers = (team: Team, profile: UserProfile, onDone?: () => void
             ${phone}
           </div>
           ${isRemovable ? `<button class="btn ghost small danger member-remove-btn"
-            data-uid="${u.uid}" data-name="${escapeHtml(u.displayName)}"
+            data-uid="${u.uid}" data-name="${escapeHtml(u.displayName)}" data-email="${escapeHtml(u.email)}"
             ${u.uid === profile.uid ? "disabled title='Cannot remove yourself'" : ""}>Remove</button>` : ""}
         </div>
       `;
@@ -522,6 +522,7 @@ const showManageMembers = (team: Team, profile: UserProfile, onDone?: () => void
         btn.addEventListener("click", async () => {
           const uid = btn.dataset.uid!;
           const displayName = btn.dataset.name!;
+          const email = btn.dataset.email!;
           errEl.hidden = true;
 
           btn.disabled = true;
@@ -531,7 +532,7 @@ const showManageMembers = (team: Team, profile: UserProfile, onDone?: () => void
           let managedTeams: import("./types.ts").Team[] = [];
           try {
             [assigned, managedTeams] = await Promise.all([
-              findAssignedTasksInTeam(displayName, team.id, team.name),
+              findAssignedTasksInTeam(displayName, email, team.id, team.name),
               getTeamsManagedBy(uid),
             ]);
           } finally {
@@ -718,7 +719,7 @@ const renderAdminTable = (): void => {
       let managedTeams: import("./types.ts").Team[] = [];
       try {
         [assigned, managedTeams] = await Promise.all([
-          findAssignedTasksAcrossTeams(displayName, uid),
+          findAssignedTasksAcrossTeams(displayName, email, uid),
           getTeamsManagedBy(uid),
         ]);
       } finally {
