@@ -242,10 +242,12 @@ export const getAllGroups = async (): Promise<Group[]> => {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Group));
 };
 
-export const getTeamsByGroup = async (groupId: string): Promise<Team[]> => {
-  const snap = await getDocs(
-    query(collection(db, "teams"), where("groupId", "==", groupId)),
-  );
+export const getTeamsByGroup = async (groupId: string, ownerUid?: string): Promise<Team[]> => {
+  // PM path: query by ownerId so Firestore can verify resource.data.ownerId == request.auth.uid
+  // SM path: query by groupId (isSuperManager() satisfies the rule for all docs)
+  const snap = ownerUid
+    ? await getDocs(query(collection(db, "teams"), where("ownerId", "==", ownerUid)))
+    : await getDocs(query(collection(db, "teams"), where("groupId", "==", groupId)));
   return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Team));
 };
 
@@ -260,8 +262,9 @@ export const removeGroupMember = async (
   groupId: string,
   userId: string,
   displayName: string,
+  groupOwnerId?: string,
 ): Promise<void> => {
-  const teams = await getTeamsByGroup(groupId);
+  const teams = await getTeamsByGroup(groupId, groupOwnerId);
   await Promise.all(
     teams.map(async (t) => {
       if (!t.memberIds.includes(userId)) return;

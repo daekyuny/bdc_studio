@@ -21110,10 +21110,8 @@ This typically indicates that your device does not have a healthy Internet conne
     const snap = await getDocs(collection(db, "groups"));
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   };
-  var getTeamsByGroup = async (groupId) => {
-    const snap = await getDocs(
-      query(collection(db, "teams"), where("groupId", "==", groupId))
-    );
+  var getTeamsByGroup = async (groupId, ownerUid) => {
+    const snap = ownerUid ? await getDocs(query(collection(db, "teams"), where("ownerId", "==", ownerUid))) : await getDocs(query(collection(db, "teams"), where("groupId", "==", groupId)));
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   };
   var getGroupMemberProfiles = async (groupId) => {
@@ -21122,8 +21120,8 @@ This typically indicates that your device does not have a healthy Internet conne
     );
     return snap.docs.map((d) => d.data());
   };
-  var removeGroupMember = async (groupId, userId, displayName) => {
-    const teams = await getTeamsByGroup(groupId);
+  var removeGroupMember = async (groupId, userId, displayName, groupOwnerId) => {
+    const teams = await getTeamsByGroup(groupId, groupOwnerId);
     await Promise.all(
       teams.map(async (t) => {
         if (!t.memberIds.includes(userId)) return;
@@ -24267,7 +24265,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
     if (!grid) return;
     if (errEl) errEl.hidden = true;
     try {
-      const teams = await getTeamsByGroup(group.id);
+      const teams = await getTeamsByGroup(group.id, profile.uid);
       renderGroupTeamGrid(grid, teams, group, profile);
     } catch (e) {
       if (errEl) {
@@ -24370,8 +24368,8 @@ All sprint data for this team will be permanently removed.`)) return;
     });
     setTimeout(() => document.getElementById("newTeamName").focus(), 50);
   };
-  var findAssignedTasksInGroup = async (displayName, email, groupId) => {
-    const teams = await getTeamsByGroup(groupId);
+  var findAssignedTasksInGroup = async (displayName, email, groupId, groupOwnerId) => {
+    const teams = await getTeamsByGroup(groupId, groupOwnerId);
     const found = [];
     await Promise.all(
       teams.map(async (t) => {
@@ -24444,7 +24442,7 @@ All sprint data for this team will be permanently removed.`)) return;
         btn.textContent = "Checking\u2026";
         let assigned = [];
         try {
-          assigned = await findAssignedTasksInGroup(displayName, email, group.id);
+          assigned = await findAssignedTasksInGroup(displayName, email, group.id, group.ownerId);
         } finally {
           btn.disabled = false;
           btn.textContent = prevText;
@@ -24462,7 +24460,7 @@ All sprint data for this team will be permanently removed.`)) return;
 
 They will also be removed from all teams within the group.`)) return;
         try {
-          await removeGroupMember(group.id, uid, displayName);
+          await removeGroupMember(group.id, uid, displayName, group.ownerId);
           void loadAndRenderGroupMembers(group, profile);
         } catch (e) {
           if (errEl) {

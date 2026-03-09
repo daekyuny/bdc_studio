@@ -1130,7 +1130,7 @@ const loadAndRenderGroupTeams = async (group: Group, profile: UserProfile): Prom
   if (!grid) return;
   if (errEl) errEl.hidden = true;
   try {
-    const teams = await getTeamsByGroup(group.id);
+    const teams = await getTeamsByGroup(group.id, profile.uid);
     renderGroupTeamGrid(grid, teams, group, profile);
   } catch (e: unknown) {
     if (errEl) {
@@ -1244,8 +1244,9 @@ const findAssignedTasksInGroup = async (
   displayName: string,
   email: string,
   groupId: string,
+  groupOwnerId?: string,
 ): Promise<string[]> => {
-  const teams = await getTeamsByGroup(groupId);
+  const teams = await getTeamsByGroup(groupId, groupOwnerId);
   const found: string[] = [];
   await Promise.all(
     teams.map(async (t) => {
@@ -1330,7 +1331,7 @@ const renderGroupMemberList = (
       btn.textContent = "Checking…";
       let assigned: string[] = [];
       try {
-        assigned = await findAssignedTasksInGroup(displayName, email, group.id);
+        assigned = await findAssignedTasksInGroup(displayName, email, group.id, group.ownerId);
       } finally {
         btn.disabled = false;
         btn.textContent = prevText;
@@ -1349,7 +1350,7 @@ const renderGroupMemberList = (
       if (!confirm(`Remove ${displayName} from this group?\n\nThey will also be removed from all teams within the group.`)) return;
 
       try {
-        await removeGroupMember(group.id, uid, displayName);
+        await removeGroupMember(group.id, uid, displayName, group.ownerId);
         void loadAndRenderGroupMembers(group, profile);
       } catch (e: unknown) {
         if (errEl) {
