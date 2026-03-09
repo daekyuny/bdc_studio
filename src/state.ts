@@ -680,12 +680,17 @@ export const removeWorkWeekend = (date: string): void => {
 
 // --- Members CRUD ---
 
-// Runtime-only (not persisted): email→name and name→email pairs for the current team.
-// Set by main.ts after loading Firebase Auth profiles.
-let _memberPairs: { email: string; name: string }[] = [];
+const MEMBER_PAIRS_KEY = "burndown-studio-member-pairs";
+
+// Persisted to localStorage so names are available immediately on any render,
+// even before startApp's async Firebase calls complete (e.g. on page reload).
+let _memberPairs: { email: string; name: string }[] = (() => {
+  try { return JSON.parse(localStorage.getItem(MEMBER_PAIRS_KEY) || "[]"); } catch { return []; }
+})();
 
 export const setMemberPairs = (pairs: { email: string; name: string }[]): void => {
   _memberPairs = pairs;
+  try { localStorage.setItem(MEMBER_PAIRS_KEY, JSON.stringify(pairs)); } catch { /* quota */ }
 };
 
 export const getMemberPairs = (): { email: string; name: string }[] => _memberPairs;

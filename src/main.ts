@@ -790,8 +790,8 @@ const startApp = async (teamId: string, profile: UserProfile, teamName: string):
     if (team) {
       const memberProfiles = await getUsersByIds(team.memberIds);
       _teamMemberProfiles = memberProfiles;
-      replaceMembers(memberProfiles.map((p) => p.displayName));
       setMemberPairs(memberProfiles.map((p) => ({ email: p.email, name: p.displayName })));
+      replaceMembers(memberProfiles.map((p) => p.displayName));
     }
   } catch { /* non-critical — preferences.members stays as-is */ }
 

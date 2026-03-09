@@ -21754,9 +21754,20 @@ This typically indicates that your device does not have a healthy Internet conne
     save();
     onChange(H_ALL);
   };
-  var _memberPairs = [];
+  var MEMBER_PAIRS_KEY = "burndown-studio-member-pairs";
+  var _memberPairs = (() => {
+    try {
+      return JSON.parse(localStorage.getItem(MEMBER_PAIRS_KEY) || "[]");
+    } catch {
+      return [];
+    }
+  })();
   var setMemberPairs = (pairs) => {
     _memberPairs = pairs;
+    try {
+      localStorage.setItem(MEMBER_PAIRS_KEY, JSON.stringify(pairs));
+    } catch {
+    }
   };
   var getMemberPairs = () => _memberPairs;
   var emailToName = (email) => _memberPairs.find((p) => p.email === email)?.name ?? email;
@@ -25190,8 +25201,8 @@ They will also be removed from all teams within the group.`)) return;
       if (team) {
         const memberProfiles = await getUsersByIds(team.memberIds);
         _teamMemberProfiles = memberProfiles;
-        replaceMembers(memberProfiles.map((p) => p.displayName));
         setMemberPairs(memberProfiles.map((p) => ({ email: p.email, name: p.displayName })));
+        replaceMembers(memberProfiles.map((p) => p.displayName));
       }
     } catch {
     }
