@@ -1,7 +1,7 @@
 # Burndown Studio — Product Requirements Document
 
-**Version:** 1.1
-**Last updated:** 2026-03-09
+**Version:** 1.2
+**Last updated:** 2026-03-10
 **Author:** [Your Name]
 **Status:** Draft — open for review
 
@@ -103,7 +103,9 @@ Key pain points:
 | Google Sign-In | Firebase Auth; quiet ghost-style sign-in button | Done |
 | Team management | PM/SM: create teams, manage members, delete teams (cleans up all Firestore data incl. member memos); member count badge refreshes after Manage closes | Done |
 | Role-based access | super_manager / product_manager / member roles with Firestore security rules | Done |
-| Admin screen | Super Manager: view all users (sortable by Email/Name), change roles, delete profiles; deletion blocked if user owns teams or is assigned to tasks across any team; always shows custom confirm dialog | Done |
+| Admin screen | Super Manager only (no team access): view all users, change roles, assign Groups, delete profiles; deletion blocked if user owns teams or is assigned to tasks; always shows custom confirm dialog | Done |
+| Group screen | PM only: manage one Group (tenant); Teams and Members tabs; create/delete teams, add/remove members per team, remove members from group | Done |
+| Group model | Group is top-level tenant; PM owns one Group; Teams and Members scoped to Group; SM can view all Groups read-only | Done |
 | Member removal guard | Removing a member blocked if assigned to tasks in the team (PM) or across all teams (SM); also blocked if member owns any teams | Done |
 | User profiles | Name + phone; first-time "register?" prompt on unknown login; registration modal; edit via header button | Done |
 | Member list in Preferences | Read-only, auto-synced from Firebase; click row for full profile popup | Done |
@@ -121,6 +123,7 @@ Key pain points:
 | TypeScript | Full codebase; strict typing for all modules and data model | Done |
 | Graceful error recovery | Corrupt localStorage data is detected and reset to defaults | Done |
 | Modular codebase | Source split into 14 ES modules (incl. firebase, auth, db, screens), bundled via esbuild | Done |
+| Member name resolution | Email IDs stored in backlog/sprint assignedTo; resolved to display names via persisted email→name cache (localStorage); names always shown, never raw email addresses | Done |
 
 ## 5. Planned Features
 

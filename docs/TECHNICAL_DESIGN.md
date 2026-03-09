@@ -1,7 +1,7 @@
 # Burndown Studio — Technical Design Document
 
-**Version:** 1.4
-**Last updated:** 2026-03-07
+**Version:** 1.5
+**Last updated:** 2026-03-10
 **Status:** Current
 
 ---
@@ -96,12 +96,15 @@ src/*.ts  ──esbuild──▶  app.js  ──browser──▶  runs in any mo
 When Firebase is configured, the following Firestore collections are used:
 
 ```
-/users/{userId}       — UserProfile: email, displayName, phoneNumber?, role, createdAt, memos: { [teamId]: string }
-/teams/{teamId}       — Team: name, ownerId, memberIds[], createdAt
+/users/{userId}       — UserProfile: email, displayName, phoneNumber?, role, groupId?, createdAt, memos: { [teamId]: string }
+/teams/{teamId}       — Team: name, ownerId, memberIds[], groupId, createdAt
+/groups/{groupId}     — Group: name, ownerId, createdAt
 /appdata/{teamId}     — AppState (full sprint/backlog/preferences JSON blob)
 ```
 
-**Roles:** `super_manager` (full access + admin), `product_manager` (create/manage teams), `member` (read/write sprint data for assigned teams). The email `dkyoon@gmail.com` is assigned `super_manager` automatically on first login.
+**Roles:** `super_manager` (admin screen only — no team access), `product_manager` (owns one Group; creates/manages Teams and Members within it), `member` (read/write sprint data for assigned teams). All new users self-register as `member`; the first `super_manager` must be set manually via the Firebase Console.
+
+**Groups (tenants):** A Group is the top-level container owned by one PM. Teams and Members belong to a Group. `groupId` on `/users` and `/teams` records group membership. SM can read all Groups; PM can create/update their own Group only. When a PM creates their first Group, `linkExistingTeamsToGroup` migrates any pre-existing teams and their members to the new Group.
 
 **`memos`** is a map stored as a nested field on the user document (`users/{uid}.memos.{teamId}`). Written via `updateDoc` with dot-notation key; deleted via `deleteField()` when a team is deleted. Reading uses `getDoc` on the user doc and extracting the nested map.
 
@@ -135,7 +138,7 @@ AppState
 │           ├── taskId: string (e.g. "0.1.1")
 │           ├── description: string
 │           ├── estimate: number (days)
-│           └── assignedTo: string[]  (multi-select; denormalized to sprint tasks as comma-separated string)
+│           └── assignedTo: string[]  (email addresses; resolved to display names at render via emailToName)
 ├── preferences
 │   ├── holidays: { date: YYYY-MM-DD, name: string }[]
 │   ├── workWeekends: string[] (YYYY-MM-DD — specific weekend dates that count as working)
@@ -155,7 +158,7 @@ AppState
     │   ├── backlogTaskId: string (UUID — link to BacklogTask)
     │   ├── taskId: string (denormalized)
     │   ├── name: string (denormalized from backlog description)
-    │   ├── assignedTo: string (denormalized)
+    │   ├── assignedTo: string (comma-separated emails, denormalized from BacklogTask.assignedTo)
     │   ├── estimate: number (denormalized — read-only in sprint)
     │   ├── worked: number (latest total; top-level reflects most recent log entry)
     │   ├── remain: number (latest total; top-level reflects most recent log entry)
@@ -181,6 +184,8 @@ AppState
 **`plannedPoints`** is locked by `finalizeSprintPlan()` when the planning modal is closed. Used exclusively for the ideal burndown line. Mid-sprint additions or removals do not affect it.
 
 **`addedDate`** is set to `projectToday` when a task is added. Tasks with `addedDate < startDate` (or no `addedDate`) are "originally planned". Tasks with `addedDate ≥ startDate` are mid-sprint additions.
+
+**`BacklogTask.assignedTo`** stores email addresses (unique Firebase Auth IDs). Display converts each email to a name via `emailToName()`, which looks up `_memberPairs` — a module-level cache of `{email, name}` pairs. This cache is pre-populated from `localStorage` under `burndown-studio-member-pairs` at module init, so names render correctly immediately on page load without waiting for the Firebase profile fetch. `setMemberPairs()` updates both the in-memory cache and localStorage. The `preferences.members` list stores display names (not emails) and is always synced from Firebase Auth team member profiles in `startApp`.
 
 **`scopeDrops`** records planned tasks removed mid-sprint. If the same task is added back, the matching ScopeDrop is cancelled (most recent match removed), restoring the original `addedDate` — net effect is as if no change occurred.
 

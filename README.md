@@ -49,22 +49,33 @@ If `src/firebase.ts` still contains the placeholder `"YOUR_API_KEY"`, the app ru
 
 | Role | Capabilities |
 |---|---|
-| `super_manager` | Full access; admin screen; manage all teams; delete/promote users |
-| `product_manager` | Create teams; manage members of owned teams; delete owned teams |
+| `super_manager` | Admin-only access: view all users, change roles, assign groups, delete profiles; no team management |
+| `product_manager` | Owns one Group (tenant); creates/manages Teams and Members within the Group |
 | `member` | Access assigned teams; read/write sprint data |
 
 All new users self-register as `member`. To bootstrap the first `super_manager`, register an account normally, then open the **Firebase Console → Firestore → users/{uid}** and manually set `role` to `"super_manager"`. After that the Admin screen can promote other users.
 
 ## Current Features
 
+### Groups (Tenants)
+
+- A **Group** is the top-level tenant unit, owned and managed by one PM
+- PM's main screen is the Group screen (Teams | Members sidebar)
+- PM creates/deletes/manages Teams within the Group; assigns Group Members to Teams
+- Group Members are users with `groupId` matching the Group; managed from the Members tab
+- SM can view all Groups in the Admin → Groups section (read-only)
+
 ### Multi-user & Authentication
 
 - Google Sign-In (production) and fake email login (localhost only)
-- Team selection screen after login — users see only their assigned teams
+- **SM** routes directly to the Admin screen on login (no team access)
+- **PM** routes to the Group screen on login; redirected to Group creation if no Group exists yet
+- **Member** routes to the Team selection screen
 - Real-time Firestore sync: all team members see changes instantly
 - **"← Teams" button** in the app header to switch between teams without signing out
-- **Admin screen** (Super Manager only): view all users (sortable by Email/Name), change roles, delete user profiles; always shows custom confirm dialog before deletion; blocked if user owns teams or is assigned to tasks across any team
-- **Team management** (PM/SM): create teams, add/remove members from a user list, delete teams; member removal blocked if member has task assignments in this team or owns any teams; member count badge refreshes immediately after Manage closes
+- **Admin screen** (Super Manager only): view all users (sortable by Email/Name), change roles, assign Groups, delete profiles; deletion blocked if user owns teams or is assigned to tasks; always shows custom confirm dialog
+- **Group screen** (PM only): create/delete Teams, manage Group Members per Team, remove Members from Group
+- **Team management** (PM): add/remove members from a Team; member removal blocked if assigned to tasks in the team
 - `projectToday` is per-session — not shared across users; remote updates do not reset it
 
 ### Project TODAY
@@ -197,12 +208,13 @@ bdc/
 ## Firestore Collections
 
 ```
-/users/{userId}        — email, displayName, phoneNumber?, role, createdAt, memos: { [teamId]: string }
-/teams/{teamId}        — name, ownerId, memberIds[], createdAt
+/users/{userId}        — email, displayName, phoneNumber?, role, groupId?, createdAt, memos: { [teamId]: string }
+/teams/{teamId}        — name, ownerId, memberIds[], groupId, createdAt
+/groups/{groupId}      — name, ownerId, createdAt
 /appdata/{teamId}      — full AppState (sprints, backlog, preferences, …)
 ```
 
-`memos` is a private per-user map keyed by `teamId`. Memos are deleted automatically when a team is deleted.
+`memos` is a private per-user map keyed by `teamId`. Memos are deleted automatically when a team is deleted. `groupId` on users and teams links them to the PM's Group (tenant).
 
 ## Data Model (AppState)
 
@@ -223,7 +235,7 @@ bdc/
             "taskId": "0.1.1",
             "description": "...",
             "estimate": 3,
-            "assignedTo": ["Alice", "Bob"]
+            "assignedTo": ["alice@example.com", "bob@example.com"]
           }
         ]
       }
@@ -232,7 +244,7 @@ bdc/
   "preferences": {
     "holidays": [{ "date": "YYYY-MM-DD", "name": "..." }],
     "workWeekends": ["YYYY-MM-DD"],
-    "members": ["Alice", "Bob"]
+    "members": ["Alice", "Bob"]   // display names, auto-synced from Firebase Auth
   },
   "sprints": [
     {
@@ -251,7 +263,7 @@ bdc/
           "backlogTaskId": "uuid",
           "taskId": "0.1.1",
           "name": "...",
-          "assignedTo": "Alice, Bob",
+          "assignedTo": "alice@example.com, bob@example.com",  // emails; resolved to names at render time
           "estimate": 3,
           "worked": 1,
           "remain": 2,
@@ -305,3 +317,5 @@ See `docs/` for detailed project documents:
 | 2026-03-06 | User profiles (name + phone, first-time registration modal, edit via header button); member profile popup in Preferences; private per-user memo (Markdown, auto-save); holiday/work-weekend pickers disable already-added dates; backlog assignedTo changed to multi-select string[] with popup picker; team delete cleans up member memos in Firestore; sign-in button redesigned (quiet ghost style) |
 | 2026-03-07 | Burndown N+1 border model: Today shown as shaded band, ideal reaches exactly 0, actual/scope plotted at right border of each day; Move/Split for undone tasks on last sprint day; sprint selector shows Total Points and Available Days, excludes past sprints; login shows "register?" prompt for unknown users; projectToday skips holidays/weekends on page load; Admin table sortable by Email/Name; developer count capped at team member count; member removal blocked if assigned to tasks or if user owns teams; SM always gets custom confirm dialog in Admin |
 | 2026-03-09 | Documentation corrections: super_manager bootstrap clarified (all self-registrations are member; set role manually in Firebase Console); CLAUDE.md module table updated to include firebase.ts, auth.ts, db.ts, screens.ts |
+| 2026-03-10 | SaaS Step 1 — Group (tenant) model: PM owns one Group; Group screen (Teams + Members tabs); SM routes to Admin-only; SM Admin Users table adds Group assignment column; Firestore security rules for /groups; lazy migration links existing teams to Group on first creation |
+| 2026-03-10 | Bug fixes: Firestore permission error when PM loads Group teams (query by ownerId not groupId); member names showing as emails after import — persisted email→name pairs to localStorage (`burndown-studio-member-pairs`); sprint task tooltip and backlog Excel import now correctly resolve emails to display names; JSON import preserves current preferences.members |
