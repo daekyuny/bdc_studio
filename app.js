@@ -21247,7 +21247,9 @@ This typically indicates that your device does not have a healthy Internet conne
     try {
       const remoteState = await loadTeamState(teamId);
       if (remoteState && Array.isArray(remoteState.sprints)) {
+        const preservedMembers = [...state.preferences.members];
         state = fixLoadedState(migrateState(remoteState));
+        if (preservedMembers.length > 0) state.preferences.members = preservedMembers;
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       }
     } catch (err) {
@@ -21257,8 +21259,10 @@ This typically indicates that your device does not have a healthy Internet conne
       if (Date.now() - lastFirestoreWriteAt < 5e3) return;
       if (!remoteState || !Array.isArray(remoteState.sprints)) return;
       const preservedToday = state.projectToday;
+      const preservedMembers = [...state.preferences.members];
       state = fixLoadedState(migrateState(remoteState));
       state.projectToday = preservedToday;
+      if (preservedMembers.length > 0) state.preferences.members = preservedMembers;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       onChange(H_ALL);
     });
@@ -23049,8 +23053,9 @@ ${marker.label}`;
     };
     reader.readAsText(file);
   };
-  var exportBacklogExcel = () => {
+  var exportBacklogExcel = (emailToName = /* @__PURE__ */ new Map()) => {
     const backlog = getBacklog();
+    const resolveNames = (assigned) => assigned.map((v2) => emailToName.get(v2) ?? v2).join(", ");
     const aoa = [
       ["Story ID", "User Stories", "Priority", "Task ID", "Task Description", "Estimate(days)", "Assigned To"]
     ];
@@ -23060,9 +23065,9 @@ ${marker.label}`;
       } else {
         story.tasks.forEach((task, i) => {
           if (i === 0) {
-            aoa.push([story.storyId, story.description, story.priority ?? 100, task.taskId, task.description, task.estimate, task.assignedTo.join(", ")]);
+            aoa.push([story.storyId, story.description, story.priority ?? 100, task.taskId, task.description, task.estimate, resolveNames(task.assignedTo)]);
           } else {
-            aoa.push(["", "", "", task.taskId, task.description, task.estimate, task.assignedTo.join(", ")]);
+            aoa.push(["", "", "", task.taskId, task.description, task.estimate, resolveNames(task.assignedTo)]);
           }
         });
       }
@@ -24217,7 +24222,10 @@ All shared sprint data for this team will be permanently removed.`)) return;
     const newId = addStory();
     startEditing(newId, true);
   });
-  dom.backlogExportCsvBtn.addEventListener("click", exportBacklogExcel);
+  dom.backlogExportCsvBtn.addEventListener("click", () => {
+    const emailToName = new Map(_teamMemberProfiles.map((p) => [p.email, p.displayName]));
+    exportBacklogExcel(emailToName);
+  });
   dom.backlogDeleteAllBtn.addEventListener("click", () => {
     dom.confirmDeleteBacklogModal.hidden = false;
   });
@@ -24592,15 +24600,6 @@ All shared sprint data for this team will be permanently removed.`)) return;
     btn.textContent = profile.displayName;
   };
   var startApp = async (teamId, profile, teamName) => {
-    await setCurrentTeam(teamId);
-    hideAllScreens();
-    showApp();
-    _currentTeamIdForMemo = teamId;
-    _currentUidForMemo = profile.uid;
-    const headerUserInfo = document.getElementById("headerUserInfo");
-    headerUserInfo.hidden = false;
-    updateHeaderUser(profile);
-    document.getElementById("headerTeamName").textContent = teamName;
     try {
       const team = await getTeamById(teamId);
       if (team) {
@@ -24610,6 +24609,15 @@ All shared sprint data for this team will be permanently removed.`)) return;
       }
     } catch {
     }
+    await setCurrentTeam(teamId);
+    hideAllScreens();
+    showApp();
+    _currentTeamIdForMemo = teamId;
+    _currentUidForMemo = profile.uid;
+    const headerUserInfo = document.getElementById("headerUserInfo");
+    headerUserInfo.hidden = false;
+    updateHeaderUser(profile);
+    document.getElementById("headerTeamName").textContent = teamName;
     render();
   };
   document.getElementById("switchTeamBtn")?.addEventListener("click", goToTeamScreen);

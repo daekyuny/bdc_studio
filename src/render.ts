@@ -20,6 +20,8 @@ import {
   deleteBacklogTask,
   getPreferences,
   getMembers,
+  getMemberPairs,
+  emailToName,
   getProjectToday,
   setProjectToday,
   H_SIDEBAR, H_HEADER, H_TASKS, H_PANEL, H_STATS, H_CHART, H_BACKLOG, H_ALL,
@@ -520,7 +522,7 @@ const renderBacklogPanel = (sprint: Sprint, isSprintActive: boolean): void => {
     if (parentStory?.description) bpTaskId.title = parentStory.description;
     const bpDesc = row.querySelector(".bp-description") as HTMLElement;
     bpDesc.textContent = task.description;
-    if (task.assignedTo.length > 0) bpDesc.title = task.assignedTo.join(", ");
+    if (task.assignedTo.length > 0) bpDesc.title = task.assignedTo.map(emailToName).join(", ");
     (row.querySelector(".bp-estimate") as HTMLElement).textContent = String(task.estimate ?? "");
 
     if (!isSprintActive) {
@@ -552,7 +554,7 @@ const STORY_SORT_KEYS = new Set(["storyId", "description", "priority"]);
 
 const openAssignedPicker = (
   current: string[],
-  members: string[],
+  members: { email: string; name: string }[],
   onDone: (selected: string[]) => void,
 ): void => {
   const overlay = document.createElement("div");
@@ -588,9 +590,10 @@ const openAssignedPicker = (
   modal.appendChild(noneRow);
 
   for (const m of members) {
-    const row = makeRow(m, m, currentSet.has(m));
+    // value = email (stored), label = display name (shown)
+    const row = makeRow(m.email, m.name, currentSet.has(m.email));
     const cb = row.querySelector("input")!;
-    checkboxes.push({ cb, value: m });
+    checkboxes.push({ cb, value: m.email });
     modal.appendChild(row);
   }
 
@@ -772,11 +775,13 @@ const renderBacklog = (): void => {
         taskIdView.textContent = task.taskId || "";
         taskDescView.textContent = task.description || "";
         taskEstView.textContent = String(task.estimate ?? "");
-        taskAssignedView.textContent = task.assignedTo.length > 0 ? task.assignedTo.join(", ") : "—";
+        // assignedTo stores emails; display as names
+        const assignedNames = task.assignedTo.map(emailToName);
+        taskAssignedView.textContent = assignedNames.length > 0 ? assignedNames.join(", ") : "—";
 
         if (assignedIds.has(task.id)) taskRow.classList.add("assigned");
 
-        let _assignedSelection: string[] = [...task.assignedTo];
+        let _assignedSelection: string[] = [...task.assignedTo]; // emails
 
         if (isTaskEditing) {
           taskRow.classList.add('row-editing');
@@ -795,7 +800,8 @@ const renderBacklog = (): void => {
           taskAssignedView.hidden = true;
           taskAssignedDropdown.hidden = false;
           taskAssignedDropdown.className = "task-assigned-clickable";
-          taskAssignedDropdown.textContent = _assignedSelection.length > 0 ? _assignedSelection.join(", ") : "—";
+          taskAssignedDropdown.textContent = _assignedSelection.length > 0
+            ? _assignedSelection.map(emailToName).join(", ") : "—";
 
           const saveTask = (): void => {
             editingIds.delete(task.id);
@@ -808,7 +814,7 @@ const renderBacklog = (): void => {
           };
 
           taskAssignedDropdown.addEventListener("click", () => {
-            openAssignedPicker(_assignedSelection, getMembers(), (selected) => {
+            openAssignedPicker(_assignedSelection, getMemberPairs(), (selected) => {
               _assignedSelection = selected;
               saveTask();
             });

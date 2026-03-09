@@ -187,7 +187,11 @@ export const setCurrentTeam = async (teamId: string): Promise<void> => {
   try {
     const remoteState = await loadTeamState(teamId);
     if (remoteState && Array.isArray(remoteState.sprints)) {
+      // Preserve members: always derived from Firebase Auth profiles by main.ts,
+      // never from Firestore appdata (which may contain stale emails).
+      const preservedMembers = [...state.preferences.members];
       state = fixLoadedState(migrateState(remoteState as any));
+      if (preservedMembers.length > 0) state.preferences.members = preservedMembers;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     }
   } catch (err) {
@@ -198,10 +202,13 @@ export const setCurrentTeam = async (teamId: string): Promise<void> => {
     // Suppress echoes of our own writes (5s suppression window)
     if (Date.now() - lastFirestoreWriteAt < 5000) return;
     if (!remoteState || !Array.isArray(remoteState.sprints)) return;
-    // projectToday is per-user/per-session — preserve the current user's value
+    // projectToday and members are per-session — preserve the current runtime values.
+    // Members are always derived from Firebase Auth profiles, never from Firestore appdata.
     const preservedToday = state.projectToday;
+    const preservedMembers = [...state.preferences.members];
     state = fixLoadedState(migrateState(remoteState as any));
     state.projectToday = preservedToday;
+    if (preservedMembers.length > 0) state.preferences.members = preservedMembers;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     onChange(H_ALL);
   });
@@ -668,6 +675,19 @@ export const removeWorkWeekend = (date: string): void => {
 };
 
 // --- Members CRUD ---
+
+// Runtime-only (not persisted): email→name and name→email pairs for the current team.
+// Set by main.ts after loading Firebase Auth profiles.
+let _memberPairs: { email: string; name: string }[] = [];
+
+export const setMemberPairs = (pairs: { email: string; name: string }[]): void => {
+  _memberPairs = pairs;
+};
+
+export const getMemberPairs = (): { email: string; name: string }[] => _memberPairs;
+
+export const emailToName = (email: string): string =>
+  _memberPairs.find((p) => p.email === email)?.name ?? email;
 
 export const getMembers = (): string[] => state.preferences.members;
 

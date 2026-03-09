@@ -331,7 +331,7 @@ const showCreateTeam = (profile: UserProfile): void => {
 // Manage Members inline modal
 // ---------------------------------------------------------------------------
 
-const findAssignedTasksInState = (displayName: string, appState: { sprints: { tasks: { assignedTo?: string; name?: string; taskId?: string }[] }[]; backlog?: { stories: { storyId: string; tasks: { assignedTo?: string[]; description?: string; taskId?: string }[] }[] } }, label: string): string[] => {
+const findAssignedTasksInState = (displayName: string, email: string, appState: { sprints: { tasks: { assignedTo?: string; name?: string; taskId?: string }[] }[]; backlog?: { stories: { storyId: string; tasks: { assignedTo?: string[]; description?: string; taskId?: string }[] }[] } }, label: string): string[] => {
   const found: string[] = [];
   appState.sprints.forEach((sprint, i) => {
     for (const task of sprint.tasks) {
@@ -343,7 +343,9 @@ const findAssignedTasksInState = (displayName: string, appState: { sprints: { ta
   });
   for (const story of (appState.backlog?.stories ?? [])) {
     for (const task of story.tasks) {
-      if ((task.assignedTo ?? []).includes(displayName)) {
+      // assignedTo stores emails; fall back to matching displayName for legacy data
+      const arr = task.assignedTo ?? [];
+      if (arr.includes(email) || arr.includes(displayName)) {
         found.push(`${label} › Backlog [${story.storyId}]: ${task.description || task.taskId || "(unnamed)"}`);
       }
     }
@@ -352,14 +354,14 @@ const findAssignedTasksInState = (displayName: string, appState: { sprints: { ta
 };
 
 // PM: checks only the current team being managed
-const findAssignedTasksInTeam = async (displayName: string, teamId: string, teamName: string): Promise<string[]> => {
+const findAssignedTasksInTeam = async (displayName: string, email: string, teamId: string, teamName: string): Promise<string[]> => {
   const appState = await loadTeamState(teamId);
   if (!appState) return [];
-  return findAssignedTasksInState(displayName, appState, teamName);
+  return findAssignedTasksInState(displayName, email, appState, teamName);
 };
 
 // SM: checks across ALL teams the member belongs to
-const findAssignedTasksAcrossTeams = async (displayName: string, userUid: string): Promise<string[]> => {
+const findAssignedTasksAcrossTeams = async (displayName: string, email: string, userUid: string): Promise<string[]> => {
   const found: string[] = [];
   let teams: Team[] = [];
   try {
@@ -370,7 +372,7 @@ const findAssignedTasksAcrossTeams = async (displayName: string, userUid: string
   await Promise.all(teams.map(async (t) => {
     const appState = await loadTeamState(t.id);
     if (!appState) return;
-    found.push(...findAssignedTasksInState(displayName, appState, t.name || t.id));
+    found.push(...findAssignedTasksInState(displayName, email, appState, t.name || t.id));
   }));
   return found;
 };

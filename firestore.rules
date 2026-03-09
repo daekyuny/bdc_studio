@@ -15,9 +15,11 @@ service cloud.firestore {
       allow update, delete: if isSuperManager();
     }
 
-    // Teams: members can read; PM/SM can create; owner/SM can update/delete
+    // Teams: members/owners can read; PM/SM can create; owner/SM can update/delete
     match /teams/{teamId} {
-      allow read: if request.auth.uid in resource.data.memberIds || isSuperManager();
+      allow read: if request.auth.uid in resource.data.memberIds
+                  || resource.data.ownerId == request.auth.uid
+                  || isSuperManager();
       allow create: if isProductManager() || isSuperManager();
       allow update, delete: if request.auth.uid == resource.data.ownerId || isProductManager();
     }

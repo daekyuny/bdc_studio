@@ -20,6 +20,7 @@ import {
   removeWorkWeekend,
   getMembers,
   replaceMembers,
+  setMemberPairs,
   setCurrentTeam,
 } from "./state.ts";
 import { render, setActiveTab, startEditing, expandAll, collapseAll, toggleTaskSort, toggleBacklogSort, setHighlightBacklogTaskId, togglePlanTaskSort, togglePlanBacklogSort } from "./render.ts";
@@ -759,6 +760,19 @@ const updateHeaderUser = (profile: UserProfile): void => {
 };
 
 const startApp = async (teamId: string, profile: UserProfile, teamName: string): Promise<void> => {
+  // Fetch member profiles and sync preferences.members BEFORE setCurrentTeam so that
+  // (a) the Firestore load preserves the correct display names, and
+  // (b) the echo-suppression window is already open when the first snapshot arrives.
+  try {
+    const team = await getTeamById(teamId);
+    if (team) {
+      const memberProfiles = await getUsersByIds(team.memberIds);
+      _teamMemberProfiles = memberProfiles;
+      replaceMembers(memberProfiles.map((p) => p.displayName));
+      setMemberPairs(memberProfiles.map((p) => ({ email: p.email, name: p.displayName })));
+    }
+  } catch { /* non-critical — preferences.members stays as-is */ }
+
   await setCurrentTeam(teamId);
   hideAllScreens();
   showApp();
@@ -771,17 +785,6 @@ const startApp = async (teamId: string, profile: UserProfile, teamName: string):
   headerUserInfo.hidden = false;
   updateHeaderUser(profile);
   (document.getElementById("headerTeamName") as HTMLElement).textContent = teamName;
-
-  // Sync preferences.members with the actual Firebase team member display names.
-  // This ensures the list is always up-to-date regardless of how members were added.
-  try {
-    const team = await getTeamById(teamId);
-    if (team) {
-      const memberProfiles = await getUsersByIds(team.memberIds);
-      _teamMemberProfiles = memberProfiles;
-      replaceMembers(memberProfiles.map((p) => p.displayName));
-    }
-  } catch { /* non-critical — preferences.members stays as-is */ }
 
   render();
 };
