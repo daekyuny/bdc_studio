@@ -2078,20 +2078,118 @@ th.sortable.sort-desc::after {
   padding-top: 4px;
 }
 
-/* Admin screen */
-.admin-card {
-  max-width: 760px;
-}
-
-.admin-header {
+/* Admin screen — sidebar layout */
+.admin-layout {
   display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 24px;
+  width: 100%;
+  max-width: 960px;
+  height: 600px;
+  background: #fff;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.12);
+  border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
-.admin-header .screen-title {
+.admin-sidebar {
+  width: 200px;
+  flex-shrink: 0;
+  background: #f8f9fa;
+  border-right: 1px solid rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  padding: 24px 0;
+}
+
+.admin-sidebar-brand {
+  padding: 0 20px 16px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  margin-bottom: 8px;
+}
+
+.admin-sidebar-brand .eyebrow {
+  font-size: 0.68rem;
+  margin: 0 0 2px;
+}
+
+.admin-sidebar-role {
+  font-size: 0.78rem;
+  color: var(--muted, #888);
   margin: 0;
+}
+
+.admin-nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+}
+
+.admin-nav-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.88rem;
+  color: var(--text, #333);
+  font-family: inherit;
+}
+
+.admin-nav-item:hover {
+  background: #eef0f3;
+}
+
+.admin-nav-item.active {
+  background: var(--primary, #4f46e5);
+  color: #fff;
+  font-weight: 500;
+}
+
+.admin-sidebar-footer {
+  padding: 12px 20px 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-footer-name {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text, #333);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.admin-main-header {
+  padding: 20px 24px 14px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.admin-section-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+#adminContent {
+  flex: 1;
+  overflow: auto;
+  padding: 16px 24px;
 }
 
 .admin-table-wrap {

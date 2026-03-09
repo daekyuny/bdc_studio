@@ -30,7 +30,7 @@ import { getNextWorkingDay, addWorkingDays, findGaps, todayIso, getWorkingDates,
 import type { Sprint } from "./types.ts";
 import { isFirebaseConfigured } from "./firebase.ts";
 import { initAuth, ensureUserProfile, createNewUserProfile, signOut, type User } from "./auth.ts";
-import { showLoginScreen, showTeamScreen, hideAllScreens, showProfileEditModal, showRegisterPrompt } from "./screens.ts";
+import { showLoginScreen, showTeamScreen, showAdminScreen, hideAllScreens, showProfileEditModal, showRegisterPrompt } from "./screens.ts";
 import { getUserMemo, saveUserMemo, getTeamById, getUsersByIds } from "./db.ts";
 import type { UserProfile } from "./types.ts";
 
@@ -749,6 +749,10 @@ let _teamMemberProfiles: UserProfile[] = [];
 const goToTeamScreen = (): void => {
   if (!_activeUser || !_activeProfile) return;
   hideApp();
+  if (_activeProfile.role === "super_manager") {
+    showAdminScreen(_activeProfile);
+    return;
+  }
   showTeamScreen(_activeUser, _activeProfile, (teamId, teamName) => {
     startApp(teamId, _activeProfile!, teamName);
   });
@@ -832,6 +836,10 @@ if (!isFirebaseConfigured) {
           return;
         }
         _activeProfile = profile;
+        if (profile.role === "super_manager") {
+          showAdminScreen(profile);
+          return;
+        }
         showTeamScreen(user, profile, (teamId, teamName) => {
           startApp(teamId, profile, teamName);
         });

@@ -23330,7 +23330,6 @@ ${marker.label}`;
           </div>
           <div class="team-screen-user">
             <span class="team-user-name">${escapeHtml(profile.displayName)}</span>
-            ${profile.role === "super_manager" ? '<button class="btn ghost small" id="adminBtn">Admin</button>' : ""}
             <button class="btn ghost small" id="teamSignOutBtn">Sign Out</button>
           </div>
         </div>
@@ -23342,12 +23341,6 @@ ${marker.label}`;
     </div>
   `;
     document.getElementById("teamSignOutBtn").addEventListener("click", () => signOut2());
-    if (profile.role === "super_manager") {
-      document.getElementById("adminBtn")?.addEventListener(
-        "click",
-        () => showAdminScreen(profile, () => showTeamScreen(user, profile, onTeamSelected))
-      );
-    }
     loadAndRenderTeams(user, profile);
   };
   var loadAndRenderTeams = async (user, profile) => {
@@ -23376,8 +23369,8 @@ ${marker.label}`;
     `;
       card.addEventListener("click", () => _onTeamSelected?.(team.id, team.name));
       grid.appendChild(card);
-      const canManage = profile.role === "product_manager" || profile.role === "super_manager";
-      const canDelete = profile.role === "super_manager" || team.ownerId === profile.uid;
+      const canManage = profile.role === "product_manager";
+      const canDelete = team.ownerId === profile.uid;
       if (canManage) {
         const manageBtn = document.createElement("button");
         manageBtn.className = "btn ghost small team-manage-btn";
@@ -23414,7 +23407,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
         card.appendChild(deleteBtn);
       }
     }
-    if (profile.role === "product_manager" || profile.role === "super_manager") {
+    if (profile.role === "product_manager") {
       const newCard = document.createElement("button");
       newCard.className = "team-card team-card-new";
       newCard.innerHTML = `<span class="team-card-new-icon">+</span><span class="team-card-name">New Team</span>`;
@@ -23736,24 +23729,55 @@ All shared sprint data for this team will be permanently removed.`)) return;
     };
     refresh();
   };
-  var showAdminScreen = (profile, onBack) => {
+  var showAdminScreen = (profile) => {
     clearContainer();
     getContainer().innerHTML = `
     <div class="screen-overlay" id="adminScreen">
-      <div class="screen-card admin-card">
-        <div class="admin-header">
-          <button class="btn ghost small" id="adminBackBtn">\u2190 Back to Teams</button>
-          <h2 class="screen-title">User Administration</h2>
-        </div>
-        <div class="screen-error" id="adminError" hidden></div>
-        <div id="adminUserTable" class="admin-table-wrap">
-          <em>Loading users\u2026</em>
-        </div>
+      <div class="admin-layout">
+        <aside class="admin-sidebar">
+          <div class="admin-sidebar-brand">
+            <p class="eyebrow">Burndown Studio</p>
+            <p class="admin-sidebar-role">Administration</p>
+          </div>
+          <nav class="admin-nav">
+            <button class="admin-nav-item active" data-section="users">Users</button>
+          </nav>
+          <div class="admin-sidebar-footer">
+            <span class="admin-footer-name">${escapeHtml(profile.displayName)}</span>
+            <button class="btn ghost small" id="adminSignOutBtn">Sign Out</button>
+          </div>
+        </aside>
+        <main class="admin-main">
+          <div class="admin-main-header">
+            <h2 class="admin-section-title" id="adminSectionTitle">Users</h2>
+          </div>
+          <div class="screen-error" id="adminError" hidden></div>
+          <div id="adminContent">
+            <div id="adminUserTable" class="admin-table-wrap"><em>Loading users\u2026</em></div>
+          </div>
+        </main>
       </div>
     </div>
   `;
-    document.getElementById("adminBackBtn").addEventListener("click", onBack);
+    document.getElementById("adminSignOutBtn").addEventListener("click", () => signOut2());
+    document.querySelectorAll(".admin-nav-item").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".admin-nav-item").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        loadAdminSection(btn.dataset.section);
+      });
+    });
     loadAdminUsers();
+  };
+  var loadAdminSection = (section) => {
+    const content = document.getElementById("adminContent");
+    const title = document.getElementById("adminSectionTitle");
+    if (!content || !title) return;
+    if (section === "users") {
+      title.textContent = "Users";
+      content.innerHTML = `<div id="adminUserTable" class="admin-table-wrap"><em>Loading users\u2026</em></div>`;
+      loadAdminUsers();
+    }
   };
   var _adminUsers = [];
   var _adminSort = { key: "email", asc: true };
@@ -24596,6 +24620,10 @@ All shared sprint data for this team will be permanently removed.`)) return;
   var goToTeamScreen = () => {
     if (!_activeUser || !_activeProfile) return;
     hideApp();
+    if (_activeProfile.role === "super_manager") {
+      showAdminScreen(_activeProfile);
+      return;
+    }
     showTeamScreen(_activeUser, _activeProfile, (teamId, teamName) => {
       startApp(teamId, _activeProfile, teamName);
     });
@@ -24664,6 +24692,10 @@ All shared sprint data for this team will be permanently removed.`)) return;
             return;
           }
           _activeProfile = profile;
+          if (profile.role === "super_manager") {
+            showAdminScreen(profile);
+            return;
+          }
           showTeamScreen(user, profile, (teamId, teamName) => {
             startApp(teamId, profile, teamName);
           });
