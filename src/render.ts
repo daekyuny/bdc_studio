@@ -238,7 +238,9 @@ const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Se
     taskIdSpan.textContent = task.taskId || "";
     nameSpan.textContent = task.name;
 
-    let currentAssigned = task.assignedTo || "";
+    let currentAssigned = task.assignedTo
+      ? task.assignedTo.split(",").map((s) => emailToName(s.trim())).join(", ")
+      : "";
     let parentStoryDesc = "";
     if (task.backlogTaskId) {
       const backlog = getBacklog();

@@ -21613,7 +21613,9 @@ This typically indicates that your device does not have a healthy Internet conne
     onChange(H_ALL);
   };
   var replaceState = (newState) => {
+    const preservedMembers = [...state.preferences.members];
     state = newState;
+    if (preservedMembers.length > 0) state.preferences.members = preservedMembers;
     save();
     onChange(H_ALL);
   };
@@ -22243,7 +22245,7 @@ ${marker.label}`;
       const splitBtn = row.querySelector(".task-split");
       taskIdSpan.textContent = task.taskId || "";
       nameSpan.textContent = task.name;
-      let currentAssigned = task.assignedTo || "";
+      let currentAssigned = task.assignedTo ? task.assignedTo.split(",").map((s) => emailToName(s.trim())).join(", ") : "";
       let parentStoryDesc = "";
       if (task.backlogTaskId) {
         const backlog = getBacklog();
@@ -23234,7 +23236,7 @@ ${marker.label}`;
       relinkSprintTasks();
       const uniqueNames = [...new Set(
         stories.flatMap((s) => s.tasks.flatMap((t) => t.assignedTo)).filter(Boolean)
-      )];
+      )].map(emailToName);
       if (uniqueNames.length > 0) addMembersFromImport(uniqueNames);
     };
     reader.readAsArrayBuffer(file);

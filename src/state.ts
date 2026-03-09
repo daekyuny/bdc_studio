@@ -517,7 +517,11 @@ export const setProjectToday = (date: string): void => {
 };
 
 export const replaceState = (newState: AppState): void => {
+  // Preserve the current runtime members list (derived from Firebase Auth profiles)
+  // so that a JSON import doesn't overwrite it with potentially stale display names.
+  const preservedMembers = [...state.preferences.members];
   state = newState;
+  if (preservedMembers.length > 0) state.preferences.members = preservedMembers;
   save();
   onChange(H_ALL);
 };

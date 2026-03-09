@@ -1,4 +1,4 @@
-import { getState, getActiveSprint, replaceState, getBacklog, replaceBacklog, addMembersFromImport, findOrphanedSprintTasks, relinkSprintTasks } from "./state.ts";
+import { getState, getActiveSprint, replaceState, getBacklog, replaceBacklog, addMembersFromImport, findOrphanedSprintTasks, relinkSprintTasks, emailToName } from "./state.ts";
 import { todayIso, createId } from "./utils.ts";
 import { dom } from "./dom.ts";
 import type { AppState, BacklogStory, BacklogTask } from "./types.ts";
@@ -221,7 +221,7 @@ export const importBacklogExcel = (file: File): void => {
 
     const uniqueNames = [...new Set(
       stories.flatMap(s => s.tasks.flatMap(t => t.assignedTo)).filter(Boolean)
-    )];
+    )].map(emailToName); // resolve emails → display names
     if (uniqueNames.length > 0) addMembersFromImport(uniqueNames);
   };
   reader.readAsArrayBuffer(file);
