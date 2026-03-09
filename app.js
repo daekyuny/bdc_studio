@@ -20972,6 +20972,9 @@ This typically indicates that your device does not have a healthy Internet conne
     if ("phoneNumber" in updates && updates.phoneNumber === null) {
       firestoreUpdates.phoneNumber = deleteField();
     }
+    if ("groupId" in updates && updates.groupId === null) {
+      firestoreUpdates.groupId = deleteField();
+    }
     await updateDoc(doc(db, "users", uid), firestoreUpdates);
   };
   var getTeamsManagedBy = async (userId) => {
@@ -23907,6 +23910,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
     }
   };
   var _adminUsers = [];
+  var _adminGroups = [];
   var _adminSort = { key: "email", asc: true };
   var renderAdminTable = () => {
     const tableEl = document.getElementById("adminUserTable");
@@ -23923,7 +23927,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
         <tr>
           <th class="sortable-header" data-sort="email" style="cursor:pointer">Email${arrow("email")}</th>
           <th class="sortable-header" data-sort="name" style="cursor:pointer">Name${arrow("name")}</th>
-          <th>Role</th><th></th>
+          <th>Role</th><th>Group</th><th></th>
         </tr>
       </thead>
       <tbody>
@@ -23936,6 +23940,15 @@ All shared sprint data for this team will be permanently removed.`)) return;
                 <option value="member" ${u.role === "member" ? "selected" : ""}>Member</option>
                 <option value="product_manager" ${u.role === "product_manager" ? "selected" : ""}>Product Manager</option>
                 <option value="super_manager" ${u.role === "super_manager" ? "selected" : ""}>Super Manager</option>
+              </select>
+            </td>
+            <td>
+              <select class="group-select" data-uid="${u.uid}" ${u.role === "super_manager" ? "disabled" : ""}>
+                <option value="">\u2014 none \u2014</option>
+                ${_adminGroups.map((g) => {
+      const pmName = _adminUsers.find((x2) => x2.uid === g.ownerId)?.displayName ?? g.ownerId;
+      return `<option value="${g.id}" ${u.groupId === g.id ? "selected" : ""}>${escapeHtml(g.name)} (${escapeHtml(pmName)})</option>`;
+    }).join("")}
               </select>
             </td>
             <td>
@@ -23968,8 +23981,26 @@ All shared sprint data for this team will be permanently removed.`)) return;
           await setUserRole(uid, role);
           const u = _adminUsers.find((u2) => u2.uid === uid);
           if (u) u.role = role;
+          renderAdminTable();
         } catch (e) {
           errEl.textContent = e instanceof Error ? e.message : "Failed to update role.";
+          errEl.hidden = false;
+          renderAdminTable();
+        }
+      });
+    });
+    tableEl.querySelectorAll(".group-select").forEach((sel) => {
+      sel.addEventListener("change", async () => {
+        const uid = sel.dataset.uid;
+        const groupId = sel.value || null;
+        const errEl = document.getElementById("adminError");
+        errEl.hidden = true;
+        try {
+          await updateUserProfile(uid, { groupId });
+          const u = _adminUsers.find((u2) => u2.uid === uid);
+          if (u) u.groupId = groupId === null ? void 0 : groupId;
+        } catch (e) {
+          errEl.textContent = e instanceof Error ? e.message : "Failed to update group.";
           errEl.hidden = false;
           renderAdminTable();
         }
@@ -24027,7 +24058,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
     const tableEl = document.getElementById("adminUserTable");
     if (!tableEl) return;
     try {
-      _adminUsers = await getAllUsers();
+      [_adminUsers, _adminGroups] = await Promise.all([getAllUsers(), getAllGroups()]);
       if (_adminUsers.length === 0) {
         tableEl.innerHTML = "<em>No users found.</em>";
         return;

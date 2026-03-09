@@ -30,11 +30,14 @@ export const createUserProfile = async (profile: UserProfile): Promise<void> => 
 
 export const updateUserProfile = async (
   uid: string,
-  updates: Partial<UserProfile> & { phoneNumber?: string | null },
+  updates: Partial<UserProfile> & { phoneNumber?: string | null; groupId?: string | null },
 ): Promise<void> => {
   const firestoreUpdates: Record<string, unknown> = { ...updates };
   if ("phoneNumber" in updates && updates.phoneNumber === null) {
     firestoreUpdates.phoneNumber = deleteField();
+  }
+  if ("groupId" in updates && updates.groupId === null) {
+    firestoreUpdates.groupId = deleteField();
   }
   await updateDoc(doc(db, "users", uid), firestoreUpdates);
 };

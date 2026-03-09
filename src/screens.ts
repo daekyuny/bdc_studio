@@ -717,6 +717,7 @@ const loadAdminGroups = async (): Promise<void> => {
 };
 
 let _adminUsers: UserProfile[] = [];
+let _adminGroups: Group[] = [];
 let _adminSort: { key: "email" | "name"; asc: boolean } = { key: "email", asc: true };
 
 const renderAdminTable = (): void => {
@@ -738,7 +739,7 @@ const renderAdminTable = (): void => {
         <tr>
           <th class="sortable-header" data-sort="email" style="cursor:pointer">Email${arrow("email")}</th>
           <th class="sortable-header" data-sort="name" style="cursor:pointer">Name${arrow("name")}</th>
-          <th>Role</th><th></th>
+          <th>Role</th><th>Group</th><th></th>
         </tr>
       </thead>
       <tbody>
@@ -751,6 +752,15 @@ const renderAdminTable = (): void => {
                 <option value="member" ${u.role === "member" ? "selected" : ""}>Member</option>
                 <option value="product_manager" ${u.role === "product_manager" ? "selected" : ""}>Product Manager</option>
                 <option value="super_manager" ${u.role === "super_manager" ? "selected" : ""}>Super Manager</option>
+              </select>
+            </td>
+            <td>
+              <select class="group-select" data-uid="${u.uid}" ${u.role === "super_manager" ? "disabled" : ""}>
+                <option value="">— none —</option>
+                ${_adminGroups.map((g) => {
+                  const pmName = _adminUsers.find(x => x.uid === g.ownerId)?.displayName ?? g.ownerId;
+                  return `<option value="${g.id}" ${u.groupId === g.id ? "selected" : ""}>${escapeHtml(g.name)} (${escapeHtml(pmName)})</option>`;
+                }).join("")}
               </select>
             </td>
             <td>
@@ -785,8 +795,27 @@ const renderAdminTable = (): void => {
         await setUserRole(uid, role);
         const u = _adminUsers.find(u => u.uid === uid);
         if (u) u.role = role;
+        renderAdminTable(); // re-render to disable group select for SM
       } catch (e: unknown) {
         errEl.textContent = e instanceof Error ? e.message : "Failed to update role.";
+        errEl.hidden = false;
+        renderAdminTable();
+      }
+    });
+  });
+
+  tableEl.querySelectorAll<HTMLSelectElement>(".group-select").forEach((sel) => {
+    sel.addEventListener("change", async () => {
+      const uid = sel.dataset.uid!;
+      const groupId = sel.value || null;
+      const errEl = document.getElementById("adminError")!;
+      errEl.hidden = true;
+      try {
+        await updateUserProfile(uid, { groupId } as Parameters<typeof updateUserProfile>[1]);
+        const u = _adminUsers.find(u => u.uid === uid);
+        if (u) u.groupId = groupId === null ? undefined : groupId;
+      } catch (e: unknown) {
+        errEl.textContent = e instanceof Error ? e.message : "Failed to update group.";
         errEl.hidden = false;
         renderAdminTable();
       }
@@ -849,7 +878,7 @@ const loadAdminUsers = async (): Promise<void> => {
   const tableEl = document.getElementById("adminUserTable");
   if (!tableEl) return;
   try {
-    _adminUsers = await getAllUsers();
+    [_adminUsers, _adminGroups] = await Promise.all([getAllUsers(), getAllGroups()]);
     if (_adminUsers.length === 0) {
       tableEl.innerHTML = "<em>No users found.</em>";
       return;
