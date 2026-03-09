@@ -125,6 +125,7 @@ export interface UserProfile {
   displayName: string;
   phoneNumber?: string;
   role: UserRole;
+  groupId?: string;
   createdAt: string;
 }
 
@@ -133,5 +134,13 @@ export interface Team {
   name: string;
   ownerId: string;
   memberIds: string[];
+  groupId: string;
+  createdAt: string;
+}
+
+export interface Group {
+  id: string;
+  name: string;
+  ownerId: string;
   createdAt: string;
 }

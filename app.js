@@ -20990,15 +20990,20 @@ This typically indicates that your device does not have a healthy Internet conne
     );
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   };
-  var createTeam = async (name4, ownerId) => {
+  var createTeam = async (name4, ownerId, groupId = "") => {
     const ref = doc(collection(db, "teams"));
     await setDoc(ref, {
       name: name4,
       ownerId,
       memberIds: [ownerId],
+      groupId,
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     });
     return ref.id;
+  };
+  var getAllTeams = async () => {
+    const snap = await getDocs(collection(db, "teams"));
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   };
   var addMemberToTeamWithPrefs = async (teamId, userId, displayName) => {
     await updateDoc(doc(db, "teams", teamId), { memberIds: arrayUnion(userId) });
@@ -21084,6 +21089,80 @@ This typically indicates that your device does not have a healthy Internet conne
   };
   var saveUserMemo = async (uid, teamId, text) => {
     await updateDoc(doc(db, "users", uid), { [`memos.${teamId}`]: text });
+  };
+  var createGroup = async (name4, ownerId) => {
+    const ref = doc(collection(db, "groups"));
+    await setDoc(ref, { name: name4, ownerId, createdAt: (/* @__PURE__ */ new Date()).toISOString() });
+    await updateDoc(doc(db, "users", ownerId), { groupId: ref.id });
+    return ref.id;
+  };
+  var getGroupByOwner = async (ownerId) => {
+    const snap = await getDocs(
+      query(collection(db, "groups"), where("ownerId", "==", ownerId))
+    );
+    if (snap.empty) return null;
+    return { id: snap.docs[0].id, ...snap.docs[0].data() };
+  };
+  var updateGroupName = async (groupId, name4) => {
+    await updateDoc(doc(db, "groups", groupId), { name: name4 });
+  };
+  var getAllGroups = async () => {
+    const snap = await getDocs(collection(db, "groups"));
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  };
+  var getTeamsByGroup = async (groupId) => {
+    const snap = await getDocs(
+      query(collection(db, "teams"), where("groupId", "==", groupId))
+    );
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  };
+  var getGroupMemberProfiles = async (groupId) => {
+    const snap = await getDocs(
+      query(collection(db, "users"), where("groupId", "==", groupId))
+    );
+    return snap.docs.map((d) => d.data());
+  };
+  var removeGroupMember = async (groupId, userId, displayName) => {
+    const teams = await getTeamsByGroup(groupId);
+    await Promise.all(
+      teams.map(async (t) => {
+        if (!t.memberIds.includes(userId)) return;
+        await updateDoc(doc(db, "teams", t.id), { memberIds: arrayRemove(userId) });
+        const appState = await loadTeamState(t.id);
+        if (appState && displayName.trim()) {
+          appState.preferences.members = appState.preferences.members.filter(
+            (m) => m !== displayName.trim()
+          );
+          await saveTeamState(t.id, appState);
+        }
+      })
+    );
+    await updateDoc(doc(db, "users", userId), { groupId: deleteField() });
+  };
+  var linkExistingTeamsToGroup = async (ownerId, groupId) => {
+    const snap = await getDocs(
+      query(collection(db, "teams"), where("ownerId", "==", ownerId))
+    );
+    const memberIds = /* @__PURE__ */ new Set();
+    await Promise.all(
+      snap.docs.map(async (d) => {
+        await updateDoc(doc(db, "teams", d.id), { groupId });
+        const data = d.data();
+        (data.memberIds ?? []).forEach((id) => memberIds.add(id));
+      })
+    );
+    memberIds.delete(ownerId);
+    await Promise.all(
+      Array.from(memberIds).map(async (uid) => {
+        try {
+          const userSnap = await getDoc(doc(db, "users", uid));
+          if (userSnap.exists() && !userSnap.data().groupId) {
+            await updateDoc(doc(db, "users", uid), { groupId });
+          }
+        } catch {
+        }
+      })
+    );
   };
 
   // src/state.ts
@@ -23585,7 +23664,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
       }
     });
   };
-  var showManageMembers = (team, profile, onDone) => {
+  var showManageMembers = (team, profile, onDone, groupId) => {
     document.getElementById("manageMembersModal")?.remove();
     const modal = document.createElement("div");
     modal.id = "manageMembersModal";
@@ -23600,7 +23679,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
           <div id="currentMemberList" class="manage-member-list">Loading\u2026</div>
         </div>
         <div class="manage-members-col">
-          <div class="manage-members-col-title">All Users (click to add)</div>
+          <div class="manage-members-col-title">${groupId ? "Group Members (click to add)" : "All Users (click to add)"}</div>
           <div id="availableUserList" class="manage-member-list">Loading\u2026</div>
         </div>
       </div>
@@ -23628,7 +23707,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
       currentEl.innerHTML = availableEl.innerHTML = "Loading\u2026";
       let allUsers;
       try {
-        allUsers = await getAllUsers();
+        allUsers = groupId ? await getGroupMemberProfiles(groupId) : await getAllUsers();
       } catch {
         currentEl.innerHTML = availableEl.innerHTML = "<em>Failed to load users.</em>";
         return;
@@ -23741,6 +23820,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
           </div>
           <nav class="admin-nav">
             <button class="admin-nav-item active" data-section="users">Users</button>
+            <button class="admin-nav-item" data-section="groups">Groups</button>
           </nav>
           <div class="admin-sidebar-footer">
             <span class="admin-footer-name">${escapeHtml(profile.displayName)}</span>
@@ -23777,6 +23857,55 @@ All shared sprint data for this team will be permanently removed.`)) return;
       title.textContent = "Users";
       content.innerHTML = `<div id="adminUserTable" class="admin-table-wrap"><em>Loading users\u2026</em></div>`;
       loadAdminUsers();
+    } else if (section === "groups") {
+      title.textContent = "Groups";
+      content.innerHTML = `<div id="adminGroupTable" class="admin-table-wrap"><em>Loading groups\u2026</em></div>`;
+      void loadAdminGroups();
+    }
+  };
+  var loadAdminGroups = async () => {
+    const tableEl = document.getElementById("adminGroupTable");
+    if (!tableEl) return;
+    try {
+      const [groups, allUsers, allTeams] = await Promise.all([
+        getAllGroups(),
+        getAllUsers(),
+        getAllTeams()
+      ]);
+      const userMap = new Map(allUsers.map((u) => [u.uid, u]));
+      if (groups.length === 0) {
+        tableEl.innerHTML = "<em>No groups found.</em>";
+        return;
+      }
+      tableEl.innerHTML = `
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Group Name</th>
+            <th>Owner</th>
+            <th>Members</th>
+            <th>Teams</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${groups.map((g) => {
+        const owner = userMap.get(g.ownerId);
+        const memberCount = allUsers.filter((u) => u.groupId === g.id).length;
+        const teamCount = allTeams.filter((t) => t.groupId === g.id).length;
+        return `
+              <tr>
+                <td>${escapeHtml(g.name)}</td>
+                <td>${owner ? `${escapeHtml(owner.displayName)} <span class="member-email">${escapeHtml(owner.email)}</span>` : "<em>unknown</em>"}</td>
+                <td>${memberCount}</td>
+                <td>${teamCount}</td>
+              </tr>
+            `;
+      }).join("")}
+        </tbody>
+      </table>
+    `;
+    } catch (e) {
+      tableEl.innerHTML = `<em>Failed to load groups: ${e instanceof Error ? escapeHtml(e.message) : "Unknown error"}</em>`;
     }
   };
   var _adminUsers = [];
@@ -23969,6 +24098,380 @@ All shared sprint data for this team will be permanently removed.`)) return;
       if (e.key === "Enter") doSave();
     });
     setTimeout(() => document.getElementById("profileNameInput").focus(), 50);
+  };
+  var showCreateGroupScreen = (user, profile, defaultName, onCreated) => {
+    clearContainer();
+    getContainer().innerHTML = `
+    <div class="screen-overlay" id="createGroupScreen">
+      <div class="screen-card login-card" style="max-width:440px;text-align:left">
+        <p class="eyebrow">Burndown Studio</p>
+        <h2 class="screen-title">Create Your Group</h2>
+        <p class="screen-subtitle" style="text-align:left">Your Group is your workspace. Teams and members are organised within it.</p>
+        <label class="screen-label">
+          Group Name
+          <input type="text" id="groupNameInput" class="screen-input" value="${escapeHtml(defaultName)}" />
+        </label>
+        <div class="screen-error" id="createGroupError" hidden></div>
+        <div style="margin-top:20px;display:flex;justify-content:flex-end">
+          <button class="btn" id="createGroupBtn">Create Group</button>
+        </div>
+      </div>
+    </div>
+  `;
+    const doCreate = async () => {
+      const name4 = document.getElementById("groupNameInput").value.trim();
+      const errEl = document.getElementById("createGroupError");
+      errEl.hidden = true;
+      if (!name4) {
+        errEl.textContent = "Group name cannot be empty.";
+        errEl.hidden = false;
+        return;
+      }
+      const btn = document.getElementById("createGroupBtn");
+      btn.disabled = true;
+      btn.textContent = "Creating\u2026";
+      try {
+        const groupId = await createGroup(name4, profile.uid);
+        await linkExistingTeamsToGroup(profile.uid, groupId);
+        const group = { id: groupId, name: name4, ownerId: profile.uid, createdAt: (/* @__PURE__ */ new Date()).toISOString() };
+        onCreated(group);
+      } catch (e) {
+        errEl.textContent = e instanceof Error ? e.message : "Failed to create group.";
+        errEl.hidden = false;
+        btn.disabled = false;
+        btn.textContent = "Create Group";
+      }
+    };
+    document.getElementById("createGroupBtn").addEventListener("click", doCreate);
+    document.getElementById("groupNameInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") void doCreate();
+    });
+    setTimeout(() => document.getElementById("groupNameInput").focus(), 50);
+  };
+  var showGroupScreen = (user, profile, group, onTeamSelected) => {
+    _currentUser = user;
+    _currentProfile = profile;
+    _onTeamSelected = onTeamSelected;
+    clearContainer();
+    getContainer().innerHTML = `
+    <div class="screen-overlay" id="groupScreen">
+      <div class="admin-layout">
+        <aside class="admin-sidebar">
+          <div class="admin-sidebar-brand">
+            <p class="eyebrow">Group</p>
+            <p class="admin-sidebar-group-name" id="groupNameDisplay">${escapeHtml(group.name)}</p>
+            <button class="btn ghost small" id="editGroupNameBtn" style="margin-top:6px">Edit</button>
+          </div>
+          <nav class="admin-nav">
+            <button class="admin-nav-item active" data-section="teams">Teams</button>
+            <button class="admin-nav-item" data-section="members">Members</button>
+          </nav>
+          <div class="admin-sidebar-footer">
+            <span class="admin-footer-name">${escapeHtml(profile.displayName)}</span>
+            <button class="btn ghost small" id="groupSignOutBtn">Sign Out</button>
+          </div>
+        </aside>
+        <main class="admin-main">
+          <div class="admin-main-header">
+            <h2 class="admin-section-title" id="groupSectionTitle">Teams</h2>
+          </div>
+          <div class="screen-error" id="groupError" hidden></div>
+          <div id="groupContent" class="group-content"></div>
+        </main>
+      </div>
+    </div>
+  `;
+    document.getElementById("groupSignOutBtn").addEventListener("click", () => signOut2());
+    document.getElementById("editGroupNameBtn").addEventListener("click", () => {
+      showEditGroupModal(group, (newName) => {
+        group.name = newName;
+        const display = document.getElementById("groupNameDisplay");
+        if (display) display.textContent = newName;
+      });
+    });
+    document.querySelectorAll(".admin-nav-item").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".admin-nav-item").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        const title = document.getElementById("groupSectionTitle");
+        if (title) title.textContent = btn.dataset.section === "teams" ? "Teams" : "Members";
+        const errEl = document.getElementById("groupError");
+        if (errEl) errEl.hidden = true;
+        loadGroupSection(btn.dataset.section, group, profile);
+      });
+    });
+    loadGroupSection("teams", group, profile);
+  };
+  var showEditGroupModal = (group, onSaved) => {
+    document.getElementById("editGroupModal")?.remove();
+    const modal = document.createElement("div");
+    modal.id = "editGroupModal";
+    modal.className = "team-modal-overlay";
+    modal.innerHTML = `
+    <div class="team-modal">
+      <h3>Edit Group</h3>
+      <label class="screen-label">
+        Group Name
+        <input type="text" id="editGroupNameInput" class="screen-input" value="${escapeHtml(group.name)}" />
+      </label>
+      <div class="screen-error" id="editGroupError" hidden></div>
+      <div class="team-modal-footer">
+        <button class="btn ghost" id="editGroupCancel">Cancel</button>
+        <button class="btn" id="editGroupSave">Save</button>
+      </div>
+    </div>
+  `;
+    document.body.appendChild(modal);
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) modal.remove();
+    });
+    document.getElementById("editGroupCancel").addEventListener("click", () => modal.remove());
+    const doSave = async () => {
+      const name4 = document.getElementById("editGroupNameInput").value.trim();
+      const errEl = document.getElementById("editGroupError");
+      errEl.hidden = true;
+      if (!name4) {
+        errEl.textContent = "Group name cannot be empty.";
+        errEl.hidden = false;
+        return;
+      }
+      try {
+        await updateGroupName(group.id, name4);
+        modal.remove();
+        onSaved(name4);
+      } catch (e) {
+        errEl.textContent = e instanceof Error ? e.message : "Failed to save.";
+        errEl.hidden = false;
+      }
+    };
+    document.getElementById("editGroupSave").addEventListener("click", doSave);
+    document.getElementById("editGroupNameInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") void doSave();
+    });
+    setTimeout(() => document.getElementById("editGroupNameInput").focus(), 50);
+  };
+  var loadGroupSection = (section, group, profile) => {
+    const content = document.getElementById("groupContent");
+    if (!content) return;
+    if (section === "teams") {
+      content.innerHTML = `<div id="groupTeamGrid" class="team-grid"><div class="team-card-loading">Loading teams\u2026</div></div>`;
+      void loadAndRenderGroupTeams(group, profile);
+    } else {
+      content.innerHTML = `<div id="groupMemberList" class="group-member-list"><em>Loading members\u2026</em></div>`;
+      void loadAndRenderGroupMembers(group, profile);
+    }
+  };
+  var loadAndRenderGroupTeams = async (group, profile) => {
+    const grid = document.getElementById("groupTeamGrid");
+    const errEl = document.getElementById("groupError");
+    if (!grid) return;
+    if (errEl) errEl.hidden = true;
+    try {
+      const teams = await getTeamsByGroup(group.id);
+      renderGroupTeamGrid(grid, teams, group, profile);
+    } catch (e) {
+      if (errEl) {
+        errEl.textContent = e instanceof Error ? e.message : "Failed to load teams.";
+        errEl.hidden = false;
+      }
+      grid.innerHTML = "";
+    }
+  };
+  var renderGroupTeamGrid = (grid, teams, group, profile) => {
+    grid.innerHTML = "";
+    for (const team of teams) {
+      const card = document.createElement("button");
+      card.className = "team-card";
+      card.innerHTML = `
+      <div class="team-card-name">${escapeHtml(team.name)}</div>
+      <div class="team-card-meta">${team.memberIds.length} member${team.memberIds.length !== 1 ? "s" : ""}</div>
+    `;
+      card.addEventListener("click", () => _onTeamSelected?.(team.id, team.name));
+      const manageBtn = document.createElement("button");
+      manageBtn.className = "btn ghost small team-manage-btn";
+      manageBtn.textContent = "Manage";
+      manageBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        showManageMembers(team, profile, () => void loadAndRenderGroupTeams(group, profile), group.id);
+      });
+      card.appendChild(manageBtn);
+      if (team.ownerId === profile.uid) {
+        const deleteBtn = document.createElement("button");
+        deleteBtn.className = "btn ghost small danger team-delete-btn";
+        deleteBtn.textContent = "Delete";
+        deleteBtn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          if (!confirm(`Delete team "${team.name}"?
+
+All sprint data for this team will be permanently removed.`)) return;
+          const errEl = document.getElementById("groupError");
+          if (errEl) errEl.hidden = true;
+          try {
+            await deleteTeam(team.id);
+            void loadAndRenderGroupTeams(group, profile);
+          } catch (err) {
+            if (errEl) {
+              errEl.textContent = err instanceof Error ? err.message : "Failed to delete team.";
+              errEl.hidden = false;
+            }
+          }
+        });
+        card.appendChild(deleteBtn);
+      }
+      grid.appendChild(card);
+    }
+    const newCard = document.createElement("button");
+    newCard.className = "team-card team-card-new";
+    newCard.innerHTML = `<span class="team-card-new-icon">+</span><span class="team-card-name">New Team</span>`;
+    newCard.addEventListener(
+      "click",
+      () => showCreateTeamForGroup(group, profile, () => void loadAndRenderGroupTeams(group, profile))
+    );
+    grid.appendChild(newCard);
+  };
+  var showCreateTeamForGroup = (group, profile, onCreated) => {
+    document.getElementById("createTeamModal")?.remove();
+    const modal = document.createElement("div");
+    modal.id = "createTeamModal";
+    modal.className = "team-modal-overlay";
+    modal.innerHTML = `
+    <div class="team-modal">
+      <h3>Create Team</h3>
+      <input type="text" id="newTeamName" class="screen-input" placeholder="Team name" />
+      <div class="screen-error" id="createTeamError" hidden></div>
+      <div class="team-modal-footer">
+        <button class="btn ghost" id="createTeamCancel">Cancel</button>
+        <button class="btn" id="createTeamConfirm">Create</button>
+      </div>
+    </div>
+  `;
+    getContainer().appendChild(modal);
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) modal.remove();
+    });
+    document.getElementById("createTeamCancel").addEventListener("click", () => modal.remove());
+    const doCreate = async () => {
+      const name4 = document.getElementById("newTeamName").value.trim();
+      if (!name4) return;
+      const errEl = document.getElementById("createTeamError");
+      errEl.hidden = true;
+      try {
+        await createTeam(name4, profile.uid, group.id);
+        modal.remove();
+        onCreated();
+      } catch (e) {
+        errEl.textContent = e instanceof Error ? e.message : "Failed to create team.";
+        errEl.hidden = false;
+      }
+    };
+    document.getElementById("createTeamConfirm").addEventListener("click", doCreate);
+    document.getElementById("newTeamName").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") void doCreate();
+    });
+    setTimeout(() => document.getElementById("newTeamName").focus(), 50);
+  };
+  var findAssignedTasksInGroup = async (displayName, email, groupId) => {
+    const teams = await getTeamsByGroup(groupId);
+    const found = [];
+    await Promise.all(
+      teams.map(async (t) => {
+        const appState = await loadTeamState(t.id);
+        if (!appState) return;
+        found.push(...findAssignedTasksInState(displayName, email, appState, t.name || t.id));
+      })
+    );
+    return found;
+  };
+  var loadAndRenderGroupMembers = async (group, profile) => {
+    const listEl = document.getElementById("groupMemberList");
+    const errEl = document.getElementById("groupError");
+    if (!listEl) return;
+    if (errEl) errEl.hidden = true;
+    try {
+      const members = await getGroupMemberProfiles(group.id);
+      renderGroupMemberList(listEl, members, group, profile);
+    } catch (e) {
+      if (errEl) {
+        errEl.textContent = e instanceof Error ? e.message : "Failed to load members.";
+        errEl.hidden = false;
+      }
+      listEl.innerHTML = "<em>Failed to load members.</em>";
+    }
+  };
+  var renderGroupMemberList = (listEl, members, group, profile) => {
+    listEl.innerHTML = "";
+    const toolbar = document.createElement("div");
+    toolbar.className = "group-member-toolbar";
+    toolbar.innerHTML = `<button class="btn" disabled title="Coming soon">+ Invite Member</button>`;
+    listEl.appendChild(toolbar);
+    if (members.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "pref-hint";
+      empty.textContent = "No members in this group yet.";
+      listEl.appendChild(empty);
+      return;
+    }
+    for (const member of members) {
+      const isOwner = member.uid === profile.uid;
+      const row = document.createElement("div");
+      row.className = "manage-member-row";
+      row.innerHTML = `
+      <div class="manage-member-info">
+        <span class="member-name">${escapeHtml(member.displayName)}${isOwner ? ' <span class="member-role-badge">Owner</span>' : ""}</span>
+        <span class="member-email">${escapeHtml(member.email)}</span>
+        ${member.phoneNumber ? `<span class="member-phone">${escapeHtml(member.phoneNumber)}</span>` : ""}
+      </div>
+      ${!isOwner ? `
+        <button class="btn ghost small danger group-member-remove-btn"
+          data-uid="${member.uid}"
+          data-name="${escapeHtml(member.displayName)}"
+          data-email="${escapeHtml(member.email)}">
+          Remove
+        </button>
+      ` : ""}
+    `;
+      listEl.appendChild(row);
+    }
+    listEl.querySelectorAll(".group-member-remove-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const uid = btn.dataset.uid;
+        const displayName = btn.dataset.name;
+        const email = btn.dataset.email;
+        const errEl = document.getElementById("groupError");
+        if (errEl) errEl.hidden = true;
+        btn.disabled = true;
+        const prevText = btn.textContent;
+        btn.textContent = "Checking\u2026";
+        let assigned = [];
+        try {
+          assigned = await findAssignedTasksInGroup(displayName, email, group.id);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = prevText;
+        }
+        if (assigned.length > 0) {
+          const preview = assigned.slice(0, 3).join(", ");
+          const more = assigned.length > 3 ? ` \u2026 and ${assigned.length - 3} more` : "";
+          if (errEl) {
+            errEl.textContent = `Cannot remove ${displayName}: assigned to ${assigned.length} task(s) \u2014 ${preview}${more}. Unassign first.`;
+            errEl.hidden = false;
+          }
+          return;
+        }
+        if (!confirm(`Remove ${displayName} from this group?
+
+They will also be removed from all teams within the group.`)) return;
+        try {
+          await removeGroupMember(group.id, uid, displayName);
+          void loadAndRenderGroupMembers(group, profile);
+        } catch (e) {
+          if (errEl) {
+            errEl.textContent = e instanceof Error ? e.message : "Failed to remove member.";
+            errEl.hidden = false;
+          }
+        }
+      });
+    });
   };
 
   // src/main.ts
@@ -24624,6 +25127,24 @@ All shared sprint data for this team will be permanently removed.`)) return;
       showAdminScreen(_activeProfile);
       return;
     }
+    if (_activeProfile.role === "product_manager") {
+      const user = _activeUser;
+      const profile = _activeProfile;
+      void getGroupByOwner(profile.uid).then((group) => {
+        if (!group) {
+          showCreateGroupScreen(user, profile, `${profile.displayName}'s Group`, (newGroup) => {
+            showGroupScreen(user, profile, newGroup, (teamId, teamName) => {
+              startApp(teamId, profile, teamName);
+            });
+          });
+        } else {
+          showGroupScreen(user, profile, group, (teamId, teamName) => {
+            startApp(teamId, profile, teamName);
+          });
+        }
+      });
+      return;
+    }
     showTeamScreen(_activeUser, _activeProfile, (teamId, teamName) => {
       startApp(teamId, _activeProfile, teamName);
     });
@@ -24694,6 +25215,21 @@ All shared sprint data for this team will be permanently removed.`)) return;
           _activeProfile = profile;
           if (profile.role === "super_manager") {
             showAdminScreen(profile);
+            return;
+          }
+          if (profile.role === "product_manager") {
+            const group = await getGroupByOwner(profile.uid);
+            if (!group) {
+              showCreateGroupScreen(user, profile, `${profile.displayName}'s Group`, (newGroup) => {
+                showGroupScreen(user, profile, newGroup, (teamId, teamName) => {
+                  startApp(teamId, profile, teamName);
+                });
+              });
+            } else {
+              showGroupScreen(user, profile, group, (teamId, teamName) => {
+                startApp(teamId, profile, teamName);
+              });
+            }
             return;
           }
           showTeamScreen(user, profile, (teamId, teamName) => {

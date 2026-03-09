@@ -30,8 +30,8 @@ import { getNextWorkingDay, addWorkingDays, findGaps, todayIso, getWorkingDates,
 import type { Sprint } from "./types.ts";
 import { isFirebaseConfigured } from "./firebase.ts";
 import { initAuth, ensureUserProfile, createNewUserProfile, signOut, type User } from "./auth.ts";
-import { showLoginScreen, showTeamScreen, showAdminScreen, hideAllScreens, showProfileEditModal, showRegisterPrompt } from "./screens.ts";
-import { getUserMemo, saveUserMemo, getTeamById, getUsersByIds } from "./db.ts";
+import { showLoginScreen, showTeamScreen, showAdminScreen, showGroupScreen, showCreateGroupScreen, hideAllScreens, showProfileEditModal, showRegisterPrompt } from "./screens.ts";
+import { getUserMemo, saveUserMemo, getTeamById, getUsersByIds, getGroupByOwner } from "./db.ts";
 import type { UserProfile } from "./types.ts";
 
 setOnStateChange(render);
@@ -753,6 +753,24 @@ const goToTeamScreen = (): void => {
     showAdminScreen(_activeProfile);
     return;
   }
+  if (_activeProfile.role === "product_manager") {
+    const user = _activeUser;
+    const profile = _activeProfile;
+    void getGroupByOwner(profile.uid).then((group) => {
+      if (!group) {
+        showCreateGroupScreen(user, profile, `${profile.displayName}'s Group`, (newGroup) => {
+          showGroupScreen(user, profile, newGroup, (teamId, teamName) => {
+            startApp(teamId, profile, teamName);
+          });
+        });
+      } else {
+        showGroupScreen(user, profile, group, (teamId, teamName) => {
+          startApp(teamId, profile, teamName);
+        });
+      }
+    });
+    return;
+  }
   showTeamScreen(_activeUser, _activeProfile, (teamId, teamName) => {
     startApp(teamId, _activeProfile!, teamName);
   });
@@ -838,6 +856,21 @@ if (!isFirebaseConfigured) {
         _activeProfile = profile;
         if (profile.role === "super_manager") {
           showAdminScreen(profile);
+          return;
+        }
+        if (profile.role === "product_manager") {
+          const group = await getGroupByOwner(profile.uid);
+          if (!group) {
+            showCreateGroupScreen(user, profile, `${profile.displayName}'s Group`, (newGroup) => {
+              showGroupScreen(user, profile, newGroup, (teamId, teamName) => {
+                startApp(teamId, profile, teamName);
+              });
+            });
+          } else {
+            showGroupScreen(user, profile, group, (teamId, teamName) => {
+              startApp(teamId, profile, teamName);
+            });
+          }
           return;
         }
         showTeamScreen(user, profile, (teamId, teamName) => {

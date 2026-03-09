@@ -15,7 +15,7 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "./firebase.ts";
-import type { AppState, UserProfile, Team, UserRole } from "./types.ts";
+import type { AppState, UserProfile, Team, UserRole, Group } from "./types.ts";
 
 // --- User Profile ---
 
@@ -59,15 +59,21 @@ export const getTeamsForUser = async (userId: string, role: UserRole): Promise<T
   return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Team));
 };
 
-export const createTeam = async (name: string, ownerId: string): Promise<string> => {
+export const createTeam = async (name: string, ownerId: string, groupId = ""): Promise<string> => {
   const ref = doc(collection(db, "teams"));
   await setDoc(ref, {
     name,
     ownerId,
     memberIds: [ownerId],
+    groupId,
     createdAt: new Date().toISOString(),
   });
   return ref.id;
+};
+
+export const getAllTeams = async (): Promise<Team[]> => {
+  const snap = await getDocs(collection(db, "teams"));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Team));
 };
 
 export const addMemberToTeam = async (teamId: string, userEmail: string): Promise<void> => {
@@ -208,4 +214,92 @@ export const getUserMemo = async (uid: string, teamId: string): Promise<string> 
 
 export const saveUserMemo = async (uid: string, teamId: string, text: string): Promise<void> => {
   await updateDoc(doc(db, "users", uid), { [`memos.${teamId}`]: text });
+};
+
+// --- Groups ---
+
+export const createGroup = async (name: string, ownerId: string): Promise<string> => {
+  const ref = doc(collection(db, "groups"));
+  await setDoc(ref, { name, ownerId, createdAt: new Date().toISOString() });
+  await updateDoc(doc(db, "users", ownerId), { groupId: ref.id });
+  return ref.id;
+};
+
+export const getGroupByOwner = async (ownerId: string): Promise<Group | null> => {
+  const snap = await getDocs(
+    query(collection(db, "groups"), where("ownerId", "==", ownerId)),
+  );
+  if (snap.empty) return null;
+  return { id: snap.docs[0].id, ...snap.docs[0].data() } as Group;
+};
+
+export const updateGroupName = async (groupId: string, name: string): Promise<void> => {
+  await updateDoc(doc(db, "groups", groupId), { name });
+};
+
+export const getAllGroups = async (): Promise<Group[]> => {
+  const snap = await getDocs(collection(db, "groups"));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Group));
+};
+
+export const getTeamsByGroup = async (groupId: string): Promise<Team[]> => {
+  const snap = await getDocs(
+    query(collection(db, "teams"), where("groupId", "==", groupId)),
+  );
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Team));
+};
+
+export const getGroupMemberProfiles = async (groupId: string): Promise<UserProfile[]> => {
+  const snap = await getDocs(
+    query(collection(db, "users"), where("groupId", "==", groupId)),
+  );
+  return snap.docs.map((d) => d.data() as UserProfile);
+};
+
+export const removeGroupMember = async (
+  groupId: string,
+  userId: string,
+  displayName: string,
+): Promise<void> => {
+  const teams = await getTeamsByGroup(groupId);
+  await Promise.all(
+    teams.map(async (t) => {
+      if (!t.memberIds.includes(userId)) return;
+      await updateDoc(doc(db, "teams", t.id), { memberIds: arrayRemove(userId) });
+      const appState = await loadTeamState(t.id);
+      if (appState && displayName.trim()) {
+        appState.preferences.members = appState.preferences.members.filter(
+          (m) => m !== displayName.trim(),
+        );
+        await saveTeamState(t.id, appState);
+      }
+    }),
+  );
+  await updateDoc(doc(db, "users", userId), { groupId: deleteField() });
+};
+
+// Back-link existing teams owned by ownerId to groupId; also set groupId on their members (migration).
+export const linkExistingTeamsToGroup = async (ownerId: string, groupId: string): Promise<void> => {
+  const snap = await getDocs(
+    query(collection(db, "teams"), where("ownerId", "==", ownerId)),
+  );
+  const memberIds = new Set<string>();
+  await Promise.all(
+    snap.docs.map(async (d) => {
+      await updateDoc(doc(db, "teams", d.id), { groupId });
+      const data = d.data();
+      ((data.memberIds as string[]) ?? []).forEach((id) => memberIds.add(id));
+    }),
+  );
+  memberIds.delete(ownerId);
+  await Promise.all(
+    Array.from(memberIds).map(async (uid) => {
+      try {
+        const userSnap = await getDoc(doc(db, "users", uid));
+        if (userSnap.exists() && !userSnap.data().groupId) {
+          await updateDoc(doc(db, "users", uid), { groupId });
+        }
+      } catch { /* ignore missing profiles */ }
+    }),
+  );
 };

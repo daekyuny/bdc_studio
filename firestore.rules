@@ -2,7 +2,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Users can read/write their own profile; super_manager can read all and update roles
+    // Users can read/write their own profile; PM can read all; SM can do anything
     match /users/{uid} {
       allow read: if request.auth.uid == uid || isProductManager();
       // Self-create: role must be 'member' (bootstrap super_manager via Firebase Console)
@@ -15,13 +15,22 @@ service cloud.firestore {
       allow update, delete: if isSuperManager();
     }
 
-    // Teams: members/owners can read; PM/SM can create; owner/SM can update/delete
+    // Groups: PM can create/read/update their own; SM can read all and delete
+    match /groups/{groupId} {
+      allow read: if request.auth.uid == resource.data.ownerId || isSuperManager();
+      allow create: if isPurePM()
+        && request.resource.data.ownerId == request.auth.uid;
+      allow update: if request.auth.uid == resource.data.ownerId;
+      allow delete: if isSuperManager();
+    }
+
+    // Teams: members/owners can read; PM can create; owner can update/delete; SM can do anything
     match /teams/{teamId} {
       allow read: if request.auth.uid in resource.data.memberIds
                   || resource.data.ownerId == request.auth.uid
                   || isSuperManager();
-      allow create: if isProductManager() || isSuperManager();
-      allow update, delete: if request.auth.uid == resource.data.ownerId || isProductManager();
+      allow create: if isPurePM() || isSuperManager();
+      allow update, delete: if request.auth.uid == resource.data.ownerId || isSuperManager();
     }
 
     // AppData: only team members can read/write; SM can delete orphaned data
@@ -34,9 +43,12 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super_manager';
     }
 
+    function isPurePM() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'product_manager';
+    }
+
     function isProductManager() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'product_manager'
-          || isSuperManager();
+      return isPurePM() || isSuperManager();
     }
 
     function teamMember(teamId) {
