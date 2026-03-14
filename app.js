@@ -24954,10 +24954,10 @@ All shared sprint data for this team will be permanently removed.`)) return;
       if (toggleContainer) {
         toggleContainer.innerHTML = `
         <div class="admin-setting-row">
-          <label class="toggle" style="cursor:pointer;gap:10px">
-            <span style="font-size:0.9rem">Disable PM Account Requests</span>
-            <input type="checkbox" id="pmRequestDisabledChk" ${pmRequestDisabled ? "checked" : ""} />
-          </label>
+          <div style="display:flex;align-items:center;gap:8px;justify-content:flex-start">
+            <label for="pmRequestDisabledChk" style="font-size:0.9rem;cursor:pointer;margin:0">Disable PM Account Requests</label>
+            <input type="checkbox" id="pmRequestDisabledChk" ${pmRequestDisabled ? "checked" : ""} style="width:15px;height:15px;cursor:pointer;margin:0;flex-shrink:0" />
+          </div>
           <p class="pref-hint" style="margin:4px 0 0">When checked, the "Request PM Account" button on the landing page is disabled.</p>
         </div>
       `;
