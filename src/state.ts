@@ -327,6 +327,14 @@ export const updateTask = (taskId: string, updates: Partial<SprintTask>): void =
   const task = sprint.tasks.find((item) => item.id === taskId);
   if (!task) return;
   Object.assign(task, updates);
+  // Sync assignedTo to linked backlog task when it changes
+  if ("assignedTo" in updates && task.backlogTaskId) {
+    const emails = (updates.assignedTo ?? "").split(",").map(e => e.trim()).filter(Boolean);
+    for (const story of state.backlog.stories) {
+      const bt = story.tasks.find((t) => t.id === task.backlogTaskId);
+      if (bt) { bt.assignedTo = emails; break; }
+    }
+  }
   save();
   onChange(H_SPRINT_TASKS);
 };

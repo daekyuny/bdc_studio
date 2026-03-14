@@ -22076,6 +22076,16 @@ This typically indicates that your device does not have a healthy Internet conne
     const task = sprint.tasks.find((item) => item.id === taskId);
     if (!task) return;
     Object.assign(task, updates);
+    if ("assignedTo" in updates && task.backlogTaskId) {
+      const emails = (updates.assignedTo ?? "").split(",").map((e) => e.trim()).filter(Boolean);
+      for (const story of state.backlog.stories) {
+        const bt2 = story.tasks.find((t) => t.id === task.backlogTaskId);
+        if (bt2) {
+          bt2.assignedTo = emails;
+          break;
+        }
+      }
+    }
     save();
     onChange(H_SPRINT_TASKS);
   };
