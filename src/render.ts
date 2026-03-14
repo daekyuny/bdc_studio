@@ -44,6 +44,7 @@ let highlightBacklogTaskId: string | null = null;
 
 // Sort state — UI-only, not persisted
 let taskSort: SortState = { key: null, asc: true };
+let closeActiveUpdate: (() => void) | null = null;
 let backlogPanelSort: SortState = { key: null, asc: true };
 let backlogSort: SortState = { key: null, asc: true };
 let planTaskSort: SortState = { key: null, asc: true };
@@ -158,6 +159,7 @@ const getLogValueAt = <T extends { date: string }>(log: T[], date: string, key: 
 
 const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Set<string>, isSprintActive: boolean): void => {
   dom.taskRows.innerHTML = "";
+  closeActiveUpdate = null;
 
   const taskTable = dom.taskRows.closest("table");
   if (taskTable) applySortClasses(taskTable as HTMLElement, taskSort);
@@ -270,9 +272,21 @@ const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Se
     remainChangeBtn.hidden = !isSprintActive || !task.existsNow;
     remainChangeBtn.textContent = "Update";
 
+    const closeThisUpdate = (): void => {
+      workedView.hidden = false;
+      workedInput.hidden = true;
+      remainView.hidden = false;
+      remainInput.hidden = true;
+      remainChangeBtn.textContent = "Update";
+    };
+
     if (!task.isBeforeAdded && isSprintActive) {
       remainChangeBtn.addEventListener("click", () => {
         if (remainChangeBtn.textContent === "Update") {
+          // Close any other open update row first
+          if (closeActiveUpdate && closeActiveUpdate !== closeThisUpdate) closeActiveUpdate();
+          closeActiveUpdate = closeThisUpdate;
+
           const currentAssigned = task.assignedTo
             ? task.assignedTo.split(",").map(e => e.trim()).filter(Boolean)
             : [];
@@ -297,6 +311,7 @@ const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Se
             workedInput.focus();
           }
         } else {
+          closeActiveUpdate = null;
           commitSave();
         }
       });

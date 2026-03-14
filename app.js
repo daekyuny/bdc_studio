@@ -22750,6 +22750,7 @@ ${marker.label}`;
   var expandedStoryIds = /* @__PURE__ */ new Set();
   var highlightBacklogTaskId = null;
   var taskSort = { key: null, asc: true };
+  var closeActiveUpdate = null;
   var backlogPanelSort = { key: null, asc: true };
   var backlogSort = { key: null, asc: true };
   var planTaskSort = { key: null, asc: true };
@@ -22864,6 +22865,7 @@ ${marker.label}`;
   };
   var renderTasks = (sprint, holidaySet, workWeekendSet, isSprintActive) => {
     dom.taskRows.innerHTML = "";
+    closeActiveUpdate = null;
     const taskTable = dom.taskRows.closest("table");
     if (taskTable) applySortClasses(taskTable, taskSort);
     const viewDate = sprint.today || todayIso();
@@ -22961,9 +22963,18 @@ ${marker.label}`;
       remainView.hidden = false;
       remainChangeBtn.hidden = !isSprintActive || !task.existsNow;
       remainChangeBtn.textContent = "Update";
+      const closeThisUpdate = () => {
+        workedView.hidden = false;
+        workedInput.hidden = true;
+        remainView.hidden = false;
+        remainInput.hidden = true;
+        remainChangeBtn.textContent = "Update";
+      };
       if (!task.isBeforeAdded && isSprintActive) {
         remainChangeBtn.addEventListener("click", () => {
           if (remainChangeBtn.textContent === "Update") {
+            if (closeActiveUpdate && closeActiveUpdate !== closeThisUpdate) closeActiveUpdate();
+            closeActiveUpdate = closeThisUpdate;
             const currentAssigned2 = task.assignedTo ? task.assignedTo.split(",").map((e) => e.trim()).filter(Boolean) : [];
             if (currentAssigned2.length === 0) {
               openAssignedPicker([], getMemberPairs(), (selected) => {
@@ -22986,6 +22997,7 @@ ${marker.label}`;
               workedInput.focus();
             }
           } else {
+            closeActiveUpdate = null;
             commitSave();
           }
         });
