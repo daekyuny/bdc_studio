@@ -219,10 +219,10 @@
     }
     return localIso(d);
   };
-  var findGaps = (sprints) => {
+  var findGaps = (sprints, holidays, workWeekends) => {
     const gaps = [];
     for (let i = 0; i < sprints.length - 1; i++) {
-      const nextWorking = getNextWorkingDay(sprints[i].endDate);
+      const nextWorking = getNextWorkingDay(sprints[i].endDate, holidays, workWeekends);
       if (nextWorking < sprints[i + 1].startDate) {
         gaps.push({ after: sprints[i], before: sprints[i + 1] });
       }
@@ -23305,8 +23305,9 @@ ${marker.label}`;
   var renderBacklog = () => {
     const backlog = getBacklog();
     if (!backlog) return;
+    const today = getProjectToday();
     const assignedIds = new Set(
-      getState().sprints.flatMap((s) => s.tasks.map((t) => t.backlogTaskId).filter((id) => Boolean(id)))
+      getState().sprints.filter((s) => s.startDate <= today).flatMap((s) => s.tasks.map((t) => t.backlogTaskId).filter((id) => Boolean(id)))
     );
     dom.backlogTableBody.innerHTML = "";
     const blTable = dom.backlogTableBody.closest("table");
@@ -23500,6 +23501,13 @@ ${marker.label}`;
     let dragStartedFromHandle = false;
     const planTable = dom.planTaskRows.closest("table");
     if (planTable) applySortClasses(planTable, planTaskSort);
+    const backlog = getBacklog();
+    const backlogStoryMap = /* @__PURE__ */ new Map();
+    if (backlog) {
+      for (const story of backlog.stories)
+        for (const bt2 of story.tasks)
+          backlogStoryMap.set(bt2.id, story);
+    }
     const tasks = sortItems(sprint.tasks, planTaskSort.key, planTaskSort.asc);
     tasks.forEach((task) => {
       const row = dom.planTaskRowTemplate.content.firstElementChild.cloneNode(true);
@@ -23523,8 +23531,18 @@ ${marker.label}`;
         dragStartedFromHandle = false;
         dom.planTaskRows.querySelectorAll(".drag-over-above, .drag-over-below").forEach((el) => el.classList.remove("drag-over-above", "drag-over-below"));
       });
-      row.querySelector(".plan-col-taskid").textContent = task.taskId || "";
-      row.querySelector(".plan-col-name").textContent = task.name;
+      const taskIdCell = row.querySelector(".plan-col-taskid");
+      taskIdCell.textContent = task.taskId || "";
+      if (task.backlogTaskId) {
+        const story = backlogStoryMap.get(task.backlogTaskId);
+        if (story) taskIdCell.title = `[${story.storyId || ""}] ${story.description || ""}`;
+      }
+      const nameCell = row.querySelector(".plan-col-name");
+      nameCell.textContent = task.name;
+      if (task.assignedTo) {
+        const names = task.assignedTo.split(",").map((e) => emailToName(e.trim())).filter(Boolean);
+        if (names.length > 0) nameCell.title = names.join(", ");
+      }
       row.querySelector(".plan-col-estimate").textContent = String(task.estimate);
       const removeBtn = row.querySelector(".plan-remove-btn");
       removeBtn.addEventListener("click", () => removeTaskFromSprint(task.id));
@@ -23572,6 +23590,10 @@ ${marker.label}`;
     const assignedIds = new Set(
       getState().sprints.flatMap((s) => s.tasks.map((t) => t.backlogTaskId).filter((id) => Boolean(id)))
     );
+    const taskStoryMap = /* @__PURE__ */ new Map();
+    for (const story of backlog.stories)
+      for (const bt2 of story.tasks)
+        taskStoryMap.set(bt2.id, story);
     const unassigned = [];
     for (const story of backlog.stories)
       for (const task of story.tasks)
@@ -23606,6 +23628,10 @@ ${marker.label}`;
       <span class="plan-bl-est">${task.estimate ?? ""}</span>
       <span><button class="btn ghost small plan-bl-add-btn">+</button></span>
     `;
+      const story = taskStoryMap.get(task.id);
+      if (story) row.querySelector(".plan-bl-taskid").title = `[${story.storyId || ""}] ${story.description || ""}`;
+      if (task.assignedTo.length > 0)
+        row.querySelector(".plan-bl-desc").title = task.assignedTo.map(emailToName).join(", ");
       row.addEventListener("dragstart", (e) => {
         e.dataTransfer.effectAllowed = "copy";
         e.dataTransfer.setData("backlogTaskId", task.id);
@@ -25969,7 +25995,12 @@ They will also be removed from all teams within the group.`)) return;
       updateSprintById(modalSprintId, updates);
       closeModal();
     }
-    const gaps = findGaps(getState().sprints);
+    const _gapPrefs = getPreferences();
+    const gaps = findGaps(
+      getState().sprints,
+      new Set(_gapPrefs.holidays.map((h) => h.date)),
+      new Set(_gapPrefs.workWeekends)
+    );
     if (gaps.length > 0) {
       alert("Note: There is a gap of working days between some sprints. You can close the gap by editing the sprint dates.");
     }

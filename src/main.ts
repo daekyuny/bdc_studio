@@ -229,7 +229,12 @@ dom.modalSave.addEventListener("click", () => {
     closeModal();
   }
 
-  const gaps = findGaps(getState().sprints);
+  const _gapPrefs = getPreferences();
+  const gaps = findGaps(
+    getState().sprints,
+    new Set(_gapPrefs.holidays.map((h) => h.date)),
+    new Set(_gapPrefs.workWeekends),
+  );
   if (gaps.length > 0) {
     alert("Note: There is a gap of working days between some sprints. You can close the gap by editing the sprint dates.");
   }

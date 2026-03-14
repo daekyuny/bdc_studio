@@ -122,10 +122,14 @@ export const sprintsOverlap = (
   b: Pick<Sprint, "startDate" | "endDate">,
 ): boolean => a.startDate <= b.endDate && a.endDate >= b.startDate;
 
-export const findGaps = (sprints: Pick<Sprint, "startDate" | "endDate">[]): GapInfo[] => {
+export const findGaps = (
+  sprints: Pick<Sprint, "startDate" | "endDate">[],
+  holidays?: Set<string>,
+  workWeekends?: Set<string>,
+): GapInfo[] => {
   const gaps: GapInfo[] = [];
   for (let i = 0; i < sprints.length - 1; i++) {
-    const nextWorking = getNextWorkingDay(sprints[i].endDate);
+    const nextWorking = getNextWorkingDay(sprints[i].endDate, holidays, workWeekends);
     if (nextWorking < sprints[i + 1].startDate) {
       gaps.push({ after: sprints[i] as Sprint, before: sprints[i + 1] as Sprint });
     }

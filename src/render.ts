@@ -659,8 +659,13 @@ const renderBacklog = (): void => {
   const backlog = getBacklog();
   if (!backlog) return;
 
+  // Only lock tasks that belong to sprints already started (start ≤ today).
+  // Future sprint tasks remain editable in the backlog.
+  const today = getProjectToday();
   const assignedIds = new Set<string>(
-    getState().sprints.flatMap(s => s.tasks.map(t => t.backlogTaskId).filter((id): id is string => Boolean(id)))
+    getState().sprints
+      .filter(s => s.startDate <= today)
+      .flatMap(s => s.tasks.map(t => t.backlogTaskId).filter((id): id is string => Boolean(id)))
   );
 
   dom.backlogTableBody.innerHTML = "";
@@ -896,6 +901,15 @@ const renderPlanTasks = (sprint: Sprint): void => {
   const planTable = dom.planTaskRows.closest("table");
   if (planTable) applySortClasses(planTable as HTMLElement, planTaskSort);
 
+  // Build backlogTaskId → story map for tooltips
+  const backlog = getBacklog();
+  const backlogStoryMap = new Map<string, BacklogStory>();
+  if (backlog) {
+    for (const story of backlog.stories)
+      for (const bt of story.tasks)
+        backlogStoryMap.set(bt.id, story);
+  }
+
   const tasks = sortItems(sprint.tasks, planTaskSort.key, planTaskSort.asc);
 
   tasks.forEach((task) => {
@@ -918,8 +932,18 @@ const renderPlanTasks = (sprint: Sprint): void => {
         .forEach(el => el.classList.remove("drag-over-above", "drag-over-below"));
     });
 
-    (row.querySelector(".plan-col-taskid") as HTMLElement).textContent = task.taskId || "";
-    (row.querySelector(".plan-col-name") as HTMLElement).textContent = task.name;
+    const taskIdCell = row.querySelector(".plan-col-taskid") as HTMLElement;
+    taskIdCell.textContent = task.taskId || "";
+    if (task.backlogTaskId) {
+      const story = backlogStoryMap.get(task.backlogTaskId);
+      if (story) taskIdCell.title = `[${story.storyId || ""}] ${story.description || ""}`;
+    }
+    const nameCell = row.querySelector(".plan-col-name") as HTMLElement;
+    nameCell.textContent = task.name;
+    if (task.assignedTo) {
+      const names = task.assignedTo.split(",").map(e => emailToName(e.trim())).filter(Boolean);
+      if (names.length > 0) nameCell.title = names.join(", ");
+    }
     (row.querySelector(".plan-col-estimate") as HTMLElement).textContent = String(task.estimate);
 
     const removeBtn = row.querySelector(".plan-remove-btn") as HTMLButtonElement;
@@ -970,6 +994,12 @@ const renderPlanBacklog = (sprint: Sprint): void => {
     getState().sprints.flatMap(s => s.tasks.map(t => t.backlogTaskId).filter((id): id is string => Boolean(id)))
   );
 
+  // Build taskId → story map for tooltips
+  const taskStoryMap = new Map<string, BacklogStory>();
+  for (const story of backlog.stories)
+    for (const bt of story.tasks)
+      taskStoryMap.set(bt.id, story);
+
   const unassigned: BacklogTask[] = [];
   for (const story of backlog.stories)
     for (const task of story.tasks)
@@ -1008,6 +1038,11 @@ const renderPlanBacklog = (sprint: Sprint): void => {
       <span class="plan-bl-est">${task.estimate ?? ""}</span>
       <span><button class="btn ghost small plan-bl-add-btn">+</button></span>
     `;
+    // Tooltips: task ID → story info, description → assigned members
+    const story = taskStoryMap.get(task.id);
+    if (story) (row.querySelector(".plan-bl-taskid") as HTMLElement).title = `[${story.storyId || ""}] ${story.description || ""}`;
+    if (task.assignedTo.length > 0)
+      (row.querySelector(".plan-bl-desc") as HTMLElement).title = task.assignedTo.map(emailToName).join(", ");
     row.addEventListener("dragstart", (e) => {
       (e as DragEvent).dataTransfer!.effectAllowed = "copy";
       (e as DragEvent).dataTransfer!.setData("backlogTaskId", task.id);
