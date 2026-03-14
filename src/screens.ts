@@ -114,8 +114,8 @@ export const showLandingPage = (): void => {
 
         <div class="landing-card">
           <p class="landing-card-label">Already a user?</p>
-          <input type="email" id="landingEmail" class="screen-input" placeholder="Email" autocomplete="email" />
-          <input type="password" id="landingPassword" class="screen-input" placeholder="Password" autocomplete="current-password" />
+          <input type="email" id="landingEmail" class="screen-input" placeholder="Email" autocomplete="off" />
+          <input type="password" id="landingPassword" class="screen-input" placeholder="Password" autocomplete="new-password" />
           <div class="landing-signin-row">
             <button class="btn" id="landingSignInBtn">Sign In</button>
           </div>
@@ -1173,10 +1173,10 @@ const loadAdminRequests = async (): Promise<void> => {
       toggleContainer.innerHTML = `
         <div class="admin-setting-row">
           <label class="toggle" style="cursor:pointer;gap:10px">
-            <input type="checkbox" id="pmRequestDisabledChk" ${pmRequestDisabled ? "checked" : ""} />
             <span style="font-size:0.9rem">Disable PM Account Requests</span>
+            <input type="checkbox" id="pmRequestDisabledChk" ${pmRequestDisabled ? "checked" : ""} />
           </label>
-          <p class="pref-hint" style="margin:4px 0 0 26px">When checked, the "Request PM Account" button on the landing page is disabled.</p>
+          <p class="pref-hint" style="margin:4px 0 0">When checked, the "Request PM Account" button on the landing page is disabled.</p>
         </div>
       `;
       const chk = document.getElementById("pmRequestDisabledChk") as HTMLInputElement;
