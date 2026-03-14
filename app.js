@@ -21540,7 +21540,7 @@ This typically indicates that your device does not have a healthy Internet conne
   }
   registerFunctions();
 
-  // src/firebase.ts
+  // src/firebase-config.ts
   var firebaseConfig = {
     apiKey: "AIzaSyAZpppRwFu_6Btal0JPyqMdQd91U8PUZ2U",
     authDomain: "burndown-studio.firebaseapp.com",
@@ -21550,6 +21550,8 @@ This typically indicates that your device does not have a healthy Internet conne
     appId: "1:805909518243:web:44449e9adb9002538cec16",
     measurementId: "G-F650JSH9YX"
   };
+
+  // src/firebase.ts
   var isFirebaseConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY";
   var app = isFirebaseConfigured ? initializeApp(firebaseConfig) : null;
   var auth = isFirebaseConfigured ? getAuth(app) : null;
