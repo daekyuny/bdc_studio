@@ -136,7 +136,15 @@ export const drawChart = (
     dom.chart.appendChild(dot);
   });
 
-  // Scope line — sum(worked + remain) per day, plotted up to today
+  // Helper: find the last non-null value and its border index in an array
+  const lastNonNull = (arr: (number | null)[]): { val: number; idx: number } | null => {
+    for (let i = arr.length - 1; i >= 0; i--) {
+      if (arr[i] !== null) return { val: arr[i] as number, idx: i };
+    }
+    return null;
+  };
+
+  // Scope line — sum(worked + remain) per day, plotted up to today, then projected flat to sprint end
   const scopePoints = scope
     .map((val, i) => (val !== null ? toPoint(val, i) : null))
     .filter((v): v is string => v !== null);
@@ -148,6 +156,19 @@ export const drawChart = (
     scopeLine.setAttribute("stroke-dasharray", "5 3");
     scopeLine.setAttribute("points", scopePoints.join(" "));
     dom.chart.appendChild(scopeLine);
+
+    // Projected flat extension from last recorded value to sprint end
+    const scopeLast = lastNonNull(scope);
+    if (scopeLast && scopeLast.idx < N) {
+      const projLine = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+      projLine.setAttribute("fill", "none");
+      projLine.setAttribute("stroke", "#10b981");
+      projLine.setAttribute("stroke-width", "1");
+      projLine.setAttribute("stroke-dasharray", "3 4");
+      projLine.setAttribute("opacity", "0.4");
+      projLine.setAttribute("points", `${toPoint(scopeLast.val, scopeLast.idx)} ${toPoint(scopeLast.val, N)}`);
+      dom.chart.appendChild(projLine);
+    }
 
     const dropDateIndices = new Set(scopeDropMarkers.map(m => m.dateIndex));
     scope.forEach((val, i) => {
@@ -193,6 +214,19 @@ export const drawChart = (
   actualLine.style.strokeDashoffset = "1000";
   actualLine.style.animation = "dash 1.6s ease forwards";
   dom.chart.appendChild(actualLine);
+
+  // Actual line projected flat extension from last recorded value to sprint end
+  const actualLast = lastNonNull(actual);
+  if (actualLast && actualLast.idx < N) {
+    const projLine = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+    projLine.setAttribute("fill", "none");
+    projLine.setAttribute("stroke", "#ef4444");
+    projLine.setAttribute("stroke-width", "1");
+    projLine.setAttribute("stroke-dasharray", "3 4");
+    projLine.setAttribute("opacity", "0.4");
+    projLine.setAttribute("points", `${toPoint(actualLast.val, actualLast.idx)} ${toPoint(actualLast.val, N)}`);
+    dom.chart.appendChild(projLine);
+  }
 
   // Actual line dots
   actual.forEach((val, i) => {

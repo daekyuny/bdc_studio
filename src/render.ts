@@ -273,12 +273,29 @@ const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Se
     if (!task.isBeforeAdded && isSprintActive) {
       remainChangeBtn.addEventListener("click", () => {
         if (remainChangeBtn.textContent === "Update") {
-          workedView.hidden = true;
-          workedInput.hidden = false;
-          remainView.hidden = true;
-          remainInput.hidden = false;
-          remainChangeBtn.textContent = "Save";
-          workedInput.focus();
+          const currentAssigned = task.assignedTo
+            ? task.assignedTo.split(",").map(e => e.trim()).filter(Boolean)
+            : [];
+          if (currentAssigned.length === 0) {
+            openAssignedPicker([], getMemberPairs(), (selected) => {
+              if (selected.length > 0) {
+                updateTask(task.id, { assignedTo: selected.join(", ") });
+                workedView.hidden = true;
+                workedInput.hidden = false;
+                remainView.hidden = true;
+                remainInput.hidden = false;
+                remainChangeBtn.textContent = "Save";
+                workedInput.focus();
+              }
+            }, "No one is assigned to this task. Please assign a member before logging work.");
+          } else {
+            workedView.hidden = true;
+            workedInput.hidden = false;
+            remainView.hidden = true;
+            remainInput.hidden = false;
+            remainChangeBtn.textContent = "Save";
+            workedInput.focus();
+          }
         } else {
           commitSave();
         }
@@ -558,6 +575,7 @@ const openAssignedPicker = (
   current: string[],
   members: { email: string; name: string }[],
   onDone: (selected: string[]) => void,
+  warningMsg?: string,
 ): void => {
   const overlay = document.createElement("div");
   overlay.className = "team-modal-overlay";
@@ -571,6 +589,13 @@ const openAssignedPicker = (
   title.textContent = "Assign Members";
   title.style.cssText = "margin:0 0 14px;font-size:1rem;";
   modal.appendChild(title);
+
+  if (warningMsg) {
+    const warn = document.createElement("p");
+    warn.textContent = warningMsg;
+    warn.style.cssText = "margin:0 0 12px;font-size:0.85rem;color:#c0392b;background:#fdf0ef;border:1px solid #f5c6c2;border-radius:6px;padding:8px 10px;";
+    modal.appendChild(warn);
+  }
 
   const currentSet = new Set(current);
   const checkboxes: { cb: HTMLInputElement; value: string }[] = [];

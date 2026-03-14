@@ -22619,6 +22619,12 @@ This typically indicates that your device does not have a healthy Internet conne
       dot.setAttribute("fill", "#3b82f6");
       dom.chart.appendChild(dot);
     });
+    const lastNonNull = (arr) => {
+      for (let i = arr.length - 1; i >= 0; i--) {
+        if (arr[i] !== null) return { val: arr[i], idx: i };
+      }
+      return null;
+    };
     const scopePoints = scope.map((val, i) => val !== null ? toPoint(val, i) : null).filter((v2) => v2 !== null);
     if (scopePoints.length) {
       const scopeLine = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
@@ -22628,6 +22634,17 @@ This typically indicates that your device does not have a healthy Internet conne
       scopeLine.setAttribute("stroke-dasharray", "5 3");
       scopeLine.setAttribute("points", scopePoints.join(" "));
       dom.chart.appendChild(scopeLine);
+      const scopeLast = lastNonNull(scope);
+      if (scopeLast && scopeLast.idx < N2) {
+        const projLine = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+        projLine.setAttribute("fill", "none");
+        projLine.setAttribute("stroke", "#10b981");
+        projLine.setAttribute("stroke-width", "1");
+        projLine.setAttribute("stroke-dasharray", "3 4");
+        projLine.setAttribute("opacity", "0.4");
+        projLine.setAttribute("points", `${toPoint(scopeLast.val, scopeLast.idx)} ${toPoint(scopeLast.val, N2)}`);
+        dom.chart.appendChild(projLine);
+      }
       const dropDateIndices = new Set(scopeDropMarkers.map((m) => m.dateIndex));
       scope.forEach((val, i) => {
         if (val === null) return;
@@ -22668,6 +22685,17 @@ ${marker.label}`;
     actualLine.style.strokeDashoffset = "1000";
     actualLine.style.animation = "dash 1.6s ease forwards";
     dom.chart.appendChild(actualLine);
+    const actualLast = lastNonNull(actual);
+    if (actualLast && actualLast.idx < N2) {
+      const projLine = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+      projLine.setAttribute("fill", "none");
+      projLine.setAttribute("stroke", "#ef4444");
+      projLine.setAttribute("stroke-width", "1");
+      projLine.setAttribute("stroke-dasharray", "3 4");
+      projLine.setAttribute("opacity", "0.4");
+      projLine.setAttribute("points", `${toPoint(actualLast.val, actualLast.idx)} ${toPoint(actualLast.val, N2)}`);
+      dom.chart.appendChild(projLine);
+    }
     actual.forEach((val, i) => {
       if (val === null) return;
       const [cx, cy] = toPoint(val, i).split(",");
@@ -22928,12 +22956,27 @@ ${marker.label}`;
       if (!task.isBeforeAdded && isSprintActive) {
         remainChangeBtn.addEventListener("click", () => {
           if (remainChangeBtn.textContent === "Update") {
-            workedView.hidden = true;
-            workedInput.hidden = false;
-            remainView.hidden = true;
-            remainInput.hidden = false;
-            remainChangeBtn.textContent = "Save";
-            workedInput.focus();
+            const currentAssigned2 = task.assignedTo ? task.assignedTo.split(",").map((e) => e.trim()).filter(Boolean) : [];
+            if (currentAssigned2.length === 0) {
+              openAssignedPicker([], getMemberPairs(), (selected) => {
+                if (selected.length > 0) {
+                  updateTask(task.id, { assignedTo: selected.join(", ") });
+                  workedView.hidden = true;
+                  workedInput.hidden = false;
+                  remainView.hidden = true;
+                  remainInput.hidden = false;
+                  remainChangeBtn.textContent = "Save";
+                  workedInput.focus();
+                }
+              }, "No one is assigned to this task. Please assign a member before logging work.");
+            } else {
+              workedView.hidden = true;
+              workedInput.hidden = false;
+              remainView.hidden = true;
+              remainInput.hidden = false;
+              remainChangeBtn.textContent = "Save";
+              workedInput.focus();
+            }
           } else {
             commitSave();
           }
@@ -23177,7 +23220,7 @@ ${marker.label}`;
     });
   };
   var STORY_SORT_KEYS = /* @__PURE__ */ new Set(["storyId", "description", "priority"]);
-  var openAssignedPicker = (current, members, onDone) => {
+  var openAssignedPicker = (current, members, onDone, warningMsg) => {
     const overlay = document.createElement("div");
     overlay.className = "team-modal-overlay";
     overlay.style.zIndex = "1100";
@@ -23188,6 +23231,12 @@ ${marker.label}`;
     title.textContent = "Assign Members";
     title.style.cssText = "margin:0 0 14px;font-size:1rem;";
     modal.appendChild(title);
+    if (warningMsg) {
+      const warn = document.createElement("p");
+      warn.textContent = warningMsg;
+      warn.style.cssText = "margin:0 0 12px;font-size:0.85rem;color:#c0392b;background:#fdf0ef;border:1px solid #f5c6c2;border-radius:6px;padding:8px 10px;";
+      modal.appendChild(warn);
+    }
     const currentSet = new Set(current);
     const checkboxes = [];
     const makeRow = (value, label, checked) => {
