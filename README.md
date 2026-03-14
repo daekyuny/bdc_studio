@@ -37,6 +37,24 @@ firebase init firestore   # select project, accept firestore.rules
 firebase deploy --only firestore:rules
 ```
 
+6. (Optional) Deploy Firebase Cloud Functions for invitation email delivery:
+
+```bash
+firebase init functions   # TypeScript, select project
+firebase deploy --only functions
+```
+
+### GitHub Actions (CI/CD)
+
+Two workflows are included in `.github/workflows/`:
+
+- **`ci.yml`** — runs on every push to any branch: installs deps, typechecks, runs tests
+- **`deploy.yml`** — runs on push to `main`: typechecks, builds, and deploys to Firebase Hosting
+
+To enable auto-deploy:
+1. Generate a Firebase CI token: `npx firebase-tools login:ci`
+2. Add the token to your GitHub repo: **Settings → Secrets → Actions → New repository secret**, name `FIREBASE_TOKEN`
+
 ### Dev mode (localhost only)
 
 When running on `localhost`, a fake email login form appears below the Google button. Enter any email (e.g. `test@dev.com`) — the account is created automatically with a fixed dev password. Use different browsers or Chrome profiles to simulate multiple users.
@@ -54,6 +72,22 @@ If `src/firebase.ts` still contains the placeholder `"YOUR_API_KEY"`, the app ru
 | `member` | Access assigned teams; read/write sprint data |
 
 All new users self-register as `member`. To bootstrap the first `super_manager`, register an account normally, then open the **Firebase Console → Firestore → users/{uid}** and manually set `role` to `"super_manager"`. After that the Admin screen can promote other users.
+
+## Onboarding Flows
+
+### PM Onboarding
+1. SM creates a PM request form link (Admin screen) or SM promotes an existing user to `product_manager`
+2. New PM submits a PM request (name, email, group name) from the landing page
+3. SM approves the request in the Admin screen → Firestore creates a Group and PM profile
+4. PM receives an email invitation (or is directed to register) and signs in
+
+### Member Invitation
+1. PM invites a member by email from the Manage Members modal
+2. An invitation document is created in `/invitations/{inviteId}` with the invitee's email
+3. Invitee opens the invitation link and lands on a dedicated **Invitation Registration page**
+4. Registration page offers: **Create Account** (email + password) or **Continue with Google** (all domains, including Google Workspace)
+5. On successful registration, invitee is automatically added to the team
+6. If a different user is signed in when the invite link is opened, they are signed out first; the invitation page is shown again for the correct email
 
 ## Current Features
 
@@ -75,12 +109,15 @@ All new users self-register as `member`. To bootstrap the first `super_manager`,
 - **"← Teams" button** in the app header to switch between teams without signing out
 - **Admin screen** (Super Manager only): view all users (sortable by Email/Name), change roles, assign Groups, delete profiles; deletion blocked if user owns teams or is assigned to tasks; always shows custom confirm dialog
 - **Group screen** (PM only): create/delete Teams, manage Group Members per Team, remove Members from Group
-- **Team management** (PM): add/remove members from a Team; member removal blocked if assigned to tasks in the team
+- **Team management** (PM): add/remove members from a Team; "Add Group Members" section lets PM add already-accepted group members to a team; member removal shows a warning dialog listing assigned tasks before confirming
+- **PM Edit**: "Edit" button on the Group screen opens a modal to change the Group name and PM display name
+- **Invitation registration**: dedicated page for invited users; supports password creation and Google Sign-In (all domains incl. Google Workspace); no "existing sign-in" option since this is a first registration
+- **Landing page**: unknown sign-in attempts show an error and sign out rather than showing a "create account" prompt; `loginError` is passed via sessionStorage
 - `projectToday` is per-session — not shared across users; remote updates do not reset it
 
 ### Project TODAY
 
-The **project TODAY** field (leftmost in the sprint toolbar) is the authoritative date for the entire project. It always resets to the real system date on every page load and can be changed manually during the session.
+The **project TODAY** field (leftmost in the sprint toolbar) is the authoritative date for the entire project. On every page load it resets to the **most recent working day** (today if today is a workday, otherwise the last non-weekend/non-holiday day before today). It can be changed manually during the session but is capped at the real system date — future dates are not selectable.
 
 - **Current sprint** = the sprint whose date range contains project TODAY (`startDate ≤ projectToday ≤ endDate`)
 - In the **current sprint**, clicking any x-axis date label on the burndown chart **updates project TODAY** and all sprint browse dates
@@ -91,7 +128,7 @@ The **project TODAY** field (leftmost in the sprint toolbar) is the authoritativ
 
 - Multiple sprints, auto-sorted by start date
 - Sprint setup: description, start/end dates (weekends/holidays excluded), developers, efficiency
-- **New sprint defaults**: developer count inherited from the previous sprint; first sprint defaults to team member count
+- **New sprint defaults**: developer count = number of team members with role `member` (PM is excluded from the count); falls back to 1 if no members exist yet
 - Date pickers enforce non-overlapping ranges; gap warning shown if working days exist between sprints
 - **Edit Sprint** button: disabled for past sprints; opens planning modal for future sprints
 - **Planning mode** (future sprints): "Edit Sprint" becomes "Add/Remove Tasks" — closes to lock `plannedPoints`
@@ -179,6 +216,10 @@ bdc/
 ├── app.js              # Bundled output (built from src/, committed to git)
 ├── styles.css          # Layout, theming, animations
 ├── firestore.rules     # Firestore security rules (deploy via Firebase CLI)
+├── .github/
+│   └── workflows/
+│       ├── ci.yml      # CI: typecheck + test on every push
+│       └── deploy.yml  # Auto-deploy to Firebase Hosting on push to main
 ├── src/
 │   ├── main.ts         # Entry point — event wiring, modal logic, auth gate
 │   ├── dom.ts          # DOM element references
@@ -208,13 +249,14 @@ bdc/
 ## Firestore Collections
 
 ```
-/users/{userId}        — email, displayName, phoneNumber?, role, groupId?, createdAt, memos: { [teamId]: string }
-/teams/{teamId}        — name, ownerId, memberIds[], groupId, createdAt
-/groups/{groupId}      — name, ownerId, createdAt
-/appdata/{teamId}      — full AppState (sprints, backlog, preferences, …)
+/users/{userId}           — email, displayName, phoneNumber?, role, groupId?, createdAt, memos: { [teamId]: string }
+/teams/{teamId}           — name, ownerId, memberIds[], groupId, createdAt
+/groups/{groupId}         — name, ownerId, createdAt
+/appdata/{teamId}         — full AppState (sprints, backlog, preferences, …)
+/invitations/{inviteId}   — email, groupId, teamId, status ("pending"|"accepted"), createdAt
 ```
 
-`memos` is a private per-user map keyed by `teamId`. Memos are deleted automatically when a team is deleted. `groupId` on users and teams links them to the PM's Group (tenant).
+`memos` is a private per-user map keyed by `teamId`. Memos are deleted automatically when a team is deleted. `groupId` on users and teams links them to the PM's Group (tenant). Invitations are readable without authentication so the registration page can display the correct invite details before sign-in.
 
 ## Data Model (AppState)
 
@@ -319,3 +361,4 @@ See `docs/` for detailed project documents:
 | 2026-03-09 | Documentation corrections: super_manager bootstrap clarified (all self-registrations are member; set role manually in Firebase Console); CLAUDE.md module table updated to include firebase.ts, auth.ts, db.ts, screens.ts |
 | 2026-03-10 | SaaS Step 1 — Group (tenant) model: PM owns one Group; Group screen (Teams + Members tabs); SM routes to Admin-only; SM Admin Users table adds Group assignment column; Firestore security rules for /groups; lazy migration links existing teams to Group on first creation |
 | 2026-03-10 | Bug fixes: Firestore permission error when PM loads Group teams (query by ownerId not groupId); member names showing as emails after import — persisted email→name pairs to localStorage (`burndown-studio-member-pairs`); sprint task tooltip and backlog Excel import now correctly resolve emails to display names; JSON import preserves current preferences.members |
+| 2026-03-14 | SaaS update2 — Invitation flow: dedicated registration page with password + Google Sign-In (all domains); wrong-user-signed-in guard (sign out, re-show invite page); landing page no longer prompts unknown sign-ins with "create account" (shows error via sessionStorage instead). PM enhancements: "Add Group Members" in Manage Members (add already-accepted group members to a team); member removal shows warning dialog with task list before confirming; PM Edit modal now includes PM display name field. Project TODAY: capped at today (no future dates); resets to most recent working day on page load (not always real today). Sprint defaults: developer count = team members with role `member` (PM excluded). Firestore rules: users collection readable by any authenticated user; invitations readable without auth. `setCurrentTeam` cancels pending debounce save on team switch (fixes cross-team data contamination). `Promise.allSettled` for resilient member profile loading. GitHub Actions: CI workflow (typecheck + test) + deploy workflow (build + Firebase Hosting deploy on push to main). |

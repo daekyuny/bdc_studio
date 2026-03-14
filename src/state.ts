@@ -1,4 +1,4 @@
-import { todayIso, addDays, addWorkingDays, createId, getNextWorkingDay } from "./utils.ts";
+import { todayIso, addDays, addWorkingDays, createId, getNextWorkingDay, getMostRecentWorkingDay } from "./utils.ts";
 import type { AppState, Sprint, SprintTask, Backlog, BacklogStory, BacklogTask, Preferences, ScopeDrop } from "./types.ts";
 import { isFirebaseConfigured } from "./firebase.ts";
 import { loadTeamState, saveTeamState, subscribeToTeamState } from "./db.ts";
@@ -125,9 +125,9 @@ const defaultState = (): AppState => {
 const fixLoadedState = (appState: AppState): AppState => {
   const holidaySet = new Set(appState.preferences.holidays.map((h: any) => h.date));
   const workWeekendSet = new Set(appState.preferences.workWeekends);
-  // Reset project TODAY to real system date, skipping holidays/weekends.
-  // getNextWorkingDay(yesterday) = first working day on or after today.
-  const today = getNextWorkingDay(addDays(todayIso(), -1), holidaySet, workWeekendSet);
+  // Reset project TODAY to the most recent working day (today if it's a workday,
+  // otherwise the last working day before today — never in the future).
+  const today = getMostRecentWorkingDay(holidaySet, workWeekendSet);
   appState.projectToday = today;
   for (const sprint of appState.sprints) {
     if (sprint.endDate < today) {
@@ -177,6 +177,13 @@ const save = (): void => {
 
 // Load state from Firestore for the given team and subscribe to real-time updates.
 export const setCurrentTeam = async (teamId: string): Promise<void> => {
+  // Cancel any pending debounced save for the previous team.
+  // Without this, the timer would fire after state has been replaced with
+  // the new team's data and would overwrite the old team's Firestore appdata.
+  if (saveDebounceTimer) {
+    clearTimeout(saveDebounceTimer);
+    saveDebounceTimer = null;
+  }
   currentTeamId = teamId;
   if (unsubscribeSnapshot) {
     unsubscribeSnapshot();
@@ -186,14 +193,17 @@ export const setCurrentTeam = async (teamId: string): Promise<void> => {
 
   try {
     const remoteState = await loadTeamState(teamId);
+    const preservedMembers = [...state.preferences.members];
     if (remoteState && Array.isArray(remoteState.sprints)) {
       // Preserve members: always derived from Firebase Auth profiles by main.ts,
       // never from Firestore appdata (which may contain stale emails).
-      const preservedMembers = [...state.preferences.members];
       state = fixLoadedState(migrateState(remoteState as any));
-      if (preservedMembers.length > 0) state.preferences.members = preservedMembers;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } else {
+      // New team with no Firestore data yet — start with a clean slate
+      state = defaultState();
     }
+    if (preservedMembers.length > 0) state.preferences.members = preservedMembers;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (err) {
     console.warn("Burndown Studio: failed to load from Firestore, using local cache:", err);
   }

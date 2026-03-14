@@ -4,5 +4,23 @@
     "location": "asia-northeast3",
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
+  },
+  "functions": {
+    "source": "functions"
+  },
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**",
+      "src/**",
+      "functions/**",
+      "todo_dk/**",
+      "test/**",
+      "test_data/**",
+      "docs/**"
+    ],
+    "rewrites": [{ "source": "**", "destination": "/index.html" }]
   }
 }

@@ -1,4 +1,4 @@
-import { signInWithGoogle, signInWithFakeEmail, signOut } from "./auth.ts";
+import { signInWithGoogle, signInWithEmail, createAccountWithEmail, signOut } from "./auth.ts";
 import {
   getTeamsForUser,
   getTeamsManagedBy,
@@ -19,9 +19,18 @@ import {
   getGroupMemberProfiles,
   removeGroupMember,
   linkExistingTeamsToGroup,
+  createInvitation,
+  getInvitation,
+  getInvitationsByGroup,
+  createPmRequest,
+  getPmRequest,
+  getAllPmRequests,
+  updatePmRequest,
 } from "./db.ts";
+import { httpsCallable } from "firebase/functions";
+import { functions } from "./firebase.ts";
 import type { User } from "firebase/auth";
-import type { UserProfile, Team, UserRole, Group } from "./types.ts";
+import type { UserProfile, Team, UserRole, Group, Invitation, PmRequest } from "./types.ts";
 
 // Module-level state for the back-navigation in admin screen
 let _currentUser: User | null = null;
@@ -49,70 +58,376 @@ const escapeHtml = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 // ---------------------------------------------------------------------------
-// Login Screen
+// Landing Page (replaces login screen)
 // ---------------------------------------------------------------------------
 
-export const showLoginScreen = (): void => {
+const googleSvg = `
+  <svg width="14" height="14" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908C16.658 14.234 17.64 11.926 17.64 9.2z" fill="#4285F4"/>
+    <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/>
+    <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
+    <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+  </svg>`;
+
+export const showLandingPage = (): void => {
   clearContainer();
-  const isLocal = window.location.hostname === "localhost";
+
+  const pendingPmApproved = sessionStorage.getItem("pendingPmApproved");
+  const pendingInvite = sessionStorage.getItem("pendingInvite");
+
+  // PM approval: show a dedicated registration page, not the general landing
+  if (pendingPmApproved) {
+    renderPmRegistrationPage(pendingPmApproved);
+    return;
+  }
+
+  // Invitation accept: show a dedicated registration page
+  if (pendingInvite) {
+    renderInvitationRegistrationPage(pendingInvite);
+    return;
+  }
+
+  const loginError = sessionStorage.getItem("loginError");
+  if (loginError) sessionStorage.removeItem("loginError");
+
+  let bannerHtml = "";
 
   getContainer().innerHTML = `
-    <div class="screen-overlay" id="loginScreen">
-      <div class="screen-card login-card">
-        <p class="eyebrow">Sprint Burndown</p>
-        <h1 class="screen-title">Burndown Studio</h1>
-        <p class="screen-subtitle">Track your team's sprint progress in real time.</p>
-        <div class="login-actions">
-          <button class="login-google-btn" id="loginGoogleBtn">
-            <svg width="14" height="14" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908C16.658 14.234 17.64 11.926 17.64 9.2z" fill="#4285F4"/>
-              <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/>
-              <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
-              <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
-            </svg>
-            Sign in with Google
-          </button>
-          ${isLocal ? `
-          <div class="login-divider"><span>or (dev only)</span></div>
-          <div class="login-fake-row">
-            <input type="email" id="fakeEmailInput" class="login-email-input" placeholder="dev@example.com" autocomplete="off" />
-            <button class="btn ghost" id="loginFakeBtn">Continue</button>
-          </div>
-          ` : ""}
+    <div class="screen-overlay" id="landingScreen">
+      <div class="landing-layout">
+        <div class="landing-brand">
+          <h1 class="landing-title">Burndown Studio</h1>
+          <p class="landing-subtitle">Sprint burndown tracking for teams</p>
         </div>
-        <div class="screen-error" id="loginError" hidden></div>
+        ${bannerHtml}
+        <div class="landing-card">
+          <p class="landing-card-label">Already a user?</p>
+          <div class="login-form">
+            <input type="email" id="landingEmail" class="screen-input" placeholder="Email" autocomplete="email" />
+            <input type="password" id="landingPassword" class="screen-input" placeholder="Password" autocomplete="current-password" />
+            <button class="btn" id="landingSignInBtn">Sign In</button>
+          </div>
+          <div class="login-divider"><span>or</span></div>
+          <button class="login-google-btn" id="loginGoogleBtn">${googleSvg} Sign in with Google</button>
+          <div class="screen-error" id="loginError"${loginError ? "" : " hidden"}>${loginError ? escapeHtml(loginError) : ""}</div>
+        </div>
+        <div class="landing-card landing-pm-card">
+          <p class="landing-card-label">Want to bring your team?</p>
+          <p class="pref-hint" style="margin:0 0 12px">Apply for a PM account to create your group and manage teams.</p>
+          <button class="btn ghost" id="requestPmBtn">Request PM Account</button>
+        </div>
       </div>
     </div>
   `;
 
+  const errEl = () => document.getElementById("loginError")!;
+
+  const doEmailSignIn = async () => {
+    const email = (document.getElementById("landingEmail") as HTMLInputElement).value.trim();
+    const password = (document.getElementById("landingPassword") as HTMLInputElement).value;
+    if (!email || !password) {
+      errEl().textContent = "Email and password are required.";
+      errEl().hidden = false;
+      return;
+    }
+    errEl().hidden = true;
+    try {
+      await signInWithEmail(email, password);
+    } catch (e: unknown) {
+      errEl().textContent = e instanceof Error ? e.message : "Sign-in failed.";
+      errEl().hidden = false;
+    }
+  };
+
+  document.getElementById("landingSignInBtn")!.addEventListener("click", doEmailSignIn);
+  (document.getElementById("landingPassword") as HTMLInputElement).addEventListener("keydown", (e) => {
+    if (e.key === "Enter") void doEmailSignIn();
+  });
   document.getElementById("loginGoogleBtn")!.addEventListener("click", async () => {
-    const errEl = document.getElementById("loginError")!;
-    errEl.hidden = true;
+    errEl().hidden = true;
     try {
       await signInWithGoogle();
     } catch (e: unknown) {
-      errEl.textContent = e instanceof Error ? e.message : "Sign-in failed.";
-      errEl.hidden = false;
+      errEl().textContent = e instanceof Error ? e.message : "Sign-in failed.";
+      errEl().hidden = false;
     }
   });
+  document.getElementById("requestPmBtn")!.addEventListener("click", () => showPmRequestForm());
+};
 
-  if (isLocal) {
-    const fakeInput = document.getElementById("fakeEmailInput") as HTMLInputElement;
-    const doFakeLogin = async () => {
-      const email = fakeInput.value.trim();
-      if (!email) return;
-      const errEl = document.getElementById("loginError")!;
+// Dedicated page shown when arriving via the PM approval email link
+const renderPmRegistrationPage = (requestId: string): void => {
+  const c = getContainer();
+  c.innerHTML = `<div class="screen-overlay"><div class="screen-card login-card"><p class="pref-hint">Loading…</p></div></div>`;
+
+  getPmRequest(requestId).then((pmReq) => {
+    const email = pmReq?.email ?? "";
+    const isGmail = email.toLowerCase().endsWith("@gmail.com");
+
+    c.innerHTML = `
+      <div class="screen-overlay" id="landingScreen">
+        <div class="landing-layout">
+          <div class="landing-brand">
+            <h1 class="landing-title">Burndown Studio</h1>
+            <p class="landing-subtitle">PM Account Registration</p>
+          </div>
+          <div class="landing-card">
+            <p class="landing-card-label">Complete your registration</p>
+            <p class="pref-hint" style="margin:0 0 12px">Your PM account has been approved. Create a password for <strong>${escapeHtml(email)}</strong>.</p>
+            <label class="screen-label">
+              Email
+              <input type="email" id="regEmail" class="screen-input" value="${escapeHtml(email)}" readonly
+                style="background:var(--bg-secondary,#f1f5f9);cursor:default;color:var(--text-muted,#64748b)" />
+            </label>
+            <label class="screen-label">
+              Password
+              <input type="password" id="regPassword" class="screen-input" placeholder="Min 6 characters" autocomplete="new-password" />
+            </label>
+            <label class="screen-label">
+              Confirm Password
+              <input type="password" id="regPassword2" class="screen-input" placeholder="Confirm password" autocomplete="new-password" />
+            </label>
+            <button class="btn" id="regCreateBtn" style="width:100%;margin-top:4px">Create Account &amp; Continue</button>
+            <div class="screen-error" id="regError" hidden></div>
+            ${isGmail ? `
+              <div class="login-divider"><span>or, if this is your primary Google account</span></div>
+              <button class="login-google-btn" id="regGoogleBtn">${googleSvg} Sign in with Google</button>
+              <p class="pref-hint" style="font-size:11px;margin-top:6px">Note: Google Sign-In only works if <strong>${escapeHtml(email)}</strong> is your primary Google account, not an alias.</p>
+            ` : ""}
+          </div>
+        </div>
+      </div>
+    `;
+
+    const errEl = document.getElementById("regError")!;
+
+    const doCreate = async () => {
+      const pw1 = (document.getElementById("regPassword") as HTMLInputElement).value;
+      const pw2 = (document.getElementById("regPassword2") as HTMLInputElement).value;
+      errEl.hidden = true;
+      if (!pw1) { errEl.textContent = "Password is required."; errEl.hidden = false; return; }
+      if (pw1 !== pw2) { errEl.textContent = "Passwords do not match."; errEl.hidden = false; return; }
+      if (pw1.length < 6) { errEl.textContent = "Password must be at least 6 characters."; errEl.hidden = false; return; }
+      const btn = document.getElementById("regCreateBtn") as HTMLButtonElement;
+      btn.disabled = true;
+      btn.textContent = "Creating…";
+      try {
+        await createAccountWithEmail(email, pw1);
+        // Auth callback picks up pendingPmApproved from sessionStorage
+      } catch (e: unknown) {
+        errEl.textContent = e instanceof Error ? e.message : "Failed to create account.";
+        errEl.hidden = false;
+        btn.disabled = false;
+        btn.textContent = "Create Account & Continue";
+      }
+    };
+
+    document.getElementById("regCreateBtn")!.addEventListener("click", doCreate);
+    (document.getElementById("regPassword2") as HTMLInputElement).addEventListener("keydown", (e) => {
+      if (e.key === "Enter") void doCreate();
+    });
+
+    if (isGmail) {
+      document.getElementById("regGoogleBtn")!.addEventListener("click", async () => {
+        errEl.hidden = true;
+        try {
+          await signInWithGoogle();
+        } catch (e: unknown) {
+          errEl.textContent = e instanceof Error ? e.message : "Sign-in failed.";
+          errEl.hidden = false;
+        }
+      });
+    }
+
+    setTimeout(() => (document.getElementById("regPassword") as HTMLInputElement)?.focus(), 50);
+  }).catch(() => {
+    c.innerHTML = `<div class="screen-overlay"><div class="screen-card login-card">
+      <p class="screen-error">Failed to load registration details. Please try the link again.</p>
+    </div></div>`;
+  });
+};
+
+// ---------------------------------------------------------------------------
+// Invitation Registration Page
+// ---------------------------------------------------------------------------
+
+const renderInvitationRegistrationPage = (inviteId: string): void => {
+  const c = getContainer();
+  c.innerHTML = `<div class="screen-overlay"><div class="screen-card login-card"><p class="pref-hint">Loading invitation…</p></div></div>`;
+
+  getInvitation(inviteId).then((invitation) => {
+    if (!invitation || invitation.status !== "pending") {
+      c.innerHTML = `<div class="screen-overlay"><div class="screen-card login-card">
+        <h2>Invitation Unavailable</h2>
+        <p class="screen-error">${invitation ? "This invitation has already been used or declined." : "Invitation not found."}</p>
+      </div></div>`;
+      return;
+    }
+
+    const email = invitation.email;
+
+    c.innerHTML = `
+      <div class="screen-overlay" id="landingScreen">
+        <div class="landing-layout">
+          <div class="landing-brand">
+            <h1 class="landing-title">Burndown Studio</h1>
+            <p class="landing-subtitle">Team Invitation</p>
+          </div>
+          <div class="landing-card">
+            <p class="landing-card-label">You've been invited to join a team</p>
+            <p class="pref-hint" style="margin:0 0 12px">Accept the invitation for <strong>${escapeHtml(email)}</strong>.</p>
+            <div class="screen-error" id="invError" hidden></div>
+            <label class="screen-label">
+              Password
+              <input type="password" id="invPassword" class="screen-input" placeholder="Min 6 characters (new account)" autocomplete="new-password" />
+            </label>
+            <label class="screen-label">
+              Confirm Password
+              <input type="password" id="invPassword2" class="screen-input" placeholder="Confirm password" autocomplete="new-password" />
+            </label>
+            <button class="btn" id="invCreateBtn" style="width:100%;margin-top:4px">Create Account &amp; Accept</button>
+            <div class="login-divider"><span>or</span></div>
+            <button class="login-google-btn" id="invGoogleBtn">${googleSvg} Continue with Google</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const errEl = document.getElementById("invError")!;
+
+    document.getElementById("invGoogleBtn")!.addEventListener("click", async () => {
       errEl.hidden = true;
       try {
-        await signInWithFakeEmail(email);
+        await signInWithGoogle();
       } catch (e: unknown) {
         errEl.textContent = e instanceof Error ? e.message : "Sign-in failed.";
         errEl.hidden = false;
       }
+    });
+
+    const doCreate = async () => {
+      const pw1 = (document.getElementById("invPassword") as HTMLInputElement).value;
+      const pw2 = (document.getElementById("invPassword2") as HTMLInputElement).value;
+      errEl.hidden = true;
+      if (!pw1) { errEl.textContent = "Password is required."; errEl.hidden = false; return; }
+      if (pw1 !== pw2) { errEl.textContent = "Passwords do not match."; errEl.hidden = false; return; }
+      if (pw1.length < 6) { errEl.textContent = "Password must be at least 6 characters."; errEl.hidden = false; return; }
+      const btn = document.getElementById("invCreateBtn") as HTMLButtonElement;
+      btn.disabled = true;
+      btn.textContent = "Creating…";
+      try {
+        await createAccountWithEmail(email, pw1);
+      } catch (e: unknown) {
+        errEl.textContent = e instanceof Error ? e.message : "Failed to create account.";
+        errEl.hidden = false;
+        btn.disabled = false;
+        btn.textContent = "Create Account & Accept";
+      }
     };
-    document.getElementById("loginFakeBtn")!.addEventListener("click", doFakeLogin);
-    fakeInput.addEventListener("keydown", (e) => { if (e.key === "Enter") doFakeLogin(); });
-  }
+
+    document.getElementById("invCreateBtn")!.addEventListener("click", doCreate);
+    (document.getElementById("invPassword2") as HTMLInputElement).addEventListener("keydown", (e) => {
+      if (e.key === "Enter") void doCreate();
+    });
+
+setTimeout(() => (document.getElementById("invPassword") as HTMLInputElement)?.focus(), 50);
+  }).catch(() => {
+    c.innerHTML = `<div class="screen-overlay"><div class="screen-card login-card">
+      <p class="screen-error">Failed to load invitation. Please try the link again.</p>
+    </div></div>`;
+  });
+};
+
+// ---------------------------------------------------------------------------
+// PM Request Form
+// ---------------------------------------------------------------------------
+
+export const showPmRequestForm = (): void => {
+  document.getElementById("pmRequestModal")?.remove();
+
+  const modal = document.createElement("div");
+  modal.id = "pmRequestModal";
+  modal.className = "team-modal-overlay";
+  modal.innerHTML = `
+    <div class="team-modal team-modal-wide">
+      <h3>Request PM Account</h3>
+      <p class="pref-hint">Fill in the details below. We'll review your request and notify you by email.</p>
+      <label class="screen-label">
+        Your Name
+        <input type="text" id="pmReqName" class="screen-input" placeholder="Full name" />
+      </label>
+      <label class="screen-label">
+        Your Email
+        <input type="email" id="pmReqEmail" class="screen-input" placeholder="you@example.com" />
+      </label>
+      <label class="screen-label">
+        Group / Team Name
+        <input type="text" id="pmReqGroup" class="screen-input" placeholder="e.g. Acme Dev Team" />
+      </label>
+      <label class="screen-label">
+        Organization
+        <input type="text" id="pmReqOrg" class="screen-input" placeholder="Company or organization" />
+      </label>
+      <label class="screen-label">
+        Brief Description
+        <textarea id="pmReqDesc" class="screen-input" rows="3" placeholder="Purpose of the group, number of members, etc."></textarea>
+      </label>
+      <div class="screen-error" id="pmReqError" hidden></div>
+      <div class="screen-success" id="pmReqSuccess" hidden></div>
+      <div class="team-modal-footer">
+        <button class="btn ghost" id="pmReqCancel">Cancel</button>
+        <button class="btn" id="pmReqSubmit">Submit Request</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  modal.addEventListener("click", (e) => { if (e.target === modal) modal.remove(); });
+  document.getElementById("pmReqCancel")!.addEventListener("click", () => modal.remove());
+
+  document.getElementById("pmReqSubmit")!.addEventListener("click", async () => {
+    const name = (document.getElementById("pmReqName") as HTMLInputElement).value.trim();
+    const email = (document.getElementById("pmReqEmail") as HTMLInputElement).value.trim();
+    const groupName = (document.getElementById("pmReqGroup") as HTMLInputElement).value.trim();
+    const organization = (document.getElementById("pmReqOrg") as HTMLInputElement).value.trim();
+    const description = (document.getElementById("pmReqDesc") as HTMLTextAreaElement).value.trim();
+    const errEl = document.getElementById("pmReqError")!;
+    const successEl = document.getElementById("pmReqSuccess")!;
+    errEl.hidden = true;
+    successEl.hidden = true;
+
+    if (!name || !email || !groupName || !organization) {
+      errEl.textContent = "Please fill in all required fields.";
+      errEl.hidden = false;
+      return;
+    }
+
+    const btn = document.getElementById("pmReqSubmit") as HTMLButtonElement;
+    btn.disabled = true;
+    btn.textContent = "Submitting…";
+    try {
+      await createPmRequest({
+        email,
+        displayName: name,
+        groupName,
+        organization,
+        description,
+        status: "pending",
+        createdAt: new Date().toISOString(),
+      });
+      successEl.textContent = "Your request has been sent. We'll notify you by email when it's reviewed.";
+      successEl.hidden = false;
+      btn.hidden = true;
+      (document.getElementById("pmReqCancel") as HTMLButtonElement).textContent = "Close";
+    } catch (e: unknown) {
+      errEl.textContent = e instanceof Error ? e.message : "Failed to submit request.";
+      errEl.hidden = false;
+      btn.disabled = false;
+      btn.textContent = "Submit Request";
+    }
+  });
+
+  setTimeout(() => (document.getElementById("pmReqName") as HTMLInputElement).focus(), 50);
 };
 
 // ---------------------------------------------------------------------------
@@ -466,8 +781,17 @@ const showManageMembers = (team: Team, profile: UserProfile, onDone?: () => void
           <div id="currentMemberList" class="manage-member-list">Loading…</div>
         </div>
         <div class="manage-members-col">
-          <div class="manage-members-col-title">${groupId ? "Group Members (click to add)" : "All Users (click to add)"}</div>
-          <div id="availableUserList" class="manage-member-list">Loading…</div>
+          <div class="manage-members-col-title">Add Group Members</div>
+          <div id="availableMemberList" class="manage-member-list"><em>Loading…</em></div>
+          <div class="manage-members-col-title" style="margin-top:16px">Invite by Email</div>
+          <div class="invite-input-row">
+            <input type="email" id="inviteEmailInput" class="screen-input" placeholder="invitee@example.com" />
+            <button class="btn" id="inviteSendBtn">Send Invite</button>
+          </div>
+          <div class="screen-error" id="inviteError" hidden></div>
+          <div class="screen-success" id="inviteSuccess" hidden></div>
+          <div class="manage-members-col-title" style="margin-top:16px">Pending Invitations</div>
+          <div id="pendingInviteList" class="manage-member-list"><em>Loading…</em></div>
         </div>
       </div>
       <div class="team-modal-footer">
@@ -480,25 +804,58 @@ const showManageMembers = (team: Team, profile: UserProfile, onDone?: () => void
   modal.addEventListener("click", (e) => { if (e.target === modal) { modal.remove(); onDone?.(); } });
   document.getElementById("manageMembersDone")!.addEventListener("click", () => { modal.remove(); onDone?.(); });
 
-  const refresh = async () => {
+  const refreshMembers = async () => {
     const errEl = document.getElementById("manageMemberError")!;
     errEl.hidden = true;
     const currentEl = document.getElementById("currentMemberList")!;
-    const availableEl = document.getElementById("availableUserList")!;
-    currentEl.innerHTML = availableEl.innerHTML = "Loading…";
+    currentEl.innerHTML = "Loading…";
 
     let allUsers;
     try {
       allUsers = groupId ? await getGroupMemberProfiles(groupId) : await getAllUsers();
     } catch {
-      currentEl.innerHTML = availableEl.innerHTML = "<em>Failed to load users.</em>";
+      currentEl.innerHTML = "<em>Failed to load users.</em>";
       return;
     }
 
     const members = allUsers.filter((u) => team.memberIds.includes(u.uid));
     const available = allUsers.filter((u) => !team.memberIds.includes(u.uid));
 
-    const memberRow = (u: typeof allUsers[0], isRemovable: boolean) => {
+    // Populate available group members (not yet in this team)
+    const availableEl = document.getElementById("availableMemberList")!;
+    if (available.length === 0) {
+      availableEl.innerHTML = "<em>All group members are already in this team.</em>";
+    } else {
+      availableEl.innerHTML = available.map((u) => `
+        <div class="manage-member-row">
+          <div class="manage-member-info">
+            <span class="member-name">${escapeHtml(u.displayName)}</span>
+            <span class="member-email">${escapeHtml(u.email)}</span>
+          </div>
+          <button class="btn ghost small member-add-btn" data-uid="${u.uid}">Add</button>
+        </div>
+      `).join("");
+      availableEl.querySelectorAll<HTMLButtonElement>(".member-add-btn").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const uid = btn.dataset.uid!;
+          btn.disabled = true;
+          btn.textContent = "Adding…";
+          try {
+            const u = available.find((x) => x.uid === uid)!;
+            await addMemberToTeamWithPrefs(team.id, uid, u.displayName);
+            team.memberIds = [...team.memberIds, uid];
+            void refreshMembers();
+          } catch (e: unknown) {
+            btn.disabled = false;
+            btn.textContent = "Add";
+            errEl.textContent = e instanceof Error ? e.message : "Failed to add member.";
+            errEl.hidden = false;
+          }
+        });
+      });
+    }
+
+    const memberRow = (u: typeof allUsers[0]) => {
       const phone = u.phoneNumber ? `<span class="member-phone">${escapeHtml(u.phoneNumber)}</span>` : "";
       return `
         <div class="manage-member-row" data-uid="${u.uid}" data-name="${escapeHtml(u.displayName)}">
@@ -507,18 +864,17 @@ const showManageMembers = (team: Team, profile: UserProfile, onDone?: () => void
             <span class="member-email">${escapeHtml(u.email)}</span>
             ${phone}
           </div>
-          ${isRemovable ? `<button class="btn ghost small danger member-remove-btn"
+          <button class="btn ghost small danger member-remove-btn"
             data-uid="${u.uid}" data-name="${escapeHtml(u.displayName)}" data-email="${escapeHtml(u.email)}"
-            ${u.uid === profile.uid ? "disabled title='Cannot remove yourself'" : ""}>Remove</button>` : ""}
+            ${u.uid === profile.uid ? "disabled title='Cannot remove yourself'" : ""}>Remove</button>
         </div>
       `;
     };
 
-    // Current members
     if (members.length === 0) {
       currentEl.innerHTML = "<em>No members yet.</em>";
     } else {
-      currentEl.innerHTML = members.map((u) => memberRow(u, true)).join("");
+      currentEl.innerHTML = members.map((u) => memberRow(u)).join("");
       currentEl.querySelectorAll<HTMLButtonElement>(".member-remove-btn").forEach((btn) => {
         btn.addEventListener("click", async () => {
           const uid = btn.dataset.uid!;
@@ -530,76 +886,135 @@ const showManageMembers = (team: Team, profile: UserProfile, onDone?: () => void
           const prevText = btn.textContent;
           btn.textContent = "Checking…";
           let assigned: string[] = [];
-          let managedTeams: import("./types.ts").Team[] = [];
           try {
-            [assigned, managedTeams] = await Promise.all([
-              findAssignedTasksInTeam(displayName, email, team.id, team.name),
-              getTeamsManagedBy(uid),
-            ]);
+            assigned = await findAssignedTasksInTeam(displayName, email, team.id, team.name);
+          } catch {
+            // ignore — proceed without assignment check
           } finally {
             btn.disabled = false;
             btn.textContent = prevText;
           }
 
-          if (managedTeams.length > 0) {
-            errEl.textContent = `Cannot remove ${displayName}: they manage ${managedTeams.length} team(s) — ${managedTeams.map(t => t.name).join(", ")}. Transfer or delete those teams first.`;
-            errEl.hidden = false;
-            return;
-          }
+          const doRemove = async () => {
+            try {
+              await removeMemberFromTeamWithPrefs(team.id, uid, displayName);
+              team.memberIds = team.memberIds.filter((id) => id !== uid);
+              refreshMembers();
+            } catch (e: unknown) {
+              errEl.textContent = e instanceof Error ? e.message : "Error removing member.";
+              errEl.hidden = false;
+            }
+          };
 
           if (assigned.length > 0) {
-            const preview = assigned.slice(0, 3).join(", ");
-            const more = assigned.length > 3 ? ` … and ${assigned.length - 3} more` : "";
-            errEl.textContent = `Cannot remove ${displayName}: assigned to ${assigned.length} task(s) — ${preview}${more}. Unassign first.`;
-            errEl.hidden = false;
+            // Show confirmation dialog
+            const existingDialog = document.getElementById("pmRemoveConfirmDialog");
+            existingDialog?.remove();
+            const dlg = document.createElement("div");
+            dlg.id = "pmRemoveConfirmDialog";
+            dlg.className = "team-modal-overlay";
+            const listItems = assigned.slice(0, 5).map(t => `<li>${escapeHtml(t)}</li>`).join("");
+            const more = assigned.length > 5 ? `<li style="color:var(--text-muted,#888)">… and ${assigned.length - 5} more</li>` : "";
+            dlg.innerHTML = `
+              <div class="team-modal">
+                <h3>Remove Member?</h3>
+                <p><strong>${escapeHtml(displayName)}</strong> is still assigned to ${assigned.length} task(s):</p>
+                <ul style="margin:10px 0;padding-left:20px;font-size:0.88em;line-height:1.6">${listItems}${more}</ul>
+                <p class="pref-hint">Removing them will not unassign these tasks. Continue?</p>
+                <div class="team-modal-footer">
+                  <button class="btn ghost" id="pmRemoveCancel">Cancel</button>
+                  <button class="btn danger" id="pmRemoveConfirm">Remove Anyway</button>
+                </div>
+              </div>
+            `;
+            document.body.appendChild(dlg);
+            document.getElementById("pmRemoveCancel")!.addEventListener("click", () => dlg.remove());
+            document.getElementById("pmRemoveConfirm")!.addEventListener("click", async () => {
+              dlg.remove();
+              await doRemove();
+            });
             return;
           }
 
-          try {
-            await removeMemberFromTeamWithPrefs(team.id, uid, displayName);
-            team.memberIds = team.memberIds.filter((id) => id !== uid);
-            refresh();
-          } catch (e: unknown) {
-            errEl.textContent = e instanceof Error ? e.message : "Error removing member.";
-            errEl.hidden = false;
-          }
-        });
-      });
-    }
-
-    // Available users
-    if (available.length === 0) {
-      availableEl.innerHTML = "<em>All registered users are already members.</em>";
-    } else {
-      availableEl.innerHTML = available.map((u) => `
-        <div class="manage-member-row available" data-uid="${u.uid}" data-name="${escapeHtml(u.displayName)}">
-          <div class="manage-member-info">
-            <span class="member-name">${escapeHtml(u.displayName)}</span>
-            <span class="member-email">${escapeHtml(u.email)}</span>
-            ${u.phoneNumber ? `<span class="member-phone">${escapeHtml(u.phoneNumber)}</span>` : ""}
-          </div>
-          <button class="btn small member-add-btn" data-uid="${u.uid}" data-name="${escapeHtml(u.displayName)}">Add</button>
-        </div>
-      `).join("");
-      availableEl.querySelectorAll<HTMLButtonElement>(".member-add-btn").forEach((btn) => {
-        btn.addEventListener("click", async () => {
-          const uid = btn.dataset.uid!;
-          const displayName = btn.dataset.name!;
-          errEl.hidden = true;
-          try {
-            await addMemberToTeamWithPrefs(team.id, uid, displayName);
-            team.memberIds.push(uid);
-            refresh();
-          } catch (e: unknown) {
-            errEl.textContent = e instanceof Error ? e.message : "Failed to add member.";
-            errEl.hidden = false;
-          }
+          await doRemove();
         });
       });
     }
   };
 
-  refresh();
+  const refreshPendingInvites = async () => {
+    const pendingEl = document.getElementById("pendingInviteList")!;
+    if (!groupId) { pendingEl.innerHTML = "<em>No group context.</em>"; return; }
+    try {
+      const invites = await getInvitationsByGroup(groupId);
+      const pending = invites.filter((i) => i.status === "pending");
+      if (pending.length === 0) {
+        pendingEl.innerHTML = "<em>No pending invitations.</em>";
+      } else {
+        pendingEl.innerHTML = pending.map((inv) => `
+          <div class="manage-member-row">
+            <div class="manage-member-info">
+              <span class="member-email">${escapeHtml(inv.email)}</span>
+              <span class="member-role-badge" style="margin-left:8px">pending</span>
+            </div>
+          </div>
+        `).join("");
+      }
+    } catch {
+      pendingEl.innerHTML = "<em>Failed to load.</em>";
+    }
+  };
+
+  // Wire invite button
+  document.getElementById("inviteSendBtn")!.addEventListener("click", async () => {
+    const emailInput = document.getElementById("inviteEmailInput") as HTMLInputElement;
+    const errInvEl = document.getElementById("inviteError")!;
+    const successEl = document.getElementById("inviteSuccess")!;
+    const email = emailInput.value.trim();
+    errInvEl.hidden = true;
+    successEl.hidden = true;
+    if (!email) {
+      errInvEl.textContent = "Please enter an email address.";
+      errInvEl.hidden = false;
+      return;
+    }
+    if (!groupId) {
+      errInvEl.textContent = "No group context for invitation.";
+      errInvEl.hidden = false;
+      return;
+    }
+    const btn = document.getElementById("inviteSendBtn") as HTMLButtonElement;
+    btn.disabled = true;
+    btn.textContent = "Sending…";
+    try {
+      const now = new Date();
+      const expires = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const inviteId = await createInvitation({
+        email,
+        groupId,
+        teamIds: [team.id],
+        invitedBy: profile.uid,
+        status: "pending",
+        createdAt: now.toISOString(),
+        expiresAt: expires.toISOString(),
+      });
+      const sendEmail = httpsCallable(functions, "sendInvitationEmail");
+      await sendEmail({ inviteId });
+      emailInput.value = "";
+      successEl.textContent = `Invitation sent to ${email}.`;
+      successEl.hidden = false;
+      void refreshPendingInvites();
+    } catch (e: unknown) {
+      errInvEl.textContent = e instanceof Error ? e.message : "Failed to send invitation.";
+      errInvEl.hidden = false;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Send Invite";
+    }
+  });
+
+  void refreshMembers();
+  void refreshPendingInvites();
 };
 
 // ---------------------------------------------------------------------------
@@ -620,6 +1035,7 @@ export const showAdminScreen = (profile: UserProfile): void => {
           <nav class="admin-nav">
             <button class="admin-nav-item active" data-section="users">Users</button>
             <button class="admin-nav-item" data-section="groups">Groups</button>
+            <button class="admin-nav-item" data-section="requests">Requests</button>
           </nav>
           <div class="admin-sidebar-footer">
             <span class="admin-footer-name">${escapeHtml(profile.displayName)}</span>
@@ -664,6 +1080,10 @@ const loadAdminSection = (section: string): void => {
     title.textContent = "Groups";
     content.innerHTML = `<div id="adminGroupTable" class="admin-table-wrap"><em>Loading groups…</em></div>`;
     void loadAdminGroups();
+  } else if (section === "requests") {
+    title.textContent = "PM Requests";
+    content.innerHTML = `<div id="adminRequestTable" class="admin-table-wrap"><em>Loading requests…</em></div>`;
+    void loadAdminRequests();
   }
 };
 
@@ -713,6 +1133,103 @@ const loadAdminGroups = async (): Promise<void> => {
     `;
   } catch (e: unknown) {
     tableEl.innerHTML = `<em>Failed to load groups: ${e instanceof Error ? escapeHtml(e.message) : "Unknown error"}</em>`;
+  }
+};
+
+const loadAdminRequests = async (): Promise<void> => {
+  const tableEl = document.getElementById("adminRequestTable");
+  if (!tableEl) return;
+  try {
+    const requests = await getAllPmRequests();
+    // Sort: pending first, then by createdAt desc
+    requests.sort((a, b) => {
+      if (a.status === "pending" && b.status !== "pending") return -1;
+      if (a.status !== "pending" && b.status === "pending") return 1;
+      return b.createdAt.localeCompare(a.createdAt);
+    });
+    if (requests.length === 0) {
+      tableEl.innerHTML = "<em>No PM requests yet.</em>";
+      return;
+    }
+    tableEl.innerHTML = `
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Name</th>
+            <th>Group Name</th>
+            <th>Organization</th>
+            <th>Description</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${requests.map((r) => `
+            <tr data-req-id="${r.id}">
+              <td>${escapeHtml(r.email)}</td>
+              <td>${escapeHtml(r.displayName)}</td>
+              <td>${escapeHtml(r.groupName)}</td>
+              <td>${escapeHtml(r.organization)}</td>
+              <td style="max-width:200px;white-space:normal;font-size:0.85em">${escapeHtml(r.description || "")}</td>
+              <td><span class="req-status req-status-${r.status}">${r.status}</span></td>
+              <td>
+                ${r.status === "pending" ? `
+                  <button class="btn small req-approve-btn" data-id="${r.id}">Approve</button>
+                  <button class="btn ghost small danger req-reject-btn" data-id="${r.id}" style="margin-left:4px">Reject</button>
+                ` : "—"}
+              </td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+
+    const errEl = document.getElementById("adminError")!;
+
+    tableEl.querySelectorAll<HTMLButtonElement>(".req-approve-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.id!;
+        btn.disabled = true;
+        btn.textContent = "Approving…";
+        errEl.hidden = true;
+        try {
+          await updatePmRequest(id, {
+            status: "approved",
+            reviewedAt: new Date().toISOString(),
+          });
+          const sendApproval = httpsCallable(functions, "sendPmApprovalEmail");
+          await sendApproval({ requestId: id });
+          void loadAdminRequests();
+        } catch (e: unknown) {
+          errEl.textContent = e instanceof Error ? e.message : "Failed to approve.";
+          errEl.hidden = false;
+          btn.disabled = false;
+          btn.textContent = "Approve";
+        }
+      });
+    });
+
+    tableEl.querySelectorAll<HTMLButtonElement>(".req-reject-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.id!;
+        btn.disabled = true;
+        errEl.hidden = true;
+        try {
+          await updatePmRequest(id, {
+            status: "rejected",
+            reviewedAt: new Date().toISOString(),
+          });
+          void loadAdminRequests();
+        } catch (e: unknown) {
+          errEl.textContent = e instanceof Error ? e.message : "Failed to reject.";
+          errEl.hidden = false;
+          btn.disabled = false;
+        }
+      });
+    });
+  } catch (e: unknown) {
+    tableEl.innerHTML = `<em>Failed to load requests: ${e instanceof Error ? escapeHtml(e.message) : "Unknown error"}</em>`;
   }
 };
 
@@ -1068,10 +1585,16 @@ export const showGroupScreen = (
   document.getElementById("groupSignOutBtn")!.addEventListener("click", () => signOut());
 
   document.getElementById("editGroupNameBtn")!.addEventListener("click", () => {
-    showEditGroupModal(group, (newName) => {
+    showEditGroupModal(group, profile, (newName, newDisplayName) => {
       group.name = newName;
       const display = document.getElementById("groupNameDisplay");
       if (display) display.textContent = newName;
+      if (newDisplayName !== profile.displayName) {
+        profile.displayName = newDisplayName;
+        _currentProfile = profile;
+        const footerName = document.querySelector(".admin-footer-name");
+        if (footerName) footerName.textContent = newDisplayName;
+      }
     });
   });
 
@@ -1090,7 +1613,7 @@ export const showGroupScreen = (
   loadGroupSection("teams", group, profile);
 };
 
-const showEditGroupModal = (group: Group, onSaved: (newName: string) => void): void => {
+const showEditGroupModal = (group: Group, profile: UserProfile, onSaved: (newName: string, newDisplayName: string) => void): void => {
   document.getElementById("editGroupModal")?.remove();
 
   const modal = document.createElement("div");
@@ -1098,7 +1621,11 @@ const showEditGroupModal = (group: Group, onSaved: (newName: string) => void): v
   modal.className = "team-modal-overlay";
   modal.innerHTML = `
     <div class="team-modal">
-      <h3>Edit Group</h3>
+      <h3>Edit</h3>
+      <label class="screen-label">
+        Your Name
+        <input type="text" id="editPmNameInput" class="screen-input" value="${escapeHtml(profile.displayName)}" />
+      </label>
       <label class="screen-label">
         Group Name
         <input type="text" id="editGroupNameInput" class="screen-input" value="${escapeHtml(group.name)}" />
@@ -1116,18 +1643,20 @@ const showEditGroupModal = (group: Group, onSaved: (newName: string) => void): v
   document.getElementById("editGroupCancel")!.addEventListener("click", () => modal.remove());
 
   const doSave = async () => {
-    const name = (document.getElementById("editGroupNameInput") as HTMLInputElement).value.trim();
+    const groupName = (document.getElementById("editGroupNameInput") as HTMLInputElement).value.trim();
+    const pmName = (document.getElementById("editPmNameInput") as HTMLInputElement).value.trim();
     const errEl = document.getElementById("editGroupError")!;
     errEl.hidden = true;
-    if (!name) {
-      errEl.textContent = "Group name cannot be empty.";
-      errEl.hidden = false;
-      return;
-    }
+    if (!groupName) { errEl.textContent = "Group name cannot be empty."; errEl.hidden = false; return; }
+    if (!pmName) { errEl.textContent = "Your name cannot be empty."; errEl.hidden = false; return; }
     try {
-      await updateGroupName(group.id, name);
+      const saves: Promise<void>[] = [updateGroupName(group.id, groupName)];
+      if (pmName !== profile.displayName) {
+        saves.push(updateUserProfile(profile.uid, { displayName: pmName } as Parameters<typeof updateUserProfile>[1]));
+      }
+      await Promise.all(saves);
       modal.remove();
-      onSaved(name);
+      onSaved(groupName, pmName);
     } catch (e: unknown) {
       errEl.textContent = e instanceof Error ? e.message : "Failed to save.";
       errEl.hidden = false;
@@ -1138,7 +1667,7 @@ const showEditGroupModal = (group: Group, onSaved: (newName: string) => void): v
   (document.getElementById("editGroupNameInput") as HTMLInputElement).addEventListener("keydown", (e) => {
     if (e.key === "Enter") void doSave();
   });
-  setTimeout(() => (document.getElementById("editGroupNameInput") as HTMLInputElement).focus(), 50);
+  setTimeout(() => (document.getElementById("editPmNameInput") as HTMLInputElement).focus(), 50);
 };
 
 const loadGroupSection = (section: string, group: Group, profile: UserProfile): void => {
@@ -1287,6 +1816,77 @@ const findAssignedTasksInGroup = async (
   return found;
 };
 
+const showInviteMemberModal = (group: Group, profile: UserProfile, onDone: () => void): void => {
+  document.getElementById("inviteMemberModal")?.remove();
+
+  const modal = document.createElement("div");
+  modal.id = "inviteMemberModal";
+  modal.className = "team-modal-overlay";
+  modal.innerHTML = `
+    <div class="team-modal">
+      <h3>Invite Member to Group</h3>
+      <p class="pref-hint">Enter the email address of the person you want to invite to <strong>${escapeHtml(group.name)}</strong>.</p>
+      <input type="email" id="groupInviteEmail" class="screen-input" placeholder="invitee@example.com" />
+      <div class="screen-error" id="groupInviteError" hidden></div>
+      <div class="screen-success" id="groupInviteSuccess" hidden></div>
+      <div class="team-modal-footer">
+        <button class="btn ghost" id="groupInviteCancel">Cancel</button>
+        <button class="btn" id="groupInviteConfirm">Send Invitation</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  modal.addEventListener("click", (e) => { if (e.target === modal) { modal.remove(); onDone(); } });
+  document.getElementById("groupInviteCancel")!.addEventListener("click", () => { modal.remove(); onDone(); });
+
+  const doInvite = async () => {
+    const email = (document.getElementById("groupInviteEmail") as HTMLInputElement).value.trim();
+    const errEl = document.getElementById("groupInviteError")!;
+    const successEl = document.getElementById("groupInviteSuccess")!;
+    errEl.hidden = true;
+    successEl.hidden = true;
+    if (!email) {
+      errEl.textContent = "Please enter an email address.";
+      errEl.hidden = false;
+      return;
+    }
+    const confirmBtn = document.getElementById("groupInviteConfirm") as HTMLButtonElement;
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = "Sending…";
+    try {
+      const now = new Date();
+      const expires = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const inviteId = await createInvitation({
+        email,
+        groupId: group.id,
+        teamIds: [],
+        invitedBy: profile.uid,
+        status: "pending",
+        createdAt: now.toISOString(),
+        expiresAt: expires.toISOString(),
+      });
+      const sendEmail = httpsCallable(functions, "sendInvitationEmail");
+      await sendEmail({ inviteId });
+      successEl.textContent = `Invitation sent to ${email}.`;
+      successEl.hidden = false;
+      (document.getElementById("groupInviteEmail") as HTMLInputElement).value = "";
+    } catch (e: unknown) {
+      errEl.textContent = e instanceof Error ? e.message : "Failed to send invitation.";
+      errEl.hidden = false;
+    } finally {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = "Send Invitation";
+    }
+  };
+
+  document.getElementById("groupInviteConfirm")!.addEventListener("click", doInvite);
+  (document.getElementById("groupInviteEmail") as HTMLInputElement).addEventListener("keydown", (e) => {
+    if (e.key === "Enter") void doInvite();
+  });
+  setTimeout(() => (document.getElementById("groupInviteEmail") as HTMLInputElement).focus(), 50);
+};
+
 const loadAndRenderGroupMembers = async (group: Group, profile: UserProfile): Promise<void> => {
   const listEl = document.getElementById("groupMemberList");
   const errEl = document.getElementById("groupError");
@@ -1314,8 +1914,11 @@ const renderGroupMemberList = (
 
   const toolbar = document.createElement("div");
   toolbar.className = "group-member-toolbar";
-  toolbar.innerHTML = `<button class="btn" disabled title="Coming soon">+ Invite Member</button>`;
+  toolbar.innerHTML = `<button class="btn" id="groupInviteMemberBtn">+ Invite Member</button>`;
   listEl.appendChild(toolbar);
+  document.getElementById("groupInviteMemberBtn")!.addEventListener("click", () => {
+    showInviteMemberModal(group, profile, () => void loadAndRenderGroupMembers(group, profile));
+  });
 
   if (members.length === 0) {
     const empty = document.createElement("p");

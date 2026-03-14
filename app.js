@@ -147,11 +147,6 @@
     return `${y}-${m}-${d}`;
   };
   var todayIso = () => localIso(/* @__PURE__ */ new Date());
-  var addDays = (isoDate, days) => {
-    const d = /* @__PURE__ */ new Date(isoDate + "T00:00:00");
-    d.setDate(d.getDate() + days);
-    return localIso(d);
-  };
   var toShortDate = (isoDate) => {
     if (!isoDate) return "";
     const date = /* @__PURE__ */ new Date(isoDate + "T00:00:00");
@@ -179,6 +174,20 @@
   };
   var formatSprintRange = (sprint) => `${toShortDate(sprint.startDate)} \u2013 ${toShortDate(sprint.endDate)}`;
   var createId = () => crypto.randomUUID();
+  var getMostRecentWorkingDay = (holidays, workWeekends) => {
+    const d = /* @__PURE__ */ new Date();
+    while (true) {
+      const day = d.getDay();
+      const iso = localIso(d);
+      const isWeekend = day === 0 || day === 6;
+      if (isWeekend) {
+        if (workWeekends && workWeekends.has(iso)) return iso;
+      } else {
+        if (!holidays || !holidays.has(iso)) return iso;
+      }
+      d.setDate(d.getDate() - 1);
+    }
+  };
   var getNextWorkingDay = (isoDate, holidays, workWeekends) => {
     const d = /* @__PURE__ */ new Date(isoDate + "T00:00:00");
     d.setDate(d.getDate() + 1);
@@ -534,7 +543,7 @@
     }
   };
   var getDefaultAppConfig = () => getDefaults()?.config;
-  var getExperimentalSetting = (name4) => getDefaults()?.[`_${name4}`];
+  var getExperimentalSetting = (name5) => getDefaults()?.[`_${name5}`];
   var Deferred = class {
     constructor() {
       this.reject = () => {
@@ -647,12 +656,12 @@
     return { created, element: parentDiv };
   }
   var previouslyDismissed = false;
-  function updateEmulatorBanner(name4, isRunningEmulator) {
-    if (typeof window === "undefined" || typeof document === "undefined" || !isCloudWorkstation(window.location.host) || emulatorStatus[name4] === isRunningEmulator || emulatorStatus[name4] || // If already set to use emulator, can't go back to prod.
+  function updateEmulatorBanner(name5, isRunningEmulator) {
+    if (typeof window === "undefined" || typeof document === "undefined" || !isCloudWorkstation(window.location.host) || emulatorStatus[name5] === isRunningEmulator || emulatorStatus[name5] || // If already set to use emulator, can't go back to prod.
     previouslyDismissed) {
       return;
     }
-    emulatorStatus[name4] = isRunningEmulator;
+    emulatorStatus[name5] = isRunningEmulator;
     function prefixedId(id) {
       return `__firebase__banner__${id}`;
     }
@@ -1098,8 +1107,8 @@
      * @param instanceFactory Service factory responsible for creating the public interface
      * @param type whether the service provided by the component is public or private
      */
-    constructor(name4, instanceFactory, type) {
-      this.name = name4;
+    constructor(name5, instanceFactory, type) {
+      this.name = name5;
       this.instanceFactory = instanceFactory;
       this.type = type;
       this.multipleInstances = false;
@@ -1126,8 +1135,8 @@
   };
   var DEFAULT_ENTRY_NAME = "[DEFAULT]";
   var Provider = class {
-    constructor(name4, container) {
-      this.name = name4;
+    constructor(name5, container) {
+      this.name = name5;
       this.container = container;
       this.component = null;
       this.instances = /* @__PURE__ */ new Map();
@@ -1330,8 +1339,8 @@
     return component.instantiationMode === "EAGER";
   }
   var ComponentContainer = class {
-    constructor(name4) {
-      this.name = name4;
+    constructor(name5) {
+      this.name = name5;
       this.providers = /* @__PURE__ */ new Map();
     }
     /**
@@ -1364,12 +1373,12 @@
      * Firebase SDKs providing services should extend NameServiceMapping interface to register
      * themselves.
      */
-    getProvider(name4) {
-      if (this.providers.has(name4)) {
-        return this.providers.get(name4);
+    getProvider(name5) {
+      if (this.providers.has(name5)) {
+        return this.providers.get(name5);
       }
-      const provider = new Provider(name4, this);
-      this.providers.set(name4, provider);
+      const provider = new Provider(name5, this);
+      this.providers.set(name5, provider);
       return provider;
     }
     getProviders() {
@@ -1423,8 +1432,8 @@
      *
      * @param name The name that the logs will be associated with
      */
-    constructor(name4) {
-      this.name = name4;
+    constructor(name5) {
+      this.name = name5;
       this._logLevel = defaultLogLevel;
       this._logHandler = defaultLogHandler;
       this._userLogHandler = null;
@@ -1627,8 +1636,8 @@
   var unwrap = (value) => reverseTransformCache.get(value);
 
   // node_modules/idb/build/index.js
-  function openDB(name4, version4, { blocked, upgrade, blocking, terminated } = {}) {
-    const request = indexedDB.open(name4, version4);
+  function openDB(name5, version5, { blocked, upgrade, blocking, terminated } = {}) {
+    const request = indexedDB.open(name5, version5);
     const openPromise = wrap(request);
     if (upgrade) {
       request.addEventListener("upgradeneeded", (event) => {
@@ -1800,12 +1809,12 @@
     }
     return true;
   }
-  function _getProvider(app2, name4) {
+  function _getProvider(app2, name5) {
     const heartbeatController = app2.container.getProvider("heartbeat").getImmediate({ optional: true });
     if (heartbeatController) {
       void heartbeatController.triggerHeartbeat();
     }
-    return app2.container.getProvider(name4);
+    return app2.container.getProvider(name5);
   }
   function _isFirebaseServerApp(obj) {
     if (obj === null || obj === void 0) {
@@ -1930,18 +1939,18 @@
   function initializeApp(_options, rawConfig = {}) {
     let options = _options;
     if (typeof rawConfig !== "object") {
-      const name5 = rawConfig;
-      rawConfig = { name: name5 };
+      const name6 = rawConfig;
+      rawConfig = { name: name6 };
     }
     const config = {
       name: DEFAULT_ENTRY_NAME2,
       automaticDataCollectionEnabled: true,
       ...rawConfig
     };
-    const name4 = config.name;
-    if (typeof name4 !== "string" || !name4) {
+    const name5 = config.name;
+    if (typeof name5 !== "string" || !name5) {
       throw ERROR_FACTORY.create("bad-app-name", {
-        appName: String(name4)
+        appName: String(name5)
       });
     }
     options || (options = getDefaultAppConfig());
@@ -1951,42 +1960,42 @@
         /* AppError.NO_OPTIONS */
       );
     }
-    const existingApp = _apps.get(name4);
+    const existingApp = _apps.get(name5);
     if (existingApp) {
       if (deepEqual(options, existingApp.options) && deepEqual(config, existingApp.config)) {
         return existingApp;
       } else {
-        throw ERROR_FACTORY.create("duplicate-app", { appName: name4 });
+        throw ERROR_FACTORY.create("duplicate-app", { appName: name5 });
       }
     }
-    const container = new ComponentContainer(name4);
+    const container = new ComponentContainer(name5);
     for (const component of _components.values()) {
       container.addComponent(component);
     }
     const newApp = new FirebaseAppImpl(options, config, container);
-    _apps.set(name4, newApp);
+    _apps.set(name5, newApp);
     return newApp;
   }
-  function getApp(name4 = DEFAULT_ENTRY_NAME2) {
-    const app2 = _apps.get(name4);
-    if (!app2 && name4 === DEFAULT_ENTRY_NAME2 && getDefaultAppConfig()) {
+  function getApp(name5 = DEFAULT_ENTRY_NAME2) {
+    const app2 = _apps.get(name5);
+    if (!app2 && name5 === DEFAULT_ENTRY_NAME2 && getDefaultAppConfig()) {
       return initializeApp();
     }
     if (!app2) {
-      throw ERROR_FACTORY.create("no-app", { appName: name4 });
+      throw ERROR_FACTORY.create("no-app", { appName: name5 });
     }
     return app2;
   }
-  function registerVersion(libraryKeyOrName, version4, variant) {
+  function registerVersion(libraryKeyOrName, version5, variant) {
     let library = PLATFORM_LOG_STRING[libraryKeyOrName] ?? libraryKeyOrName;
     if (variant) {
       library += `-${variant}`;
     }
     const libraryMismatch = library.match(/\s|\//);
-    const versionMismatch = version4.match(/\s|\//);
+    const versionMismatch = version5.match(/\s|\//);
     if (libraryMismatch || versionMismatch) {
       const warning = [
-        `Unable to register library "${library}" with version "${version4}":`
+        `Unable to register library "${library}" with version "${version5}":`
       ];
       if (libraryMismatch) {
         warning.push(`library name "${library}" contains illegal characters (whitespace or "/")`);
@@ -1995,14 +2004,14 @@
         warning.push("and");
       }
       if (versionMismatch) {
-        warning.push(`version name "${version4}" contains illegal characters (whitespace or "/")`);
+        warning.push(`version name "${version5}" contains illegal characters (whitespace or "/")`);
       }
       logger.warn(warning.join(" "));
       return;
     }
     _registerComponent(new Component(
       `${library}-version`,
-      () => ({ library, version: version4 }),
+      () => ({ library, version: version5 }),
       "VERSION"
       /* ComponentType.VERSION */
     ));
@@ -3610,9 +3619,9 @@
       this.persistence = persistence;
       this.auth = auth2;
       this.userKey = userKey;
-      const { config, name: name4 } = this.auth;
-      this.fullUserKey = _persistenceKeyName(this.userKey, config.apiKey, name4);
-      this.fullPersistenceKey = _persistenceKeyName("persistence", config.apiKey, name4);
+      const { config, name: name5 } = this.auth;
+      this.fullUserKey = _persistenceKeyName(this.userKey, config.apiKey, name5);
+      this.fullPersistenceKey = _persistenceKeyName("persistence", config.apiKey, name5);
       this.boundEventHandler = auth2._onStorageEvent.bind(auth2);
       this.persistence._addListener(this.fullUserKey, this.boundEventHandler);
     }
@@ -6099,8 +6108,8 @@
   BrowserLocalPersistence.type = "LOCAL";
   var browserLocalPersistence = BrowserLocalPersistence;
   var POLLING_INTERVAL_MS = 1e3;
-  function getDocumentCookie(name4) {
-    const escapedName = name4.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
+  function getDocumentCookie(name5) {
+    const escapedName = name5.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
     const matcher = RegExp(`${escapedName}=([^;]+)`);
     return document.cookie.match(matcher)?.[1] ?? null;
   }
@@ -6143,12 +6152,12 @@
       if (!this._isAvailable()) {
         return null;
       }
-      const name4 = getCookieName(key);
+      const name5 = getCookieName(key);
       if (window.cookieStore) {
-        const cookie = await window.cookieStore.get(name4);
+        const cookie = await window.cookieStore.get(name5);
         return cookie?.value;
       }
-      return getDocumentCookie(name4);
+      return getDocumentCookie(name5);
     }
     // Log out by overriding the idToken with a sentinel value of ""
     async _remove(key) {
@@ -6159,8 +6168,8 @@
       if (!existingValue) {
         return;
       }
-      const name4 = getCookieName(key);
-      document.cookie = `${name4}=;Max-Age=34560000;Partitioned;Secure;SameSite=Strict;Path=/;Priority=High`;
+      const name5 = getCookieName(key);
+      document.cookie = `${name5}=;Max-Age=34560000;Partitioned;Secure;SameSite=Strict;Path=/;Priority=High`;
       await fetch(`/__cookies__`, { method: "DELETE" }).catch(() => void 0);
     }
     // Listen for cookie changes, both cookieStore and fallback to polling document.cookie
@@ -6168,14 +6177,14 @@
       if (!this._isAvailable()) {
         return;
       }
-      const name4 = getCookieName(key);
+      const name5 = getCookieName(key);
       if (window.cookieStore) {
         const cb = ((event) => {
-          const changedCookie = event.changed.find((change) => change.name === name4);
+          const changedCookie = event.changed.find((change) => change.name === name5);
           if (changedCookie) {
             listener(changedCookie.value);
           }
-          const deletedCookie = event.deleted.find((change) => change.name === name4);
+          const deletedCookie = event.deleted.find((change) => change.name === name5);
           if (deletedCookie) {
             listener(null);
           }
@@ -6184,9 +6193,9 @@
         this.listenerUnsubscribes.set(listener, unsubscribe2);
         return window.cookieStore.addEventListener("change", cb);
       }
-      let lastValue = getDocumentCookie(name4);
+      let lastValue = getDocumentCookie(name5);
       const interval = setInterval(() => {
-        const currentValue = getDocumentCookie(name4);
+        const currentValue = getDocumentCookie(name5);
         if (currentValue !== lastValue) {
           listener(currentValue);
           lastValue = currentValue;
@@ -7741,7 +7750,7 @@
       }
     }
   };
-  function _open(auth2, url, name4, width = DEFAULT_WIDTH, height = DEFAULT_HEIGHT) {
+  function _open(auth2, url, name5, width = DEFAULT_WIDTH, height = DEFAULT_HEIGHT) {
     const top = Math.max((window.screen.availHeight - height) / 2, 0).toString();
     const left = Math.max((window.screen.availWidth - width) / 2, 0).toString();
     let target = "";
@@ -7753,8 +7762,8 @@
       left
     };
     const ua = getUA().toLowerCase();
-    if (name4) {
-      target = _isChromeIOS(ua) ? TARGET_BLANK : name4;
+    if (name5) {
+      target = _isChromeIOS(ua) ? TARGET_BLANK : name5;
     }
     if (_isFirefox(ua)) {
       url = url || FIREFOX_EMPTY_URL;
@@ -20944,6 +20953,593 @@ This typically indicates that your device does not have a healthy Internet conne
     registerVersion(Ut, Ht2, "esm2020");
   })();
 
+  // node_modules/@firebase/functions/dist/esm/index.esm.js
+  var LONG_TYPE = "type.googleapis.com/google.protobuf.Int64Value";
+  var UNSIGNED_LONG_TYPE = "type.googleapis.com/google.protobuf.UInt64Value";
+  function mapValues(o, f) {
+    const result = {};
+    for (const key in o) {
+      if (o.hasOwnProperty(key)) {
+        result[key] = f(o[key]);
+      }
+    }
+    return result;
+  }
+  function encode(data) {
+    if (data == null) {
+      return null;
+    }
+    if (data instanceof Number) {
+      data = data.valueOf();
+    }
+    if (typeof data === "number" && isFinite(data)) {
+      return data;
+    }
+    if (data === true || data === false) {
+      return data;
+    }
+    if (Object.prototype.toString.call(data) === "[object String]") {
+      return data;
+    }
+    if (data instanceof Date) {
+      return data.toISOString();
+    }
+    if (Array.isArray(data)) {
+      return data.map((x2) => encode(x2));
+    }
+    if (typeof data === "function" || typeof data === "object") {
+      return mapValues(data, (x2) => encode(x2));
+    }
+    throw new Error("Data cannot be encoded in JSON: " + data);
+  }
+  function decode(json) {
+    if (json == null) {
+      return json;
+    }
+    if (json["@type"]) {
+      switch (json["@type"]) {
+        case LONG_TYPE:
+        // Fall through and handle this the same as unsigned.
+        case UNSIGNED_LONG_TYPE: {
+          const value = Number(json["value"]);
+          if (isNaN(value)) {
+            throw new Error("Data cannot be decoded from JSON: " + json);
+          }
+          return value;
+        }
+        default: {
+          throw new Error("Data cannot be decoded from JSON: " + json);
+        }
+      }
+    }
+    if (Array.isArray(json)) {
+      return json.map((x2) => decode(x2));
+    }
+    if (typeof json === "function" || typeof json === "object") {
+      return mapValues(json, (x2) => decode(x2));
+    }
+    return json;
+  }
+  var FUNCTIONS_TYPE = "functions";
+  var errorCodeMap = {
+    OK: "ok",
+    CANCELLED: "cancelled",
+    UNKNOWN: "unknown",
+    INVALID_ARGUMENT: "invalid-argument",
+    DEADLINE_EXCEEDED: "deadline-exceeded",
+    NOT_FOUND: "not-found",
+    ALREADY_EXISTS: "already-exists",
+    PERMISSION_DENIED: "permission-denied",
+    UNAUTHENTICATED: "unauthenticated",
+    RESOURCE_EXHAUSTED: "resource-exhausted",
+    FAILED_PRECONDITION: "failed-precondition",
+    ABORTED: "aborted",
+    OUT_OF_RANGE: "out-of-range",
+    UNIMPLEMENTED: "unimplemented",
+    INTERNAL: "internal",
+    UNAVAILABLE: "unavailable",
+    DATA_LOSS: "data-loss"
+  };
+  var FunctionsError = class _FunctionsError extends FirebaseError {
+    /**
+     * Constructs a new instance of the `FunctionsError` class.
+     */
+    constructor(code, message, details) {
+      super(`${FUNCTIONS_TYPE}/${code}`, message || "");
+      this.details = details;
+      Object.setPrototypeOf(this, _FunctionsError.prototype);
+    }
+  };
+  function codeForHTTPStatus(status) {
+    if (status >= 200 && status < 300) {
+      return "ok";
+    }
+    switch (status) {
+      case 0:
+        return "internal";
+      case 400:
+        return "invalid-argument";
+      case 401:
+        return "unauthenticated";
+      case 403:
+        return "permission-denied";
+      case 404:
+        return "not-found";
+      case 409:
+        return "aborted";
+      case 429:
+        return "resource-exhausted";
+      case 499:
+        return "cancelled";
+      case 500:
+        return "internal";
+      case 501:
+        return "unimplemented";
+      case 503:
+        return "unavailable";
+      case 504:
+        return "deadline-exceeded";
+    }
+    return "unknown";
+  }
+  function _errorForResponse(status, bodyJSON) {
+    let code = codeForHTTPStatus(status);
+    let description = code;
+    let details = void 0;
+    try {
+      const errorJSON = bodyJSON && bodyJSON.error;
+      if (errorJSON) {
+        const status2 = errorJSON.status;
+        if (typeof status2 === "string") {
+          if (!errorCodeMap[status2]) {
+            return new FunctionsError("internal", "internal");
+          }
+          code = errorCodeMap[status2];
+          description = status2;
+        }
+        const message = errorJSON.message;
+        if (typeof message === "string") {
+          description = message;
+        }
+        details = errorJSON.details;
+        if (details !== void 0) {
+          details = decode(details);
+        }
+      }
+    } catch (e) {
+    }
+    if (code === "ok") {
+      return null;
+    }
+    return new FunctionsError(code, description, details);
+  }
+  var ContextProvider = class {
+    constructor(app2, authProvider, messagingProvider, appCheckProvider) {
+      this.app = app2;
+      this.auth = null;
+      this.messaging = null;
+      this.appCheck = null;
+      this.serverAppAppCheckToken = null;
+      if (_isFirebaseServerApp(app2) && app2.settings.appCheckToken) {
+        this.serverAppAppCheckToken = app2.settings.appCheckToken;
+      }
+      this.auth = authProvider.getImmediate({ optional: true });
+      this.messaging = messagingProvider.getImmediate({
+        optional: true
+      });
+      if (!this.auth) {
+        authProvider.get().then((auth2) => this.auth = auth2, () => {
+        });
+      }
+      if (!this.messaging) {
+        messagingProvider.get().then((messaging) => this.messaging = messaging, () => {
+        });
+      }
+      if (!this.appCheck) {
+        appCheckProvider?.get().then((appCheck) => this.appCheck = appCheck, () => {
+        });
+      }
+    }
+    async getAuthToken() {
+      if (!this.auth) {
+        return void 0;
+      }
+      try {
+        const token = await this.auth.getToken();
+        return token?.accessToken;
+      } catch (e) {
+        return void 0;
+      }
+    }
+    async getMessagingToken() {
+      if (!this.messaging || !("Notification" in self) || Notification.permission !== "granted") {
+        return void 0;
+      }
+      try {
+        return await this.messaging.getToken();
+      } catch (e) {
+        return void 0;
+      }
+    }
+    async getAppCheckToken(limitedUseAppCheckTokens) {
+      if (this.serverAppAppCheckToken) {
+        return this.serverAppAppCheckToken;
+      }
+      if (this.appCheck) {
+        const result = limitedUseAppCheckTokens ? await this.appCheck.getLimitedUseToken() : await this.appCheck.getToken();
+        if (result.error) {
+          return null;
+        }
+        return result.token;
+      }
+      return null;
+    }
+    async getContext(limitedUseAppCheckTokens) {
+      const authToken = await this.getAuthToken();
+      const messagingToken = await this.getMessagingToken();
+      const appCheckToken = await this.getAppCheckToken(limitedUseAppCheckTokens);
+      return { authToken, messagingToken, appCheckToken };
+    }
+  };
+  var DEFAULT_REGION = "us-central1";
+  var responseLineRE = /^data: (.*?)(?:\n|$)/;
+  function failAfter(millis) {
+    let timer = null;
+    return {
+      promise: new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new FunctionsError("deadline-exceeded", "deadline-exceeded"));
+        }, millis);
+      }),
+      cancel: () => {
+        if (timer) {
+          clearTimeout(timer);
+        }
+      }
+    };
+  }
+  var FunctionsService = class {
+    /**
+     * Creates a new Functions service for the given app.
+     * @param app - The FirebaseApp to use.
+     */
+    constructor(app2, authProvider, messagingProvider, appCheckProvider, regionOrCustomDomain = DEFAULT_REGION, fetchImpl = (...args) => fetch(...args)) {
+      this.app = app2;
+      this.fetchImpl = fetchImpl;
+      this.emulatorOrigin = null;
+      this.contextProvider = new ContextProvider(app2, authProvider, messagingProvider, appCheckProvider);
+      this.cancelAllRequests = new Promise((resolve) => {
+        this.deleteService = () => {
+          return Promise.resolve(resolve());
+        };
+      });
+      try {
+        const url = new URL(regionOrCustomDomain);
+        this.customDomain = url.origin + (url.pathname === "/" ? "" : url.pathname);
+        this.region = DEFAULT_REGION;
+      } catch (e) {
+        this.customDomain = null;
+        this.region = regionOrCustomDomain;
+      }
+    }
+    _delete() {
+      return this.deleteService();
+    }
+    /**
+     * Returns the URL for a callable with the given name.
+     * @param name - The name of the callable.
+     * @internal
+     */
+    _url(name5) {
+      const projectId = this.app.options.projectId;
+      if (this.emulatorOrigin !== null) {
+        const origin = this.emulatorOrigin;
+        return `${origin}/${projectId}/${this.region}/${name5}`;
+      }
+      if (this.customDomain !== null) {
+        return `${this.customDomain}/${name5}`;
+      }
+      return `https://${this.region}-${projectId}.cloudfunctions.net/${name5}`;
+    }
+  };
+  function connectFunctionsEmulator$1(functionsInstance, host, port) {
+    const useSsl = isCloudWorkstation(host);
+    functionsInstance.emulatorOrigin = `http${useSsl ? "s" : ""}://${host}:${port}`;
+    if (useSsl) {
+      void pingServer(functionsInstance.emulatorOrigin + "/backends");
+      updateEmulatorBanner("Functions", true);
+    }
+  }
+  function httpsCallable$1(functionsInstance, name5, options) {
+    const callable = (data) => {
+      return call(functionsInstance, name5, data, options || {});
+    };
+    callable.stream = (data, options2) => {
+      return stream(functionsInstance, name5, data, options2);
+    };
+    return callable;
+  }
+  function getCredentials(functionsInstance) {
+    return functionsInstance.emulatorOrigin && isCloudWorkstation(functionsInstance.emulatorOrigin) ? "include" : void 0;
+  }
+  async function postJSON(url, body, headers, fetchImpl, functionsInstance) {
+    headers["Content-Type"] = "application/json";
+    let response;
+    try {
+      response = await fetchImpl(url, {
+        method: "POST",
+        body: JSON.stringify(body),
+        headers,
+        credentials: getCredentials(functionsInstance)
+      });
+    } catch (e) {
+      return {
+        status: 0,
+        json: null
+      };
+    }
+    let json = null;
+    try {
+      json = await response.json();
+    } catch (e) {
+    }
+    return {
+      status: response.status,
+      json
+    };
+  }
+  async function makeAuthHeaders(functionsInstance, options) {
+    const headers = {};
+    const context = await functionsInstance.contextProvider.getContext(options.limitedUseAppCheckTokens);
+    if (context.authToken) {
+      headers["Authorization"] = "Bearer " + context.authToken;
+    }
+    if (context.messagingToken) {
+      headers["Firebase-Instance-ID-Token"] = context.messagingToken;
+    }
+    if (context.appCheckToken !== null) {
+      headers["X-Firebase-AppCheck"] = context.appCheckToken;
+    }
+    return headers;
+  }
+  function call(functionsInstance, name5, data, options) {
+    const url = functionsInstance._url(name5);
+    return callAtURL(functionsInstance, url, data, options);
+  }
+  async function callAtURL(functionsInstance, url, data, options) {
+    data = encode(data);
+    const body = { data };
+    const headers = await makeAuthHeaders(functionsInstance, options);
+    const timeout = options.timeout || 7e4;
+    const failAfterHandle = failAfter(timeout);
+    const response = await Promise.race([
+      postJSON(url, body, headers, functionsInstance.fetchImpl, functionsInstance),
+      failAfterHandle.promise,
+      functionsInstance.cancelAllRequests
+    ]);
+    failAfterHandle.cancel();
+    if (!response) {
+      throw new FunctionsError("cancelled", "Firebase Functions instance was deleted.");
+    }
+    const error = _errorForResponse(response.status, response.json);
+    if (error) {
+      throw error;
+    }
+    if (!response.json) {
+      throw new FunctionsError("internal", "Response is not valid JSON object.");
+    }
+    let responseData = response.json.data;
+    if (typeof responseData === "undefined") {
+      responseData = response.json.result;
+    }
+    if (typeof responseData === "undefined") {
+      throw new FunctionsError("internal", "Response is missing data field.");
+    }
+    const decodedData = decode(responseData);
+    return { data: decodedData };
+  }
+  function stream(functionsInstance, name5, data, options) {
+    const url = functionsInstance._url(name5);
+    return streamAtURL(functionsInstance, url, data, options || {});
+  }
+  async function streamAtURL(functionsInstance, url, data, options) {
+    data = encode(data);
+    const body = { data };
+    const headers = await makeAuthHeaders(functionsInstance, options);
+    headers["Content-Type"] = "application/json";
+    headers["Accept"] = "text/event-stream";
+    let response;
+    try {
+      response = await functionsInstance.fetchImpl(url, {
+        method: "POST",
+        body: JSON.stringify(body),
+        headers,
+        signal: options?.signal,
+        credentials: getCredentials(functionsInstance)
+      });
+    } catch (e) {
+      if (e instanceof Error && e.name === "AbortError") {
+        const error2 = new FunctionsError("cancelled", "Request was cancelled.");
+        return {
+          data: Promise.reject(error2),
+          stream: {
+            [Symbol.asyncIterator]() {
+              return {
+                next() {
+                  return Promise.reject(error2);
+                }
+              };
+            }
+          }
+        };
+      }
+      const error = _errorForResponse(0, null);
+      return {
+        data: Promise.reject(error),
+        // Return an empty async iterator
+        stream: {
+          [Symbol.asyncIterator]() {
+            return {
+              next() {
+                return Promise.reject(error);
+              }
+            };
+          }
+        }
+      };
+    }
+    let resultResolver;
+    let resultRejecter;
+    const resultPromise = new Promise((resolve, reject) => {
+      resultResolver = resolve;
+      resultRejecter = reject;
+    });
+    options?.signal?.addEventListener("abort", () => {
+      const error = new FunctionsError("cancelled", "Request was cancelled.");
+      resultRejecter(error);
+    });
+    const reader = response.body.getReader();
+    const rstream = createResponseStream(reader, resultResolver, resultRejecter, options?.signal);
+    return {
+      stream: {
+        [Symbol.asyncIterator]() {
+          const rreader = rstream.getReader();
+          return {
+            async next() {
+              const { value, done } = await rreader.read();
+              return { value, done };
+            },
+            async return() {
+              await rreader.cancel();
+              return { done: true, value: void 0 };
+            }
+          };
+        }
+      },
+      data: resultPromise
+    };
+  }
+  function createResponseStream(reader, resultResolver, resultRejecter, signal) {
+    const processLine = (line, controller) => {
+      const match = line.match(responseLineRE);
+      if (!match) {
+        return;
+      }
+      const data = match[1];
+      try {
+        const jsonData = JSON.parse(data);
+        if ("result" in jsonData) {
+          resultResolver(decode(jsonData.result));
+          return;
+        }
+        if ("message" in jsonData) {
+          controller.enqueue(decode(jsonData.message));
+          return;
+        }
+        if ("error" in jsonData) {
+          const error = _errorForResponse(0, jsonData);
+          controller.error(error);
+          resultRejecter(error);
+          return;
+        }
+      } catch (error) {
+        if (error instanceof FunctionsError) {
+          controller.error(error);
+          resultRejecter(error);
+          return;
+        }
+      }
+    };
+    const decoder = new TextDecoder();
+    return new ReadableStream({
+      start(controller) {
+        let currentText = "";
+        return pump();
+        async function pump() {
+          if (signal?.aborted) {
+            const error = new FunctionsError("cancelled", "Request was cancelled");
+            controller.error(error);
+            resultRejecter(error);
+            return Promise.resolve();
+          }
+          try {
+            const { value, done } = await reader.read();
+            if (done) {
+              if (currentText.trim()) {
+                processLine(currentText.trim(), controller);
+              }
+              controller.close();
+              return;
+            }
+            if (signal?.aborted) {
+              const error = new FunctionsError("cancelled", "Request was cancelled");
+              controller.error(error);
+              resultRejecter(error);
+              await reader.cancel();
+              return;
+            }
+            currentText += decoder.decode(value, { stream: true });
+            const lines = currentText.split("\n");
+            currentText = lines.pop() || "";
+            for (const line of lines) {
+              if (line.trim()) {
+                processLine(line.trim(), controller);
+              }
+            }
+            return pump();
+          } catch (error) {
+            const functionsError = error instanceof FunctionsError ? error : _errorForResponse(0, null);
+            controller.error(functionsError);
+            resultRejecter(functionsError);
+          }
+        }
+      },
+      cancel() {
+        return reader.cancel();
+      }
+    });
+  }
+  var name4 = "@firebase/functions";
+  var version4 = "0.13.2";
+  var AUTH_INTERNAL_NAME = "auth-internal";
+  var APP_CHECK_INTERNAL_NAME = "app-check-internal";
+  var MESSAGING_INTERNAL_NAME = "messaging-internal";
+  function registerFunctions(variant) {
+    const factory = (container, { instanceIdentifier: regionOrCustomDomain }) => {
+      const app2 = container.getProvider("app").getImmediate();
+      const authProvider = container.getProvider(AUTH_INTERNAL_NAME);
+      const messagingProvider = container.getProvider(MESSAGING_INTERNAL_NAME);
+      const appCheckProvider = container.getProvider(APP_CHECK_INTERNAL_NAME);
+      return new FunctionsService(app2, authProvider, messagingProvider, appCheckProvider, regionOrCustomDomain);
+    };
+    _registerComponent(new Component(
+      FUNCTIONS_TYPE,
+      factory,
+      "PUBLIC"
+      /* ComponentType.PUBLIC */
+    ).setMultipleInstances(true));
+    registerVersion(name4, version4, variant);
+    registerVersion(name4, version4, "esm2020");
+  }
+  function getFunctions(app2 = getApp(), regionOrCustomDomain = DEFAULT_REGION) {
+    const functionsProvider = _getProvider(getModularInstance(app2), FUNCTIONS_TYPE);
+    const functionsInstance = functionsProvider.getImmediate({
+      identifier: regionOrCustomDomain
+    });
+    const emulator = getDefaultEmulatorHostnameAndPort("functions");
+    if (emulator) {
+      connectFunctionsEmulator(functionsInstance, ...emulator);
+    }
+    return functionsInstance;
+  }
+  function connectFunctionsEmulator(functionsInstance, host, port) {
+    connectFunctionsEmulator$1(getModularInstance(functionsInstance), host, port);
+  }
+  function httpsCallable(functionsInstance, name5, options) {
+    return httpsCallable$1(getModularInstance(functionsInstance), name5, options);
+  }
+  registerFunctions();
+
   // src/firebase.ts
   var firebaseConfig = {
     apiKey: "AIzaSyAZpppRwFu_6Btal0JPyqMdQd91U8PUZ2U",
@@ -20958,6 +21554,8 @@ This typically indicates that your device does not have a healthy Internet conne
   var app = isFirebaseConfigured ? initializeApp(firebaseConfig) : null;
   var auth = isFirebaseConfigured ? getAuth(app) : null;
   var db = isFirebaseConfigured ? getFirestore(app) : null;
+  var functions = isFirebaseConfigured ? getFunctions(app, "asia-northeast3") : null;
+  var DECLINE_INVITATION_URL = "https://asia-northeast3-burndown-studio.cloudfunctions.net/declineInvitation";
 
   // src/db.ts
   var getUserProfile = async (uid) => {
@@ -20993,10 +21591,10 @@ This typically indicates that your device does not have a healthy Internet conne
     );
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   };
-  var createTeam = async (name4, ownerId, groupId = "") => {
+  var createTeam = async (name5, ownerId, groupId = "") => {
     const ref = doc(collection(db, "teams"));
     await setDoc(ref, {
-      name: name4,
+      name: name5,
       ownerId,
       memberIds: [ownerId],
       groupId,
@@ -21008,13 +21606,16 @@ This typically indicates that your device does not have a healthy Internet conne
     const snap = await getDocs(collection(db, "teams"));
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   };
+  var addMemberToTeamById = async (teamId, userId) => {
+    await updateDoc(doc(db, "teams", teamId), { memberIds: arrayUnion(userId) });
+  };
   var addMemberToTeamWithPrefs = async (teamId, userId, displayName) => {
     await updateDoc(doc(db, "teams", teamId), { memberIds: arrayUnion(userId) });
     const appState = await loadTeamState(teamId);
     if (appState) {
-      const name4 = displayName.trim();
-      if (name4 && !appState.preferences.members.includes(name4)) {
-        appState.preferences.members.push(name4);
+      const name5 = displayName.trim();
+      if (name5 && !appState.preferences.members.includes(name5)) {
+        appState.preferences.members.push(name5);
         appState.preferences.members.sort((a, b) => a.localeCompare(b));
         await saveTeamState(teamId, appState);
       }
@@ -21033,11 +21634,6 @@ This typically indicates that your device does not have a healthy Internet conne
   var getTeamById = async (teamId) => {
     const snap = await getDoc(doc(db, "teams", teamId));
     return snap.exists() ? { id: snap.id, ...snap.data() } : null;
-  };
-  var getUsersByIds = async (uids) => {
-    if (uids.length === 0) return [];
-    const profiles = await Promise.all(uids.map((uid) => getUserProfile(uid)));
-    return profiles.filter((p) => p !== null);
   };
   var deleteTeam = async (teamId) => {
     const teamSnap = await getDoc(doc(db, "teams", teamId));
@@ -21093,9 +21689,9 @@ This typically indicates that your device does not have a healthy Internet conne
   var saveUserMemo = async (uid, teamId, text) => {
     await updateDoc(doc(db, "users", uid), { [`memos.${teamId}`]: text });
   };
-  var createGroup = async (name4, ownerId) => {
+  var createGroup = async (name5, ownerId) => {
     const ref = doc(collection(db, "groups"));
-    await setDoc(ref, { name: name4, ownerId, createdAt: (/* @__PURE__ */ new Date()).toISOString() });
+    await setDoc(ref, { name: name5, ownerId, createdAt: (/* @__PURE__ */ new Date()).toISOString() });
     await updateDoc(doc(db, "users", ownerId), { groupId: ref.id });
     return ref.id;
   };
@@ -21106,8 +21702,8 @@ This typically indicates that your device does not have a healthy Internet conne
     if (snap.empty) return null;
     return { id: snap.docs[0].id, ...snap.docs[0].data() };
   };
-  var updateGroupName = async (groupId, name4) => {
-    await updateDoc(doc(db, "groups", groupId), { name: name4 });
+  var updateGroupName = async (groupId, name5) => {
+    await updateDoc(doc(db, "groups", groupId), { name: name5 });
   };
   var getAllGroups = async () => {
     const snap = await getDocs(collection(db, "groups"));
@@ -21164,6 +21760,40 @@ This typically indicates that your device does not have a healthy Internet conne
         }
       })
     );
+  };
+  var createInvitation = async (inv) => {
+    const ref = doc(collection(db, "invitations"));
+    await setDoc(ref, inv);
+    return ref.id;
+  };
+  var getInvitation = async (inviteId) => {
+    const snap = await getDoc(doc(db, "invitations", inviteId));
+    return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+  };
+  var updateInvitation = async (inviteId, updates) => {
+    await updateDoc(doc(db, "invitations", inviteId), updates);
+  };
+  var getInvitationsByGroup = async (groupId) => {
+    const snap = await getDocs(
+      query(collection(db, "invitations"), where("groupId", "==", groupId))
+    );
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  };
+  var createPmRequest = async (req) => {
+    const ref = doc(collection(db, "pm_requests"));
+    await setDoc(ref, req);
+    return ref.id;
+  };
+  var getPmRequest = async (requestId) => {
+    const snap = await getDoc(doc(db, "pm_requests", requestId));
+    return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+  };
+  var getAllPmRequests = async () => {
+    const snap = await getDocs(collection(db, "pm_requests"));
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  };
+  var updatePmRequest = async (requestId, updates) => {
+    await updateDoc(doc(db, "pm_requests", requestId), updates);
   };
 
   // src/state.ts
@@ -21275,7 +21905,7 @@ This typically indicates that your device does not have a healthy Internet conne
   var fixLoadedState = (appState) => {
     const holidaySet = new Set(appState.preferences.holidays.map((h) => h.date));
     const workWeekendSet = new Set(appState.preferences.workWeekends);
-    const today = getNextWorkingDay(addDays(todayIso(), -1), holidaySet, workWeekendSet);
+    const today = getMostRecentWorkingDay(holidaySet, workWeekendSet);
     appState.projectToday = today;
     for (const sprint of appState.sprints) {
       if (sprint.endDate < today) {
@@ -21318,6 +21948,10 @@ This typically indicates that your device does not have a healthy Internet conne
     }
   };
   var setCurrentTeam = async (teamId) => {
+    if (saveDebounceTimer) {
+      clearTimeout(saveDebounceTimer);
+      saveDebounceTimer = null;
+    }
     currentTeamId = teamId;
     if (unsubscribeSnapshot) {
       unsubscribeSnapshot();
@@ -21326,12 +21960,14 @@ This typically indicates that your device does not have a healthy Internet conne
     if (!isFirebaseConfigured) return;
     try {
       const remoteState = await loadTeamState(teamId);
+      const preservedMembers = [...state.preferences.members];
       if (remoteState && Array.isArray(remoteState.sprints)) {
-        const preservedMembers = [...state.preferences.members];
         state = fixLoadedState(migrateState(remoteState));
-        if (preservedMembers.length > 0) state.preferences.members = preservedMembers;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } else {
+        state = defaultState();
       }
+      if (preservedMembers.length > 0) state.preferences.members = preservedMembers;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch (err) {
       console.warn("Burndown Studio: failed to load from Firestore, using local cache:", err);
     }
@@ -21730,9 +22366,9 @@ This typically indicates that your device does not have a healthy Internet conne
     save();
   };
   var getPreferences = () => state.preferences;
-  var addHoliday = (date, name4) => {
+  var addHoliday = (date, name5) => {
     if (state.preferences.holidays.some((h) => h.date === date)) return;
-    state.preferences.holidays.push({ date, name: name4 });
+    state.preferences.holidays.push({ date, name: name5 });
     state.preferences.holidays.sort((a, b) => a.date.localeCompare(b.date));
     save();
     onChange(H_ALL);
@@ -21780,8 +22416,8 @@ This typically indicates that your device does not have a healthy Internet conne
   var addMembersFromImport = (names) => {
     const existing = new Set(state.preferences.members);
     let added = false;
-    for (const name4 of names) {
-      const trimmed = name4.trim();
+    for (const name5 of names) {
+      const trimmed = name5.trim();
       if (trimmed && !existing.has(trimmed)) {
         state.preferences.members.push(trimmed);
         existing.add(trimmed);
@@ -22986,6 +23622,7 @@ ${marker.label}`;
     fpProjectToday = flatpickr(dom.projectTodayInput, {
       dateFormat: "Y-m-d",
       disableMobile: true,
+      maxDate: "today",
       disable: [
         (date) => {
           const iso = localIso(date);
@@ -23254,7 +23891,6 @@ ${marker.label}`;
   };
 
   // src/auth.ts
-  var DEV_PASSWORD = "dev-local-123";
   var initAuth = (onLogin, onLogout) => {
     onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -23268,18 +23904,11 @@ ${marker.label}`;
     const provider = new GoogleAuthProvider();
     await signInWithPopup(auth, provider);
   };
-  var signInWithFakeEmail = async (email) => {
-    if (window.location.hostname !== "localhost") return;
-    try {
-      await createUserWithEmailAndPassword(auth, email, DEV_PASSWORD);
-    } catch (err) {
-      const code = err.code;
-      if (code === "auth/email-already-in-use") {
-        await signInWithEmailAndPassword(auth, email, DEV_PASSWORD);
-      } else {
-        throw err;
-      }
-    }
+  var signInWithEmail = async (email, password) => {
+    await signInWithEmailAndPassword(auth, email, password);
+  };
+  var createAccountWithEmail = async (email, password) => {
+    await createUserWithEmailAndPassword(auth, email, password);
   };
   var signOut2 = async () => {
     await signOut(auth);
@@ -23321,92 +23950,353 @@ ${marker.label}`;
   };
   var hideAllScreens = () => clearContainer();
   var escapeHtml = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  var showLoginScreen = () => {
+  var googleSvg = `
+  <svg width="14" height="14" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908C16.658 14.234 17.64 11.926 17.64 9.2z" fill="#4285F4"/>
+    <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/>
+    <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
+    <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+  </svg>`;
+  var showLandingPage = () => {
     clearContainer();
-    const isLocal = window.location.hostname === "localhost";
+    const pendingPmApproved = sessionStorage.getItem("pendingPmApproved");
+    const pendingInvite = sessionStorage.getItem("pendingInvite");
+    if (pendingPmApproved) {
+      renderPmRegistrationPage(pendingPmApproved);
+      return;
+    }
+    if (pendingInvite) {
+      renderInvitationRegistrationPage(pendingInvite);
+      return;
+    }
+    const loginError = sessionStorage.getItem("loginError");
+    if (loginError) sessionStorage.removeItem("loginError");
+    let bannerHtml = "";
     getContainer().innerHTML = `
-    <div class="screen-overlay" id="loginScreen">
-      <div class="screen-card login-card">
-        <p class="eyebrow">Sprint Burndown</p>
-        <h1 class="screen-title">Burndown Studio</h1>
-        <p class="screen-subtitle">Track your team's sprint progress in real time.</p>
-        <div class="login-actions">
-          <button class="login-google-btn" id="loginGoogleBtn">
-            <svg width="14" height="14" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908C16.658 14.234 17.64 11.926 17.64 9.2z" fill="#4285F4"/>
-              <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/>
-              <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
-              <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
-            </svg>
-            Sign in with Google
-          </button>
-          ${isLocal ? `
-          <div class="login-divider"><span>or (dev only)</span></div>
-          <div class="login-fake-row">
-            <input type="email" id="fakeEmailInput" class="login-email-input" placeholder="dev@example.com" autocomplete="off" />
-            <button class="btn ghost" id="loginFakeBtn">Continue</button>
-          </div>
-          ` : ""}
+    <div class="screen-overlay" id="landingScreen">
+      <div class="landing-layout">
+        <div class="landing-brand">
+          <h1 class="landing-title">Burndown Studio</h1>
+          <p class="landing-subtitle">Sprint burndown tracking for teams</p>
         </div>
-        <div class="screen-error" id="loginError" hidden></div>
+        ${bannerHtml}
+        <div class="landing-card">
+          <p class="landing-card-label">Already a user?</p>
+          <div class="login-form">
+            <input type="email" id="landingEmail" class="screen-input" placeholder="Email" autocomplete="email" />
+            <input type="password" id="landingPassword" class="screen-input" placeholder="Password" autocomplete="current-password" />
+            <button class="btn" id="landingSignInBtn">Sign In</button>
+          </div>
+          <div class="login-divider"><span>or</span></div>
+          <button class="login-google-btn" id="loginGoogleBtn">${googleSvg} Sign in with Google</button>
+          <div class="screen-error" id="loginError"${loginError ? "" : " hidden"}>${loginError ? escapeHtml(loginError) : ""}</div>
+        </div>
+        <div class="landing-card landing-pm-card">
+          <p class="landing-card-label">Want to bring your team?</p>
+          <p class="pref-hint" style="margin:0 0 12px">Apply for a PM account to create your group and manage teams.</p>
+          <button class="btn ghost" id="requestPmBtn">Request PM Account</button>
+        </div>
       </div>
     </div>
   `;
+    const errEl = () => document.getElementById("loginError");
+    const doEmailSignIn = async () => {
+      const email = document.getElementById("landingEmail").value.trim();
+      const password = document.getElementById("landingPassword").value;
+      if (!email || !password) {
+        errEl().textContent = "Email and password are required.";
+        errEl().hidden = false;
+        return;
+      }
+      errEl().hidden = true;
+      try {
+        await signInWithEmail(email, password);
+      } catch (e) {
+        errEl().textContent = e instanceof Error ? e.message : "Sign-in failed.";
+        errEl().hidden = false;
+      }
+    };
+    document.getElementById("landingSignInBtn").addEventListener("click", doEmailSignIn);
+    document.getElementById("landingPassword").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") void doEmailSignIn();
+    });
     document.getElementById("loginGoogleBtn").addEventListener("click", async () => {
-      const errEl = document.getElementById("loginError");
-      errEl.hidden = true;
+      errEl().hidden = true;
       try {
         await signInWithGoogle();
       } catch (e) {
-        errEl.textContent = e instanceof Error ? e.message : "Sign-in failed.";
-        errEl.hidden = false;
+        errEl().textContent = e instanceof Error ? e.message : "Sign-in failed.";
+        errEl().hidden = false;
       }
     });
-    if (isLocal) {
-      const fakeInput = document.getElementById("fakeEmailInput");
-      const doFakeLogin = async () => {
-        const email = fakeInput.value.trim();
-        if (!email) return;
-        const errEl = document.getElementById("loginError");
+    document.getElementById("requestPmBtn").addEventListener("click", () => showPmRequestForm());
+  };
+  var renderPmRegistrationPage = (requestId) => {
+    const c = getContainer();
+    c.innerHTML = `<div class="screen-overlay"><div class="screen-card login-card"><p class="pref-hint">Loading\u2026</p></div></div>`;
+    getPmRequest(requestId).then((pmReq) => {
+      const email = pmReq?.email ?? "";
+      const isGmail = email.toLowerCase().endsWith("@gmail.com");
+      c.innerHTML = `
+      <div class="screen-overlay" id="landingScreen">
+        <div class="landing-layout">
+          <div class="landing-brand">
+            <h1 class="landing-title">Burndown Studio</h1>
+            <p class="landing-subtitle">PM Account Registration</p>
+          </div>
+          <div class="landing-card">
+            <p class="landing-card-label">Complete your registration</p>
+            <p class="pref-hint" style="margin:0 0 12px">Your PM account has been approved. Create a password for <strong>${escapeHtml(email)}</strong>.</p>
+            <label class="screen-label">
+              Email
+              <input type="email" id="regEmail" class="screen-input" value="${escapeHtml(email)}" readonly
+                style="background:var(--bg-secondary,#f1f5f9);cursor:default;color:var(--text-muted,#64748b)" />
+            </label>
+            <label class="screen-label">
+              Password
+              <input type="password" id="regPassword" class="screen-input" placeholder="Min 6 characters" autocomplete="new-password" />
+            </label>
+            <label class="screen-label">
+              Confirm Password
+              <input type="password" id="regPassword2" class="screen-input" placeholder="Confirm password" autocomplete="new-password" />
+            </label>
+            <button class="btn" id="regCreateBtn" style="width:100%;margin-top:4px">Create Account &amp; Continue</button>
+            <div class="screen-error" id="regError" hidden></div>
+            ${isGmail ? `
+              <div class="login-divider"><span>or, if this is your primary Google account</span></div>
+              <button class="login-google-btn" id="regGoogleBtn">${googleSvg} Sign in with Google</button>
+              <p class="pref-hint" style="font-size:11px;margin-top:6px">Note: Google Sign-In only works if <strong>${escapeHtml(email)}</strong> is your primary Google account, not an alias.</p>
+            ` : ""}
+          </div>
+        </div>
+      </div>
+    `;
+      const errEl = document.getElementById("regError");
+      const doCreate = async () => {
+        const pw1 = document.getElementById("regPassword").value;
+        const pw2 = document.getElementById("regPassword2").value;
+        errEl.hidden = true;
+        if (!pw1) {
+          errEl.textContent = "Password is required.";
+          errEl.hidden = false;
+          return;
+        }
+        if (pw1 !== pw2) {
+          errEl.textContent = "Passwords do not match.";
+          errEl.hidden = false;
+          return;
+        }
+        if (pw1.length < 6) {
+          errEl.textContent = "Password must be at least 6 characters.";
+          errEl.hidden = false;
+          return;
+        }
+        const btn = document.getElementById("regCreateBtn");
+        btn.disabled = true;
+        btn.textContent = "Creating\u2026";
+        try {
+          await createAccountWithEmail(email, pw1);
+        } catch (e) {
+          errEl.textContent = e instanceof Error ? e.message : "Failed to create account.";
+          errEl.hidden = false;
+          btn.disabled = false;
+          btn.textContent = "Create Account & Continue";
+        }
+      };
+      document.getElementById("regCreateBtn").addEventListener("click", doCreate);
+      document.getElementById("regPassword2").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") void doCreate();
+      });
+      if (isGmail) {
+        document.getElementById("regGoogleBtn").addEventListener("click", async () => {
+          errEl.hidden = true;
+          try {
+            await signInWithGoogle();
+          } catch (e) {
+            errEl.textContent = e instanceof Error ? e.message : "Sign-in failed.";
+            errEl.hidden = false;
+          }
+        });
+      }
+      setTimeout(() => document.getElementById("regPassword")?.focus(), 50);
+    }).catch(() => {
+      c.innerHTML = `<div class="screen-overlay"><div class="screen-card login-card">
+      <p class="screen-error">Failed to load registration details. Please try the link again.</p>
+    </div></div>`;
+    });
+  };
+  var renderInvitationRegistrationPage = (inviteId) => {
+    const c = getContainer();
+    c.innerHTML = `<div class="screen-overlay"><div class="screen-card login-card"><p class="pref-hint">Loading invitation\u2026</p></div></div>`;
+    getInvitation(inviteId).then((invitation) => {
+      if (!invitation || invitation.status !== "pending") {
+        c.innerHTML = `<div class="screen-overlay"><div class="screen-card login-card">
+        <h2>Invitation Unavailable</h2>
+        <p class="screen-error">${invitation ? "This invitation has already been used or declined." : "Invitation not found."}</p>
+      </div></div>`;
+        return;
+      }
+      const email = invitation.email;
+      c.innerHTML = `
+      <div class="screen-overlay" id="landingScreen">
+        <div class="landing-layout">
+          <div class="landing-brand">
+            <h1 class="landing-title">Burndown Studio</h1>
+            <p class="landing-subtitle">Team Invitation</p>
+          </div>
+          <div class="landing-card">
+            <p class="landing-card-label">You've been invited to join a team</p>
+            <p class="pref-hint" style="margin:0 0 12px">Accept the invitation for <strong>${escapeHtml(email)}</strong>.</p>
+            <div class="screen-error" id="invError" hidden></div>
+            <label class="screen-label">
+              Password
+              <input type="password" id="invPassword" class="screen-input" placeholder="Min 6 characters (new account)" autocomplete="new-password" />
+            </label>
+            <label class="screen-label">
+              Confirm Password
+              <input type="password" id="invPassword2" class="screen-input" placeholder="Confirm password" autocomplete="new-password" />
+            </label>
+            <button class="btn" id="invCreateBtn" style="width:100%;margin-top:4px">Create Account &amp; Accept</button>
+            <div class="login-divider"><span>or</span></div>
+            <button class="login-google-btn" id="invGoogleBtn">${googleSvg} Continue with Google</button>
+          </div>
+        </div>
+      </div>
+    `;
+      const errEl = document.getElementById("invError");
+      document.getElementById("invGoogleBtn").addEventListener("click", async () => {
         errEl.hidden = true;
         try {
-          await signInWithFakeEmail(email);
+          await signInWithGoogle();
         } catch (e) {
           errEl.textContent = e instanceof Error ? e.message : "Sign-in failed.";
           errEl.hidden = false;
         }
-      };
-      document.getElementById("loginFakeBtn").addEventListener("click", doFakeLogin);
-      fakeInput.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") doFakeLogin();
       });
-    }
+      const doCreate = async () => {
+        const pw1 = document.getElementById("invPassword").value;
+        const pw2 = document.getElementById("invPassword2").value;
+        errEl.hidden = true;
+        if (!pw1) {
+          errEl.textContent = "Password is required.";
+          errEl.hidden = false;
+          return;
+        }
+        if (pw1 !== pw2) {
+          errEl.textContent = "Passwords do not match.";
+          errEl.hidden = false;
+          return;
+        }
+        if (pw1.length < 6) {
+          errEl.textContent = "Password must be at least 6 characters.";
+          errEl.hidden = false;
+          return;
+        }
+        const btn = document.getElementById("invCreateBtn");
+        btn.disabled = true;
+        btn.textContent = "Creating\u2026";
+        try {
+          await createAccountWithEmail(email, pw1);
+        } catch (e) {
+          errEl.textContent = e instanceof Error ? e.message : "Failed to create account.";
+          errEl.hidden = false;
+          btn.disabled = false;
+          btn.textContent = "Create Account & Accept";
+        }
+      };
+      document.getElementById("invCreateBtn").addEventListener("click", doCreate);
+      document.getElementById("invPassword2").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") void doCreate();
+      });
+      setTimeout(() => document.getElementById("invPassword")?.focus(), 50);
+    }).catch(() => {
+      c.innerHTML = `<div class="screen-overlay"><div class="screen-card login-card">
+      <p class="screen-error">Failed to load invitation. Please try the link again.</p>
+    </div></div>`;
+    });
   };
-  var showRegisterPrompt = (email, onConfirm, onCancel) => {
-    document.getElementById("registerPromptModal")?.remove();
+  var showPmRequestForm = () => {
+    document.getElementById("pmRequestModal")?.remove();
     const modal = document.createElement("div");
-    modal.id = "registerPromptModal";
+    modal.id = "pmRequestModal";
     modal.className = "team-modal-overlay";
     modal.innerHTML = `
-    <div class="team-modal">
-      <h3>Account Not Found</h3>
-      <p class="pref-hint">No account exists for <strong>${escapeHtml(email)}</strong>.</p>
-      <p class="pref-hint">Would you like to register as a new user?</p>
+    <div class="team-modal team-modal-wide">
+      <h3>Request PM Account</h3>
+      <p class="pref-hint">Fill in the details below. We'll review your request and notify you by email.</p>
+      <label class="screen-label">
+        Your Name
+        <input type="text" id="pmReqName" class="screen-input" placeholder="Full name" />
+      </label>
+      <label class="screen-label">
+        Your Email
+        <input type="email" id="pmReqEmail" class="screen-input" placeholder="you@example.com" />
+      </label>
+      <label class="screen-label">
+        Group / Team Name
+        <input type="text" id="pmReqGroup" class="screen-input" placeholder="e.g. Acme Dev Team" />
+      </label>
+      <label class="screen-label">
+        Organization
+        <input type="text" id="pmReqOrg" class="screen-input" placeholder="Company or organization" />
+      </label>
+      <label class="screen-label">
+        Brief Description
+        <textarea id="pmReqDesc" class="screen-input" rows="3" placeholder="Purpose of the group, number of members, etc."></textarea>
+      </label>
+      <div class="screen-error" id="pmReqError" hidden></div>
+      <div class="screen-success" id="pmReqSuccess" hidden></div>
       <div class="team-modal-footer">
-        <button class="btn ghost" id="registerPromptCancel">Cancel</button>
-        <button class="btn" id="registerPromptConfirm">Register</button>
+        <button class="btn ghost" id="pmReqCancel">Cancel</button>
+        <button class="btn" id="pmReqSubmit">Submit Request</button>
       </div>
     </div>
   `;
     document.body.appendChild(modal);
-    document.getElementById("registerPromptCancel").addEventListener("click", () => {
-      modal.remove();
-      onCancel();
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) modal.remove();
     });
-    document.getElementById("registerPromptConfirm").addEventListener("click", () => {
-      modal.remove();
-      onConfirm();
+    document.getElementById("pmReqCancel").addEventListener("click", () => modal.remove());
+    document.getElementById("pmReqSubmit").addEventListener("click", async () => {
+      const name5 = document.getElementById("pmReqName").value.trim();
+      const email = document.getElementById("pmReqEmail").value.trim();
+      const groupName = document.getElementById("pmReqGroup").value.trim();
+      const organization = document.getElementById("pmReqOrg").value.trim();
+      const description = document.getElementById("pmReqDesc").value.trim();
+      const errEl = document.getElementById("pmReqError");
+      const successEl = document.getElementById("pmReqSuccess");
+      errEl.hidden = true;
+      successEl.hidden = true;
+      if (!name5 || !email || !groupName || !organization) {
+        errEl.textContent = "Please fill in all required fields.";
+        errEl.hidden = false;
+        return;
+      }
+      const btn = document.getElementById("pmReqSubmit");
+      btn.disabled = true;
+      btn.textContent = "Submitting\u2026";
+      try {
+        await createPmRequest({
+          email,
+          displayName: name5,
+          groupName,
+          organization,
+          description,
+          status: "pending",
+          createdAt: (/* @__PURE__ */ new Date()).toISOString()
+        });
+        successEl.textContent = "Your request has been sent. We'll notify you by email when it's reviewed.";
+        successEl.hidden = false;
+        btn.hidden = true;
+        document.getElementById("pmReqCancel").textContent = "Close";
+      } catch (e) {
+        errEl.textContent = e instanceof Error ? e.message : "Failed to submit request.";
+        errEl.hidden = false;
+        btn.disabled = false;
+        btn.textContent = "Submit Request";
+      }
     });
+    setTimeout(() => document.getElementById("pmReqName").focus(), 50);
   };
   var showTeamScreen = (user, profile, onTeamSelected) => {
     _currentUser = user;
@@ -23536,12 +24426,12 @@ All shared sprint data for this team will be permanently removed.`)) return;
     });
     document.getElementById("createTeamCancel").addEventListener("click", () => modal.remove());
     const doCreate = async () => {
-      const name4 = document.getElementById("newTeamName").value.trim();
-      if (!name4) return;
+      const name5 = document.getElementById("newTeamName").value.trim();
+      if (!name5) return;
       const errEl = document.getElementById("createTeamError");
       errEl.hidden = true;
       try {
-        await createTeam(name4, profile.uid);
+        await createTeam(name5, profile.uid);
         modal.remove();
         const grid = document.getElementById("teamGrid");
         if (grid && _currentUser) {
@@ -23693,8 +24583,17 @@ All shared sprint data for this team will be permanently removed.`)) return;
           <div id="currentMemberList" class="manage-member-list">Loading\u2026</div>
         </div>
         <div class="manage-members-col">
-          <div class="manage-members-col-title">${groupId ? "Group Members (click to add)" : "All Users (click to add)"}</div>
-          <div id="availableUserList" class="manage-member-list">Loading\u2026</div>
+          <div class="manage-members-col-title">Add Group Members</div>
+          <div id="availableMemberList" class="manage-member-list"><em>Loading\u2026</em></div>
+          <div class="manage-members-col-title" style="margin-top:16px">Invite by Email</div>
+          <div class="invite-input-row">
+            <input type="email" id="inviteEmailInput" class="screen-input" placeholder="invitee@example.com" />
+            <button class="btn" id="inviteSendBtn">Send Invite</button>
+          </div>
+          <div class="screen-error" id="inviteError" hidden></div>
+          <div class="screen-success" id="inviteSuccess" hidden></div>
+          <div class="manage-members-col-title" style="margin-top:16px">Pending Invitations</div>
+          <div id="pendingInviteList" class="manage-member-list"><em>Loading\u2026</em></div>
         </div>
       </div>
       <div class="team-modal-footer">
@@ -23713,22 +24612,53 @@ All shared sprint data for this team will be permanently removed.`)) return;
       modal.remove();
       onDone?.();
     });
-    const refresh = async () => {
+    const refreshMembers = async () => {
       const errEl = document.getElementById("manageMemberError");
       errEl.hidden = true;
       const currentEl = document.getElementById("currentMemberList");
-      const availableEl = document.getElementById("availableUserList");
-      currentEl.innerHTML = availableEl.innerHTML = "Loading\u2026";
+      currentEl.innerHTML = "Loading\u2026";
       let allUsers;
       try {
         allUsers = groupId ? await getGroupMemberProfiles(groupId) : await getAllUsers();
       } catch {
-        currentEl.innerHTML = availableEl.innerHTML = "<em>Failed to load users.</em>";
+        currentEl.innerHTML = "<em>Failed to load users.</em>";
         return;
       }
       const members = allUsers.filter((u) => team.memberIds.includes(u.uid));
       const available = allUsers.filter((u) => !team.memberIds.includes(u.uid));
-      const memberRow = (u, isRemovable) => {
+      const availableEl = document.getElementById("availableMemberList");
+      if (available.length === 0) {
+        availableEl.innerHTML = "<em>All group members are already in this team.</em>";
+      } else {
+        availableEl.innerHTML = available.map((u) => `
+        <div class="manage-member-row">
+          <div class="manage-member-info">
+            <span class="member-name">${escapeHtml(u.displayName)}</span>
+            <span class="member-email">${escapeHtml(u.email)}</span>
+          </div>
+          <button class="btn ghost small member-add-btn" data-uid="${u.uid}">Add</button>
+        </div>
+      `).join("");
+        availableEl.querySelectorAll(".member-add-btn").forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            const uid = btn.dataset.uid;
+            btn.disabled = true;
+            btn.textContent = "Adding\u2026";
+            try {
+              const u = available.find((x2) => x2.uid === uid);
+              await addMemberToTeamWithPrefs(team.id, uid, u.displayName);
+              team.memberIds = [...team.memberIds, uid];
+              void refreshMembers();
+            } catch (e) {
+              btn.disabled = false;
+              btn.textContent = "Add";
+              errEl.textContent = e instanceof Error ? e.message : "Failed to add member.";
+              errEl.hidden = false;
+            }
+          });
+        });
+      }
+      const memberRow = (u) => {
         const phone = u.phoneNumber ? `<span class="member-phone">${escapeHtml(u.phoneNumber)}</span>` : "";
         return `
         <div class="manage-member-row" data-uid="${u.uid}" data-name="${escapeHtml(u.displayName)}">
@@ -23737,16 +24667,16 @@ All shared sprint data for this team will be permanently removed.`)) return;
             <span class="member-email">${escapeHtml(u.email)}</span>
             ${phone}
           </div>
-          ${isRemovable ? `<button class="btn ghost small danger member-remove-btn"
+          <button class="btn ghost small danger member-remove-btn"
             data-uid="${u.uid}" data-name="${escapeHtml(u.displayName)}" data-email="${escapeHtml(u.email)}"
-            ${u.uid === profile.uid ? "disabled title='Cannot remove yourself'" : ""}>Remove</button>` : ""}
+            ${u.uid === profile.uid ? "disabled title='Cannot remove yourself'" : ""}>Remove</button>
         </div>
       `;
       };
       if (members.length === 0) {
         currentEl.innerHTML = "<em>No members yet.</em>";
       } else {
-        currentEl.innerHTML = members.map((u) => memberRow(u, true)).join("");
+        currentEl.innerHTML = members.map((u) => memberRow(u)).join("");
         currentEl.querySelectorAll(".member-remove-btn").forEach((btn) => {
           btn.addEventListener("click", async () => {
             const uid = btn.dataset.uid;
@@ -23757,70 +24687,129 @@ All shared sprint data for this team will be permanently removed.`)) return;
             const prevText = btn.textContent;
             btn.textContent = "Checking\u2026";
             let assigned = [];
-            let managedTeams = [];
             try {
-              [assigned, managedTeams] = await Promise.all([
-                findAssignedTasksInTeam(displayName, email, team.id, team.name),
-                getTeamsManagedBy(uid)
-              ]);
+              assigned = await findAssignedTasksInTeam(displayName, email, team.id, team.name);
+            } catch {
             } finally {
               btn.disabled = false;
               btn.textContent = prevText;
             }
-            if (managedTeams.length > 0) {
-              errEl.textContent = `Cannot remove ${displayName}: they manage ${managedTeams.length} team(s) \u2014 ${managedTeams.map((t) => t.name).join(", ")}. Transfer or delete those teams first.`;
-              errEl.hidden = false;
-              return;
-            }
+            const doRemove = async () => {
+              try {
+                await removeMemberFromTeamWithPrefs(team.id, uid, displayName);
+                team.memberIds = team.memberIds.filter((id) => id !== uid);
+                refreshMembers();
+              } catch (e) {
+                errEl.textContent = e instanceof Error ? e.message : "Error removing member.";
+                errEl.hidden = false;
+              }
+            };
             if (assigned.length > 0) {
-              const preview = assigned.slice(0, 3).join(", ");
-              const more = assigned.length > 3 ? ` \u2026 and ${assigned.length - 3} more` : "";
-              errEl.textContent = `Cannot remove ${displayName}: assigned to ${assigned.length} task(s) \u2014 ${preview}${more}. Unassign first.`;
-              errEl.hidden = false;
+              const existingDialog = document.getElementById("pmRemoveConfirmDialog");
+              existingDialog?.remove();
+              const dlg = document.createElement("div");
+              dlg.id = "pmRemoveConfirmDialog";
+              dlg.className = "team-modal-overlay";
+              const listItems = assigned.slice(0, 5).map((t) => `<li>${escapeHtml(t)}</li>`).join("");
+              const more = assigned.length > 5 ? `<li style="color:var(--text-muted,#888)">\u2026 and ${assigned.length - 5} more</li>` : "";
+              dlg.innerHTML = `
+              <div class="team-modal">
+                <h3>Remove Member?</h3>
+                <p><strong>${escapeHtml(displayName)}</strong> is still assigned to ${assigned.length} task(s):</p>
+                <ul style="margin:10px 0;padding-left:20px;font-size:0.88em;line-height:1.6">${listItems}${more}</ul>
+                <p class="pref-hint">Removing them will not unassign these tasks. Continue?</p>
+                <div class="team-modal-footer">
+                  <button class="btn ghost" id="pmRemoveCancel">Cancel</button>
+                  <button class="btn danger" id="pmRemoveConfirm">Remove Anyway</button>
+                </div>
+              </div>
+            `;
+              document.body.appendChild(dlg);
+              document.getElementById("pmRemoveCancel").addEventListener("click", () => dlg.remove());
+              document.getElementById("pmRemoveConfirm").addEventListener("click", async () => {
+                dlg.remove();
+                await doRemove();
+              });
               return;
             }
-            try {
-              await removeMemberFromTeamWithPrefs(team.id, uid, displayName);
-              team.memberIds = team.memberIds.filter((id) => id !== uid);
-              refresh();
-            } catch (e) {
-              errEl.textContent = e instanceof Error ? e.message : "Error removing member.";
-              errEl.hidden = false;
-            }
-          });
-        });
-      }
-      if (available.length === 0) {
-        availableEl.innerHTML = "<em>All registered users are already members.</em>";
-      } else {
-        availableEl.innerHTML = available.map((u) => `
-        <div class="manage-member-row available" data-uid="${u.uid}" data-name="${escapeHtml(u.displayName)}">
-          <div class="manage-member-info">
-            <span class="member-name">${escapeHtml(u.displayName)}</span>
-            <span class="member-email">${escapeHtml(u.email)}</span>
-            ${u.phoneNumber ? `<span class="member-phone">${escapeHtml(u.phoneNumber)}</span>` : ""}
-          </div>
-          <button class="btn small member-add-btn" data-uid="${u.uid}" data-name="${escapeHtml(u.displayName)}">Add</button>
-        </div>
-      `).join("");
-        availableEl.querySelectorAll(".member-add-btn").forEach((btn) => {
-          btn.addEventListener("click", async () => {
-            const uid = btn.dataset.uid;
-            const displayName = btn.dataset.name;
-            errEl.hidden = true;
-            try {
-              await addMemberToTeamWithPrefs(team.id, uid, displayName);
-              team.memberIds.push(uid);
-              refresh();
-            } catch (e) {
-              errEl.textContent = e instanceof Error ? e.message : "Failed to add member.";
-              errEl.hidden = false;
-            }
+            await doRemove();
           });
         });
       }
     };
-    refresh();
+    const refreshPendingInvites = async () => {
+      const pendingEl = document.getElementById("pendingInviteList");
+      if (!groupId) {
+        pendingEl.innerHTML = "<em>No group context.</em>";
+        return;
+      }
+      try {
+        const invites = await getInvitationsByGroup(groupId);
+        const pending = invites.filter((i) => i.status === "pending");
+        if (pending.length === 0) {
+          pendingEl.innerHTML = "<em>No pending invitations.</em>";
+        } else {
+          pendingEl.innerHTML = pending.map((inv) => `
+          <div class="manage-member-row">
+            <div class="manage-member-info">
+              <span class="member-email">${escapeHtml(inv.email)}</span>
+              <span class="member-role-badge" style="margin-left:8px">pending</span>
+            </div>
+          </div>
+        `).join("");
+        }
+      } catch {
+        pendingEl.innerHTML = "<em>Failed to load.</em>";
+      }
+    };
+    document.getElementById("inviteSendBtn").addEventListener("click", async () => {
+      const emailInput = document.getElementById("inviteEmailInput");
+      const errInvEl = document.getElementById("inviteError");
+      const successEl = document.getElementById("inviteSuccess");
+      const email = emailInput.value.trim();
+      errInvEl.hidden = true;
+      successEl.hidden = true;
+      if (!email) {
+        errInvEl.textContent = "Please enter an email address.";
+        errInvEl.hidden = false;
+        return;
+      }
+      if (!groupId) {
+        errInvEl.textContent = "No group context for invitation.";
+        errInvEl.hidden = false;
+        return;
+      }
+      const btn = document.getElementById("inviteSendBtn");
+      btn.disabled = true;
+      btn.textContent = "Sending\u2026";
+      try {
+        const now = /* @__PURE__ */ new Date();
+        const expires = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1e3);
+        const inviteId = await createInvitation({
+          email,
+          groupId,
+          teamIds: [team.id],
+          invitedBy: profile.uid,
+          status: "pending",
+          createdAt: now.toISOString(),
+          expiresAt: expires.toISOString()
+        });
+        const sendEmail = httpsCallable(functions, "sendInvitationEmail");
+        await sendEmail({ inviteId });
+        emailInput.value = "";
+        successEl.textContent = `Invitation sent to ${email}.`;
+        successEl.hidden = false;
+        void refreshPendingInvites();
+      } catch (e) {
+        errInvEl.textContent = e instanceof Error ? e.message : "Failed to send invitation.";
+        errInvEl.hidden = false;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Send Invite";
+      }
+    });
+    void refreshMembers();
+    void refreshPendingInvites();
   };
   var showAdminScreen = (profile) => {
     clearContainer();
@@ -23835,6 +24824,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
           <nav class="admin-nav">
             <button class="admin-nav-item active" data-section="users">Users</button>
             <button class="admin-nav-item" data-section="groups">Groups</button>
+            <button class="admin-nav-item" data-section="requests">Requests</button>
           </nav>
           <div class="admin-sidebar-footer">
             <span class="admin-footer-name">${escapeHtml(profile.displayName)}</span>
@@ -23875,6 +24865,10 @@ All shared sprint data for this team will be permanently removed.`)) return;
       title.textContent = "Groups";
       content.innerHTML = `<div id="adminGroupTable" class="admin-table-wrap"><em>Loading groups\u2026</em></div>`;
       void loadAdminGroups();
+    } else if (section === "requests") {
+      title.textContent = "PM Requests";
+      content.innerHTML = `<div id="adminRequestTable" class="admin-table-wrap"><em>Loading requests\u2026</em></div>`;
+      void loadAdminRequests();
     }
   };
   var loadAdminGroups = async () => {
@@ -23920,6 +24914,98 @@ All shared sprint data for this team will be permanently removed.`)) return;
     `;
     } catch (e) {
       tableEl.innerHTML = `<em>Failed to load groups: ${e instanceof Error ? escapeHtml(e.message) : "Unknown error"}</em>`;
+    }
+  };
+  var loadAdminRequests = async () => {
+    const tableEl = document.getElementById("adminRequestTable");
+    if (!tableEl) return;
+    try {
+      const requests = await getAllPmRequests();
+      requests.sort((a, b) => {
+        if (a.status === "pending" && b.status !== "pending") return -1;
+        if (a.status !== "pending" && b.status === "pending") return 1;
+        return b.createdAt.localeCompare(a.createdAt);
+      });
+      if (requests.length === 0) {
+        tableEl.innerHTML = "<em>No PM requests yet.</em>";
+        return;
+      }
+      tableEl.innerHTML = `
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Name</th>
+            <th>Group Name</th>
+            <th>Organization</th>
+            <th>Description</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${requests.map((r) => `
+            <tr data-req-id="${r.id}">
+              <td>${escapeHtml(r.email)}</td>
+              <td>${escapeHtml(r.displayName)}</td>
+              <td>${escapeHtml(r.groupName)}</td>
+              <td>${escapeHtml(r.organization)}</td>
+              <td style="max-width:200px;white-space:normal;font-size:0.85em">${escapeHtml(r.description || "")}</td>
+              <td><span class="req-status req-status-${r.status}">${r.status}</span></td>
+              <td>
+                ${r.status === "pending" ? `
+                  <button class="btn small req-approve-btn" data-id="${r.id}">Approve</button>
+                  <button class="btn ghost small danger req-reject-btn" data-id="${r.id}" style="margin-left:4px">Reject</button>
+                ` : "\u2014"}
+              </td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+      const errEl = document.getElementById("adminError");
+      tableEl.querySelectorAll(".req-approve-btn").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const id = btn.dataset.id;
+          btn.disabled = true;
+          btn.textContent = "Approving\u2026";
+          errEl.hidden = true;
+          try {
+            await updatePmRequest(id, {
+              status: "approved",
+              reviewedAt: (/* @__PURE__ */ new Date()).toISOString()
+            });
+            const sendApproval = httpsCallable(functions, "sendPmApprovalEmail");
+            await sendApproval({ requestId: id });
+            void loadAdminRequests();
+          } catch (e) {
+            errEl.textContent = e instanceof Error ? e.message : "Failed to approve.";
+            errEl.hidden = false;
+            btn.disabled = false;
+            btn.textContent = "Approve";
+          }
+        });
+      });
+      tableEl.querySelectorAll(".req-reject-btn").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const id = btn.dataset.id;
+          btn.disabled = true;
+          errEl.hidden = true;
+          try {
+            await updatePmRequest(id, {
+              status: "rejected",
+              reviewedAt: (/* @__PURE__ */ new Date()).toISOString()
+            });
+            void loadAdminRequests();
+          } catch (e) {
+            errEl.textContent = e instanceof Error ? e.message : "Failed to reject.";
+            errEl.hidden = false;
+            btn.disabled = false;
+          }
+        });
+      });
+    } catch (e) {
+      tableEl.innerHTML = `<em>Failed to load requests: ${e instanceof Error ? escapeHtml(e.message) : "Unknown error"}</em>`;
     }
   };
   var _adminUsers = [];
@@ -24114,18 +25200,18 @@ All shared sprint data for this team will be permanently removed.`)) return;
       document.getElementById("profileEditCancel").addEventListener("click", () => modal.remove());
     }
     const doSave = async () => {
-      const name4 = document.getElementById("profileNameInput").value.trim();
+      const name5 = document.getElementById("profileNameInput").value.trim();
       const phone = document.getElementById("profilePhoneInput").value.trim();
       const errEl = document.getElementById("profileEditError");
       errEl.hidden = true;
-      if (!name4) {
+      if (!name5) {
         errEl.textContent = "Name cannot be empty.";
         errEl.hidden = false;
         return;
       }
       try {
-        await updateUserProfile(profile.uid, { displayName: name4, phoneNumber: phone || null });
-        const updated = { ...profile, displayName: name4 };
+        await updateUserProfile(profile.uid, { displayName: name5, phoneNumber: phone || null });
+        const updated = { ...profile, displayName: name5 };
         if (phone) updated.phoneNumber = phone;
         else delete updated.phoneNumber;
         modal.remove();
@@ -24161,10 +25247,10 @@ All shared sprint data for this team will be permanently removed.`)) return;
     </div>
   `;
     const doCreate = async () => {
-      const name4 = document.getElementById("groupNameInput").value.trim();
+      const name5 = document.getElementById("groupNameInput").value.trim();
       const errEl = document.getElementById("createGroupError");
       errEl.hidden = true;
-      if (!name4) {
+      if (!name5) {
         errEl.textContent = "Group name cannot be empty.";
         errEl.hidden = false;
         return;
@@ -24173,9 +25259,9 @@ All shared sprint data for this team will be permanently removed.`)) return;
       btn.disabled = true;
       btn.textContent = "Creating\u2026";
       try {
-        const groupId = await createGroup(name4, profile.uid);
+        const groupId = await createGroup(name5, profile.uid);
         await linkExistingTeamsToGroup(profile.uid, groupId);
-        const group = { id: groupId, name: name4, ownerId: profile.uid, createdAt: (/* @__PURE__ */ new Date()).toISOString() };
+        const group = { id: groupId, name: name5, ownerId: profile.uid, createdAt: (/* @__PURE__ */ new Date()).toISOString() };
         onCreated(group);
       } catch (e) {
         errEl.textContent = e instanceof Error ? e.message : "Failed to create group.";
@@ -24225,10 +25311,16 @@ All shared sprint data for this team will be permanently removed.`)) return;
   `;
     document.getElementById("groupSignOutBtn").addEventListener("click", () => signOut2());
     document.getElementById("editGroupNameBtn").addEventListener("click", () => {
-      showEditGroupModal(group, (newName) => {
+      showEditGroupModal(group, profile, (newName, newDisplayName) => {
         group.name = newName;
         const display = document.getElementById("groupNameDisplay");
         if (display) display.textContent = newName;
+        if (newDisplayName !== profile.displayName) {
+          profile.displayName = newDisplayName;
+          _currentProfile = profile;
+          const footerName = document.querySelector(".admin-footer-name");
+          if (footerName) footerName.textContent = newDisplayName;
+        }
       });
     });
     document.querySelectorAll(".admin-nav-item").forEach((btn) => {
@@ -24244,14 +25336,18 @@ All shared sprint data for this team will be permanently removed.`)) return;
     });
     loadGroupSection("teams", group, profile);
   };
-  var showEditGroupModal = (group, onSaved) => {
+  var showEditGroupModal = (group, profile, onSaved) => {
     document.getElementById("editGroupModal")?.remove();
     const modal = document.createElement("div");
     modal.id = "editGroupModal";
     modal.className = "team-modal-overlay";
     modal.innerHTML = `
     <div class="team-modal">
-      <h3>Edit Group</h3>
+      <h3>Edit</h3>
+      <label class="screen-label">
+        Your Name
+        <input type="text" id="editPmNameInput" class="screen-input" value="${escapeHtml(profile.displayName)}" />
+      </label>
       <label class="screen-label">
         Group Name
         <input type="text" id="editGroupNameInput" class="screen-input" value="${escapeHtml(group.name)}" />
@@ -24269,18 +25365,28 @@ All shared sprint data for this team will be permanently removed.`)) return;
     });
     document.getElementById("editGroupCancel").addEventListener("click", () => modal.remove());
     const doSave = async () => {
-      const name4 = document.getElementById("editGroupNameInput").value.trim();
+      const groupName = document.getElementById("editGroupNameInput").value.trim();
+      const pmName = document.getElementById("editPmNameInput").value.trim();
       const errEl = document.getElementById("editGroupError");
       errEl.hidden = true;
-      if (!name4) {
+      if (!groupName) {
         errEl.textContent = "Group name cannot be empty.";
         errEl.hidden = false;
         return;
       }
+      if (!pmName) {
+        errEl.textContent = "Your name cannot be empty.";
+        errEl.hidden = false;
+        return;
+      }
       try {
-        await updateGroupName(group.id, name4);
+        const saves = [updateGroupName(group.id, groupName)];
+        if (pmName !== profile.displayName) {
+          saves.push(updateUserProfile(profile.uid, { displayName: pmName }));
+        }
+        await Promise.all(saves);
         modal.remove();
-        onSaved(name4);
+        onSaved(groupName, pmName);
       } catch (e) {
         errEl.textContent = e instanceof Error ? e.message : "Failed to save.";
         errEl.hidden = false;
@@ -24290,7 +25396,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
     document.getElementById("editGroupNameInput").addEventListener("keydown", (e) => {
       if (e.key === "Enter") void doSave();
     });
-    setTimeout(() => document.getElementById("editGroupNameInput").focus(), 50);
+    setTimeout(() => document.getElementById("editPmNameInput").focus(), 50);
   };
   var loadGroupSection = (section, group, profile) => {
     const content = document.getElementById("groupContent");
@@ -24393,12 +25499,12 @@ All sprint data for this team will be permanently removed.`)) return;
     });
     document.getElementById("createTeamCancel").addEventListener("click", () => modal.remove());
     const doCreate = async () => {
-      const name4 = document.getElementById("newTeamName").value.trim();
-      if (!name4) return;
+      const name5 = document.getElementById("newTeamName").value.trim();
+      if (!name5) return;
       const errEl = document.getElementById("createTeamError");
       errEl.hidden = true;
       try {
-        await createTeam(name4, profile.uid, group.id);
+        await createTeam(name5, profile.uid, group.id);
         modal.remove();
         onCreated();
       } catch (e) {
@@ -24424,6 +25530,80 @@ All sprint data for this team will be permanently removed.`)) return;
     );
     return found;
   };
+  var showInviteMemberModal = (group, profile, onDone) => {
+    document.getElementById("inviteMemberModal")?.remove();
+    const modal = document.createElement("div");
+    modal.id = "inviteMemberModal";
+    modal.className = "team-modal-overlay";
+    modal.innerHTML = `
+    <div class="team-modal">
+      <h3>Invite Member to Group</h3>
+      <p class="pref-hint">Enter the email address of the person you want to invite to <strong>${escapeHtml(group.name)}</strong>.</p>
+      <input type="email" id="groupInviteEmail" class="screen-input" placeholder="invitee@example.com" />
+      <div class="screen-error" id="groupInviteError" hidden></div>
+      <div class="screen-success" id="groupInviteSuccess" hidden></div>
+      <div class="team-modal-footer">
+        <button class="btn ghost" id="groupInviteCancel">Cancel</button>
+        <button class="btn" id="groupInviteConfirm">Send Invitation</button>
+      </div>
+    </div>
+  `;
+    document.body.appendChild(modal);
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) {
+        modal.remove();
+        onDone();
+      }
+    });
+    document.getElementById("groupInviteCancel").addEventListener("click", () => {
+      modal.remove();
+      onDone();
+    });
+    const doInvite = async () => {
+      const email = document.getElementById("groupInviteEmail").value.trim();
+      const errEl = document.getElementById("groupInviteError");
+      const successEl = document.getElementById("groupInviteSuccess");
+      errEl.hidden = true;
+      successEl.hidden = true;
+      if (!email) {
+        errEl.textContent = "Please enter an email address.";
+        errEl.hidden = false;
+        return;
+      }
+      const confirmBtn = document.getElementById("groupInviteConfirm");
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = "Sending\u2026";
+      try {
+        const now = /* @__PURE__ */ new Date();
+        const expires = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1e3);
+        const inviteId = await createInvitation({
+          email,
+          groupId: group.id,
+          teamIds: [],
+          invitedBy: profile.uid,
+          status: "pending",
+          createdAt: now.toISOString(),
+          expiresAt: expires.toISOString()
+        });
+        const sendEmail = httpsCallable(functions, "sendInvitationEmail");
+        await sendEmail({ inviteId });
+        successEl.textContent = `Invitation sent to ${email}.`;
+        successEl.hidden = false;
+        document.getElementById("groupInviteEmail").value = "";
+      } catch (e) {
+        errEl.textContent = e instanceof Error ? e.message : "Failed to send invitation.";
+        errEl.hidden = false;
+      } finally {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = "Send Invitation";
+      }
+    };
+    document.getElementById("groupInviteConfirm").addEventListener("click", doInvite);
+    document.getElementById("groupInviteEmail").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") void doInvite();
+    });
+    setTimeout(() => document.getElementById("groupInviteEmail").focus(), 50);
+  };
   var loadAndRenderGroupMembers = async (group, profile) => {
     const listEl = document.getElementById("groupMemberList");
     const errEl = document.getElementById("groupError");
@@ -24444,8 +25624,11 @@ All sprint data for this team will be permanently removed.`)) return;
     listEl.innerHTML = "";
     const toolbar = document.createElement("div");
     toolbar.className = "group-member-toolbar";
-    toolbar.innerHTML = `<button class="btn" disabled title="Coming soon">+ Invite Member</button>`;
+    toolbar.innerHTML = `<button class="btn" id="groupInviteMemberBtn">+ Invite Member</button>`;
     listEl.appendChild(toolbar);
+    document.getElementById("groupInviteMemberBtn").addEventListener("click", () => {
+      showInviteMemberModal(group, profile, () => void loadAndRenderGroupMembers(group, profile));
+    });
     if (members.length === 0) {
       const empty = document.createElement("p");
       empty.className = "pref-hint";
@@ -24626,13 +25809,13 @@ They will also be removed from all teams within the group.`)) return;
     dom.modalTitle.textContent = mode === "create" ? "New Sprint" : "Edit Sprint";
     dom.modalSave.textContent = mode === "create" ? "Save & Add Tasks" : mode === "plan-edit" ? "Add/Remove Tasks" : "Save";
     dom.modalDescription.value = sprint.description || "";
-    const memberCount = getMembers().length;
+    const memberCount = getMemberPairs().length;
     if (memberCount > 0) {
       dom.modalDevelopers.max = String(memberCount);
     } else {
       dom.modalDevelopers.removeAttribute("max");
     }
-    dom.modalDevelopers.value = String(Math.min(sprint.developers ?? 4, memberCount || Infinity));
+    dom.modalDevelopers.value = String(memberCount || 1);
     dom.modalEfficiency.value = String(sprint.efficiency ?? 0.8);
     dom.modalError.hidden = true;
     dom.sprintModal.hidden = false;
@@ -24658,7 +25841,7 @@ They will also be removed from all teams within the group.`)) return;
     const description = dom.modalDescription.value.trim();
     const startDate = dom.modalStartDate.value;
     const endDate = dom.modalEndDate.value;
-    const memberCount = getMembers().length;
+    const memberCount = getMemberPairs().length;
     const developers = memberCount > 0 ? Math.min(Number(dom.modalDevelopers.value), memberCount) : Number(dom.modalDevelopers.value);
     const efficiency = Number(dom.modalEfficiency.value);
     if (!startDate || !endDate) return;
@@ -24689,7 +25872,7 @@ They will also be removed from all teams within the group.`)) return;
     const latestEnd = latestSprint ? latestSprint.endDate : "";
     const start = latestEnd ? getNextWorkingDay(latestEnd) : todayIso();
     const end = addWorkingDays(start, 10);
-    const defaultDevelopers = latestSprint ? latestSprint.developers : state2.preferences.members.length || 4;
+    const defaultDevelopers = getMemberPairs().length || 1;
     openModal("create", { description: "", startDate: start, endDate: end, developers: defaultDevelopers, efficiency: 1 });
   });
   dom.editSprintBtn.addEventListener("click", () => {
@@ -24985,18 +26168,18 @@ They will also be removed from all teams within the group.`)) return;
       (date) => date.getDay() === 0 || date.getDay() === 6 || holidaySet.has(localIso(date))
     ];
   };
-  var showMemberProfilePopup = (name4) => {
+  var showMemberProfilePopup = (name5) => {
     document.getElementById("memberProfilePopup")?.remove();
-    const p = _teamMemberProfiles.find((m) => m.displayName === name4);
+    const p = _teamMemberProfiles.find((m) => m.displayName === name5);
     const popup = document.createElement("div");
     popup.id = "memberProfilePopup";
     popup.className = "team-modal-overlay";
     popup.innerHTML = `
     <div class="team-modal member-profile-popup">
       <div class="member-profile-popup-header">
-        <span class="member-profile-popup-avatar">${Array.from(name4)[0]?.toUpperCase() ?? "?"}</span>
+        <span class="member-profile-popup-avatar">${Array.from(name5)[0]?.toUpperCase() ?? "?"}</span>
         <div>
-          <div class="member-profile-popup-name">${name4}</div>
+          <div class="member-profile-popup-name">${name5}</div>
           ${p ? `<div class="member-profile-popup-role">${p.role.replace("_", " ")}</div>` : ""}
         </div>
         <button class="modal-close member-profile-popup-close">&times;</button>
@@ -25055,12 +26238,12 @@ They will also be removed from all teams within the group.`)) return;
     if (members.length === 0) {
       dom.prefMemberList.innerHTML = "<em class='pref-hint'>No members yet. Add members via the Team screen.</em>";
     } else {
-      for (const name4 of members) {
+      for (const name5 of members) {
         const row = document.createElement("div");
         row.className = "pref-list-row pref-member-row-clickable";
         row.title = "Click to view profile";
-        row.innerHTML = `<span class="pref-list-name">${name4}</span><span class="pref-member-row-hint">\u203A</span>`;
-        row.addEventListener("click", () => showMemberProfilePopup(name4));
+        row.innerHTML = `<span class="pref-list-name">${name5}</span><span class="pref-member-row-hint">\u203A</span>`;
+        row.addEventListener("click", () => showMemberProfilePopup(name5));
         dom.prefMemberList.appendChild(row);
       }
     }
@@ -25123,9 +26306,9 @@ They will also be removed from all teams within the group.`)) return;
   });
   dom.prefHolidayAddBtn.addEventListener("click", () => {
     const date = dom.prefHolidayDate.value;
-    const name4 = dom.prefHolidayName.value.trim();
+    const name5 = dom.prefHolidayName.value.trim();
     if (!date) return;
-    addHoliday(date, name4);
+    addHoliday(date, name5);
     dom.prefHolidayDate.value = "";
     dom.prefHolidayName.value = "";
     if (fpPrefHoliday) {
@@ -25196,13 +26379,16 @@ They will also be removed from all teams within the group.`)) return;
     btn.textContent = profile.displayName;
   };
   var startApp = async (teamId, profile, teamName) => {
+    setMemberPairs([]);
     try {
       const team = await getTeamById(teamId);
       if (team) {
-        const memberProfiles = await getUsersByIds(team.memberIds);
+        const results = await Promise.allSettled(team.memberIds.map((uid) => getUserProfile(uid)));
+        const memberProfiles = results.filter((r) => r.status === "fulfilled" && r.value !== null).map((r) => r.value);
         _teamMemberProfiles = memberProfiles;
-        setMemberPairs(memberProfiles.map((p) => ({ email: p.email, name: p.displayName })));
-        replaceMembers(memberProfiles.map((p) => p.displayName));
+        const assignableProfiles = memberProfiles.filter((p) => p.role === "member");
+        setMemberPairs(assignableProfiles.map((p) => ({ email: p.email, name: p.displayName })));
+        replaceMembers(assignableProfiles.map((p) => p.displayName));
       }
     } catch {
     }
@@ -25225,6 +26411,44 @@ They will also be removed from all teams within the group.`)) return;
       updateHeaderUser(updated);
     });
   });
+  var getContainer2 = () => {
+    let el = document.getElementById("screen-overlays");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "screen-overlays";
+      document.body.appendChild(el);
+    }
+    return el;
+  };
+  if (isFirebaseConfigured) {
+    const params = new URLSearchParams(window.location.search);
+    const inviteId = params.get("invite");
+    const inviteAction = params.get("action");
+    const pmApprovedId = params.get("pm_approved");
+    if (inviteId && inviteAction === "decline") {
+      window.history.replaceState({}, "", "/");
+      hideApp();
+      getContainer2().innerHTML = `<div class="screen-overlay"><div class="screen-card login-card"><p>Declining invitation\u2026</p></div></div>`;
+      fetch(DECLINE_INVITATION_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inviteId })
+      }).then(() => {
+        getContainer2().innerHTML = `<div class="screen-overlay"><div class="screen-card login-card"><h2>Invitation Declined</h2><p class="screen-subtitle">You have declined the invitation. You can close this page.</p></div></div>`;
+      }).catch(() => {
+        getContainer2().innerHTML = `<div class="screen-overlay"><div class="screen-card login-card"><p class="screen-error">Failed to decline invitation. Please try again.</p></div></div>`;
+      });
+    } else {
+      if (inviteId && inviteAction === "accept") {
+        sessionStorage.setItem("pendingInvite", inviteId);
+        window.history.replaceState({}, "", "/");
+      }
+      if (pmApprovedId) {
+        sessionStorage.setItem("pendingPmApproved", pmApprovedId);
+        window.history.replaceState({}, "", "/");
+      }
+    }
+  }
   if (!isFirebaseConfigured) {
     render();
   } else {
@@ -25233,25 +26457,81 @@ They will also be removed from all teams within the group.`)) return;
       async (user) => {
         try {
           _activeUser = user;
-          const profile = await ensureUserProfile(user);
-          if (!profile) {
-            showRegisterPrompt(user.email ?? "", async () => {
-              try {
+          const pendingInvite = sessionStorage.getItem("pendingInvite");
+          if (pendingInvite) {
+            const invitation = await getInvitation(pendingInvite);
+            if (invitation && invitation.status === "pending") {
+              if (user.email !== invitation.email) {
+                await signOut2();
+                return;
+              }
+              sessionStorage.removeItem("pendingInvite");
+              let profile2 = await ensureUserProfile(user);
+              if (!profile2) {
                 const newProfile = await createNewUserProfile(user);
                 _activeProfile = newProfile;
-                showProfileEditModal(newProfile, true, (updated) => {
-                  _activeProfile = updated;
-                  showTeamScreen(user, updated, (teamId, teamName) => {
-                    startApp(teamId, updated, teamName);
+                await new Promise((resolve) => {
+                  showProfileEditModal(newProfile, true, async (updated) => {
+                    _activeProfile = updated;
+                    resolve();
                   });
                 });
-              } catch (e) {
-                console.error("Registration error:", e);
-                showLoginScreen();
+                profile2 = _activeProfile;
+              } else {
+                _activeProfile = profile2;
               }
-            }, async () => {
-              await signOut2();
-            });
+              if (profile2) {
+                await updateInvitation(pendingInvite, { status: "accepted" });
+                await updateUserProfile(profile2.uid, { groupId: invitation.groupId });
+                for (const teamId of invitation.teamIds) {
+                  await addMemberToTeamById(teamId, profile2.uid);
+                }
+                _activeProfile = { ...profile2, groupId: invitation.groupId };
+                showTeamScreen(user, _activeProfile, (teamId, teamName) => {
+                  startApp(teamId, _activeProfile, teamName);
+                });
+              }
+              return;
+            }
+            sessionStorage.removeItem("pendingInvite");
+          }
+          const pendingPmApproved = sessionStorage.getItem("pendingPmApproved");
+          if (pendingPmApproved) {
+            sessionStorage.removeItem("pendingPmApproved");
+            try {
+              const pmReq = await getPmRequest(pendingPmApproved);
+              if (pmReq && pmReq.status === "approved" && pmReq.email === user.email) {
+                let profile2 = await ensureUserProfile(user);
+                if (!profile2) {
+                  const newProfile = await createNewUserProfile(user);
+                  _activeProfile = { ...newProfile, role: "product_manager" };
+                  await updateUserProfile(newProfile.uid, { role: "product_manager" });
+                  profile2 = _activeProfile;
+                } else if (profile2.role === "member") {
+                  await updateUserProfile(profile2.uid, { role: "product_manager" });
+                  profile2 = { ...profile2, role: "product_manager" };
+                  _activeProfile = profile2;
+                } else {
+                  _activeProfile = profile2;
+                }
+                if (profile2) {
+                  const groupId = await createGroup(pmReq.groupName, profile2.uid);
+                  await linkExistingTeamsToGroup(profile2.uid, groupId);
+                  const group = { id: groupId, name: pmReq.groupName, ownerId: profile2.uid, createdAt: (/* @__PURE__ */ new Date()).toISOString() };
+                  showGroupScreen(user, _activeProfile, group, (teamId, teamName) => {
+                    startApp(teamId, _activeProfile, teamName);
+                  });
+                }
+                return;
+              }
+            } catch (e) {
+              console.warn("PM approval flow failed, falling through to normal login:", e);
+            }
+          }
+          const profile = await ensureUserProfile(user);
+          if (!profile) {
+            sessionStorage.setItem("loginError", "No account found. Please use your invitation link to register.");
+            await signOut2();
             return;
           }
           _activeProfile = profile;
@@ -25279,7 +26559,7 @@ They will also be removed from all teams within the group.`)) return;
           });
         } catch (e) {
           console.error("Auth error:", e);
-          showLoginScreen();
+          showLandingPage();
         }
       },
       () => {
@@ -25290,7 +26570,7 @@ They will also be removed from all teams within the group.`)) return;
         hideApp();
         const headerUserInfo = document.getElementById("headerUserInfo");
         if (headerUserInfo) headerUserInfo.hidden = true;
-        showLoginScreen();
+        showLandingPage();
       }
     );
   }
@@ -25727,6 +27007,7 @@ firebase/app/dist/esm/index.esm.js:
    *)
 
 @firebase/auth/dist/esm/index-3398f4bb.js:
+@firebase/functions/dist/esm/index.esm.js:
   (**
    * @license
    * Copyright 2019 Google LLC
@@ -25973,6 +27254,7 @@ firebase/app/dist/esm/index.esm.js:
   *)
 
 @firebase/firestore/dist/common-091f2944.esm.js:
+@firebase/functions/dist/esm/index.esm.js:
   (**
    * @license
    * Copyright 2017 Google LLC

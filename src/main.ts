@@ -19,6 +19,7 @@ import {
   addWorkWeekend,
   removeWorkWeekend,
   getMembers,
+  getMemberPairs,
   replaceMembers,
   setMemberPairs,
   setCurrentTeam,
@@ -28,10 +29,11 @@ import { H_CHART } from "./state.ts";
 import { exportData, exportSprintExcel, importData, exportBacklogExcel, importBacklogExcel } from "./io.ts";
 import { getNextWorkingDay, addWorkingDays, findGaps, todayIso, getWorkingDates, localIso } from "./utils.ts";
 import type { Sprint } from "./types.ts";
-import { isFirebaseConfigured } from "./firebase.ts";
-import { initAuth, ensureUserProfile, createNewUserProfile, signOut, type User } from "./auth.ts";
-import { showLoginScreen, showTeamScreen, showAdminScreen, showGroupScreen, showCreateGroupScreen, hideAllScreens, showProfileEditModal, showRegisterPrompt } from "./screens.ts";
-import { getUserMemo, saveUserMemo, getTeamById, getUsersByIds, getGroupByOwner } from "./db.ts";
+import { isFirebaseConfigured, functions, DECLINE_INVITATION_URL } from "./firebase.ts";
+import { httpsCallable } from "firebase/functions";
+import { initAuth, ensureUserProfile, createNewUserProfile, createAccountWithEmail, signOut, type User } from "./auth.ts";
+import { showLandingPage, showTeamScreen, showAdminScreen, showGroupScreen, showCreateGroupScreen, hideAllScreens, showProfileEditModal } from "./screens.ts";
+import { getUserMemo, saveUserMemo, getTeamById, getUsersByIds, getUserProfile, getGroupByOwner, getInvitation, updateInvitation, addMemberToTeamById, updateUserProfile, getPmRequest, createGroup, linkExistingTeamsToGroup } from "./db.ts";
 import type { UserProfile } from "./types.ts";
 
 setOnStateChange(render);
@@ -173,13 +175,13 @@ const openModal = (mode: "edit" | "create" | "plan-edit", sprint: ModalSprint): 
   dom.modalTitle.textContent = mode === "create" ? "New Sprint" : "Edit Sprint";
   dom.modalSave.textContent = mode === "create" ? "Save & Add Tasks" : mode === "plan-edit" ? "Add/Remove Tasks" : "Save";
   dom.modalDescription.value = sprint.description || "";
-  const memberCount = getMembers().length;
+  const memberCount = getMemberPairs().length;
   if (memberCount > 0) {
     dom.modalDevelopers.max = String(memberCount);
   } else {
     dom.modalDevelopers.removeAttribute("max");
   }
-  dom.modalDevelopers.value = String(Math.min(sprint.developers ?? 4, memberCount || Infinity));
+  dom.modalDevelopers.value = String(memberCount || 1);
   dom.modalEfficiency.value = String(sprint.efficiency ?? 0.8);
   dom.modalError.hidden = true;
   dom.sprintModal.hidden = false;
@@ -203,7 +205,7 @@ dom.modalSave.addEventListener("click", () => {
   const description = dom.modalDescription.value.trim();
   const startDate = dom.modalStartDate.value;
   const endDate = dom.modalEndDate.value;
-  const memberCount = getMembers().length;
+  const memberCount = getMemberPairs().length;
   const developers = memberCount > 0
     ? Math.min(Number(dom.modalDevelopers.value), memberCount)
     : Number(dom.modalDevelopers.value);
@@ -241,9 +243,7 @@ dom.newSprintBtn.addEventListener("click", () => {
   const latestEnd = latestSprint ? latestSprint.endDate : "";
   const start = latestEnd ? getNextWorkingDay(latestEnd) : todayIso();
   const end = addWorkingDays(start, 10);
-  const defaultDevelopers = latestSprint
-    ? latestSprint.developers
-    : state.preferences.members.length || 4;
+  const defaultDevelopers = getMemberPairs().length || 1;
   openModal("create", { description: "", startDate: start, endDate: end, developers: defaultDevelopers, efficiency: 1 });
 });
 
@@ -785,15 +785,22 @@ const startApp = async (teamId: string, profile: UserProfile, teamName: string):
   // Fetch member profiles and sync preferences.members BEFORE setCurrentTeam so that
   // (a) the Firestore load preserves the correct display names, and
   // (b) the echo-suppression window is already open when the first snapshot arrives.
+  // Always clear stale member pairs first so old cached data (including PM) never leaks through
+  setMemberPairs([]);
   try {
     const team = await getTeamById(teamId);
     if (team) {
-      const memberProfiles = await getUsersByIds(team.memberIds);
+      // Use allSettled so a single failed profile fetch doesn't abort the whole list
+      const results = await Promise.allSettled(team.memberIds.map((uid) => getUserProfile(uid)));
+      const memberProfiles = results
+        .filter((r): r is PromiseFulfilledResult<UserProfile> => r.status === "fulfilled" && r.value !== null)
+        .map((r) => r.value as UserProfile);
       _teamMemberProfiles = memberProfiles;
-      setMemberPairs(memberProfiles.map((p) => ({ email: p.email, name: p.displayName })));
-      replaceMembers(memberProfiles.map((p) => p.displayName));
+      const assignableProfiles = memberProfiles.filter((p) => p.role === "member");
+      setMemberPairs(assignableProfiles.map((p) => ({ email: p.email, name: p.displayName })));
+      replaceMembers(assignableProfiles.map((p) => p.displayName));
     }
-  } catch { /* non-critical — preferences.members stays as-is */ }
+  } catch { /* non-critical — member list stays empty */ }
 
   await setCurrentTeam(teamId);
   hideAllScreens();
@@ -822,6 +829,55 @@ document.getElementById("headerUserName")?.addEventListener("click", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// URL parameter handling (invite accept/decline, PM approval)
+// ---------------------------------------------------------------------------
+
+// Helper used in decline flow
+const getContainer = (): HTMLElement => {
+  let el = document.getElementById("screen-overlays");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "screen-overlays";
+    document.body.appendChild(el);
+  }
+  return el;
+};
+
+if (isFirebaseConfigured) {
+  const params = new URLSearchParams(window.location.search);
+  const inviteId = params.get("invite");
+  const inviteAction = params.get("action");
+  const pmApprovedId = params.get("pm_approved");
+
+  if (inviteId && inviteAction === "decline") {
+    // Decline path — no auth needed: POST to the public Cloud Function
+    window.history.replaceState({}, "", "/");
+    hideApp();
+    getContainer().innerHTML = `<div class="screen-overlay"><div class="screen-card login-card"><p>Declining invitation…</p></div></div>`;
+    fetch(DECLINE_INVITATION_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ inviteId }),
+    })
+      .then(() => {
+        getContainer().innerHTML = `<div class="screen-overlay"><div class="screen-card login-card"><h2>Invitation Declined</h2><p class="screen-subtitle">You have declined the invitation. You can close this page.</p></div></div>`;
+      })
+      .catch(() => {
+        getContainer().innerHTML = `<div class="screen-overlay"><div class="screen-card login-card"><p class="screen-error">Failed to decline invitation. Please try again.</p></div></div>`;
+      });
+  } else {
+    if (inviteId && inviteAction === "accept") {
+      sessionStorage.setItem("pendingInvite", inviteId);
+      window.history.replaceState({}, "", "/");
+    }
+    if (pmApprovedId) {
+      sessionStorage.setItem("pendingPmApproved", pmApprovedId);
+      window.history.replaceState({}, "", "/");
+    }
+  }
+}
+
 if (!isFirebaseConfigured) {
   // No Firebase config — legacy single-user mode (localStorage only)
   render();
@@ -831,26 +887,94 @@ if (!isFirebaseConfigured) {
     async (user) => {
       try {
         _activeUser = user;
-        const profile = await ensureUserProfile(user);
-        if (!profile) {
-          // No account found — ask the user to confirm registration
-          showRegisterPrompt(user.email ?? "", async () => {
-            try {
+
+        // --- Handle pending invite acceptance ---
+        const pendingInvite = sessionStorage.getItem("pendingInvite");
+        if (pendingInvite) {
+          const invitation = await getInvitation(pendingInvite);
+          if (invitation && invitation.status === "pending") {
+            // Email mismatch — wrong user is signed in; sign out so the
+            // landing page shows the invitation registration form
+            if (user.email !== invitation.email) {
+              await signOut();
+              return;
+            }
+            sessionStorage.removeItem("pendingInvite");
+            let profile = await ensureUserProfile(user);
+            if (!profile) {
               const newProfile = await createNewUserProfile(user);
               _activeProfile = newProfile;
-              showProfileEditModal(newProfile, true, (updated) => {
-                _activeProfile = updated;
-                showTeamScreen(user, updated, (teamId, teamName) => {
-                  startApp(teamId, updated, teamName);
+              // Show profile edit, then accept invite
+              await new Promise<void>((resolve) => {
+                showProfileEditModal(newProfile, true, async (updated) => {
+                  _activeProfile = updated;
+                  resolve();
                 });
               });
-            } catch (e) {
-              console.error("Registration error:", e);
-              showLoginScreen();
+              profile = _activeProfile;
+            } else {
+              _activeProfile = profile;
             }
-          }, async () => {
-            await signOut();
-          });
+            if (profile) {
+              await updateInvitation(pendingInvite, { status: "accepted" });
+              await updateUserProfile(profile.uid, { groupId: invitation.groupId });
+              for (const teamId of invitation.teamIds) {
+                await addMemberToTeamById(teamId, profile.uid);
+              }
+              _activeProfile = { ...(profile), groupId: invitation.groupId };
+              showTeamScreen(user, _activeProfile, (teamId, teamName) => {
+                startApp(teamId, _activeProfile!, teamName);
+              });
+            }
+            return;
+          }
+          // Invite not found, already used, or expired — clear and fall through
+          sessionStorage.removeItem("pendingInvite");
+        }
+
+        // --- Handle PM approval registration ---
+        const pendingPmApproved = sessionStorage.getItem("pendingPmApproved");
+        if (pendingPmApproved) {
+          sessionStorage.removeItem("pendingPmApproved");
+          try {
+            const pmReq = await getPmRequest(pendingPmApproved);
+            if (pmReq && pmReq.status === "approved" && pmReq.email === user.email) {
+              let profile = await ensureUserProfile(user);
+              if (!profile) {
+                const newProfile = await createNewUserProfile(user);
+                _activeProfile = { ...newProfile, role: "product_manager" };
+                await updateUserProfile(newProfile.uid, { role: "product_manager" } as Parameters<typeof updateUserProfile>[1]);
+                profile = _activeProfile;
+              } else if (profile.role === "member") {
+                await updateUserProfile(profile.uid, { role: "product_manager" } as Parameters<typeof updateUserProfile>[1]);
+                profile = { ...profile, role: "product_manager" };
+                _activeProfile = profile;
+              } else {
+                _activeProfile = profile;
+              }
+              if (profile) {
+                const groupId = await createGroup(pmReq.groupName, profile.uid);
+                await linkExistingTeamsToGroup(profile.uid, groupId);
+                const group = { id: groupId, name: pmReq.groupName, ownerId: profile.uid, createdAt: new Date().toISOString() };
+                showGroupScreen(user, _activeProfile!, group, (teamId, teamName) => {
+                  startApp(teamId, _activeProfile!, teamName);
+                });
+              }
+              return;
+            }
+            // email mismatch or not approved — fall through to normal login
+          } catch (e) {
+            console.warn("PM approval flow failed, falling through to normal login:", e);
+            // fall through to normal login
+          }
+        }
+
+        // --- Normal login flow ---
+        const profile = await ensureUserProfile(user);
+        if (!profile) {
+          // No Firestore profile — not a registered user; sign out and show error
+          sessionStorage.setItem("loginError", "No account found. Please use your invitation link to register.");
+          await signOut();
           return;
         }
         _activeProfile = profile;
@@ -878,7 +1002,7 @@ if (!isFirebaseConfigured) {
         });
       } catch (e) {
         console.error("Auth error:", e);
-        showLoginScreen();
+        showLandingPage();
       }
     },
     () => {
@@ -889,7 +1013,7 @@ if (!isFirebaseConfigured) {
       hideApp();
       const headerUserInfo = document.getElementById("headerUserInfo");
       if (headerUserInfo) headerUserInfo.hidden = true;
-      showLoginScreen();
+      showLandingPage();
     },
   );
 }

@@ -1087,6 +1087,7 @@ export const render = (hints?: number): void => {
   fpProjectToday = flatpickr(dom.projectTodayInput, {
     dateFormat: "Y-m-d",
     disableMobile: true,
+    maxDate: "today",
     disable: [
       (date: Date) => {
         const iso = localIso(date);

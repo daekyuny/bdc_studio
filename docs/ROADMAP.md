@@ -1,7 +1,7 @@
 # Burndown Studio — Project Roadmap
 
-**Version:** 1.0
-**Last updated:** 2026-03-07
+**Version:** 1.2
+**Last updated:** 2026-03-14
 **Status:** Draft — open for review
 
 ---
@@ -9,10 +9,10 @@
 ## Roadmap Overview
 
 ```
-Phase 0 (Done)     Phase 1 (Done)     Phase 2 (Done)     Phase 3            Phase 4 (Done)
-──────────────     ────────────       ────────────       ────────────       ────────────
-MVP baseline       Data Safety        Daily Usability    Insights           Multi-user
-+ Tech Foundation  & Accuracy                            & History          & Integrations
+Phase 0 (Done)     Phase 1 (Done)     Phase 2 (Done)     Phase 3            Phase 4 (Done)     Phase 5 (Done)
+──────────────     ────────────       ────────────       ────────────       ────────────       ────────────
+MVP baseline       Data Safety        Daily Usability    Insights           Multi-user         SaaS Hardening
++ Tech Foundation  & Accuracy                            & History          & Integrations     & Onboarding
 ```
 
 ---
@@ -175,6 +175,39 @@ MVP baseline       Data Safety        Daily Usability    Insights           Mult
 
 ---
 
+---
+
+## Phase 5 — SaaS Hardening & Onboarding (DONE)
+
+**Goal:** Make onboarding self-service and robust; harden multi-team isolation, project TODAY semantics, and CI/CD.
+
+### Delivered
+
+| ID | Feature | Status | Description |
+|---|---|---|---|
+| F-501 | Invitation registration page | **Done** | Dedicated page for invited members: password + Google Sign-In (all domains incl. Workspace); no "existing sign-in" option; displayed from landing page when `pendingInvite` in sessionStorage |
+| F-502 | Wrong-user guard on invite accept | **Done** | If a different user is signed in when an invite link is opened, they are signed out; invite page is shown for the correct email |
+| F-503 | Landing page error handling | **Done** | Unknown sign-ins display an error message (via sessionStorage `loginError`) and sign out instead of prompting "create account" |
+| F-504 | "Add Group Members" in Manage Members | **Done** | PM can add already-accepted group members to a team from the Manage Members modal without re-inviting |
+| F-505 | PM member removal warning dialog | **Done** | Removing a member who has assigned tasks shows a warning dialog listing the tasks; PM can proceed or cancel |
+| F-506 | PM display name edit | **Done** | "Edit" on the Group screen opens a modal with both the Group name field and a "Your Name" field for the PM's display name |
+| F-507 | Project TODAY capped at today | **Done** | Flatpickr `maxDate: "today"` prevents selecting future dates for project TODAY |
+| F-508 | Project TODAY resets to most recent workday | **Done** | `getMostRecentWorkingDay()` in `utils.ts` — page load sets projectToday to the most recent non-weekend, non-holiday day (not always real today) |
+| F-509 | Sprint default developers = team member count | **Done** | "Add Sprint" and "Edit Sprint" default developer count = `getMemberPairs().length` (role=member only, PM excluded) |
+| F-510 | Team data isolation fix | **Done** | `setCurrentTeam` cancels pending debounce save before replacing state; new teams with no Firestore data start with `defaultState()` |
+| F-511 | Resilient member profile loading | **Done** | `Promise.allSettled` prevents one failed profile fetch from aborting the entire team load; `setMemberPairs([])` clears stale cache before loading |
+| F-512 | GitHub Actions CI/CD | **Done** | CI workflow: typecheck + test on every push; deploy workflow: build + Firebase Hosting auto-deploy on push to `main` |
+
+### Also Delivered
+- `/invitations` Firestore collection (`allow read: if true` for unauthenticated registration page)
+- `/users` Firestore rule changed to `request.auth != null` (was per-uid check with `isProductManager()`)
+- `isProductManager()` helper removed from `firestore.rules` (unused, caused warnings)
+- Future plan documented: multi-group membership (freelancer belonging to multiple groups via `groupId[]`)
+
+**Delivered:** 2026-03-14
+
+---
+
 ## Effort Estimates Key
 
 | Label | Meaning |
@@ -201,3 +234,4 @@ MVP baseline       Data Safety        Daily Usability    Insights           Mult
 | 2026-03-03 | 0.9 | Marked T-302 (TypeScript migration) as Done. Updated F-204 description: scope line uses per-task workedLog/remainLog instead of sprint-level scopeLog. |
 | 2026-03-06 | 1.0 | Phase 4 shipped: F-401/F-402/F-403 marked Done. Phase 2 marked Done. Updated roadmap overview. Added "Also Delivered" section for Phase 4 extras (user profiles, memos, multi-assign, pickers, sign-in UX). |
 | 2026-03-07 | 1.1 | Extended "Also Delivered" for Phase 4: burndown N+1 border model, last-day Move/Split, login register prompt, projectToday holiday skip, admin enhancements, member removal guards. |
+| 2026-03-14 | 1.2 | Added Phase 5 (SaaS Hardening & Onboarding): invitation registration page, wrong-user guard, landing page error handling, "Add Group Members", PM removal warning dialog, PM display name edit, projectToday future-date cap, getMostRecentWorkingDay, sprint defaults by member count, team data isolation fix, resilient member loading, GitHub Actions CI/CD. Updated roadmap overview to include Phase 5. |

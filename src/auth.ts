@@ -13,8 +13,6 @@ import type { UserProfile } from "./types.ts";
 
 export type { User };
 
-const DEV_PASSWORD = "dev-local-123";
-
 export const initAuth = (
   onLogin: (user: User) => void,
   onLogout: () => void,
@@ -33,19 +31,12 @@ export const signInWithGoogle = async (): Promise<void> => {
   await signInWithPopup(auth, provider);
 };
 
-export const signInWithFakeEmail = async (email: string): Promise<void> => {
-  if (window.location.hostname !== "localhost") return;
-  try {
-    // Try creating the account first; if it already exists, sign in instead
-    await createUserWithEmailAndPassword(auth, email, DEV_PASSWORD);
-  } catch (err: unknown) {
-    const code = (err as { code?: string }).code;
-    if (code === "auth/email-already-in-use") {
-      await signInWithEmailAndPassword(auth, email, DEV_PASSWORD);
-    } else {
-      throw err;
-    }
-  }
+export const signInWithEmail = async (email: string, password: string): Promise<void> => {
+  await signInWithEmailAndPassword(auth, email, password);
+};
+
+export const createAccountWithEmail = async (email: string, password: string): Promise<void> => {
+  await createUserWithEmailAndPassword(auth, email, password);
 };
 
 export const signOut = async (): Promise<void> => {

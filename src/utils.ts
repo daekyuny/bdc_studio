@@ -56,6 +56,25 @@ export const formatSprintRange = (sprint: Pick<Sprint, "startDate" | "endDate">)
 
 export const createId = (): string => crypto.randomUUID();
 
+// Returns today if it's a working day, otherwise the most recent working day before today.
+export const getMostRecentWorkingDay = (
+  holidays?: Set<string>,
+  workWeekends?: Set<string>,
+): string => {
+  const d = new Date();
+  while (true) {
+    const day = d.getDay();
+    const iso = localIso(d);
+    const isWeekend = day === 0 || day === 6;
+    if (isWeekend) {
+      if (workWeekends && workWeekends.has(iso)) return iso;
+    } else {
+      if (!holidays || !holidays.has(iso)) return iso;
+    }
+    d.setDate(d.getDate() - 1);
+  }
+};
+
 export const getNextWorkingDay = (
   isoDate: string,
   holidays?: Set<string>,

@@ -15,7 +15,7 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "./firebase.ts";
-import type { AppState, UserProfile, Team, UserRole, Group } from "./types.ts";
+import type { AppState, UserProfile, Team, UserRole, Group, Invitation, PmRequest } from "./types.ts";
 
 // --- User Profile ---
 
@@ -308,4 +308,50 @@ export const linkExistingTeamsToGroup = async (ownerId: string, groupId: string)
       } catch { /* ignore missing profiles */ }
     }),
   );
+};
+
+// --- Invitations ---
+
+export const createInvitation = async (inv: Omit<Invitation, "id">): Promise<string> => {
+  const ref = doc(collection(db, "invitations"));
+  await setDoc(ref, inv);
+  return ref.id;
+};
+
+export const getInvitation = async (inviteId: string): Promise<(Invitation & { id: string }) | null> => {
+  const snap = await getDoc(doc(db, "invitations", inviteId));
+  return snap.exists() ? ({ id: snap.id, ...snap.data() } as Invitation & { id: string }) : null;
+};
+
+export const updateInvitation = async (inviteId: string, updates: Partial<Invitation>): Promise<void> => {
+  await updateDoc(doc(db, "invitations", inviteId), updates as Record<string, unknown>);
+};
+
+export const getInvitationsByGroup = async (groupId: string): Promise<(Invitation & { id: string })[]> => {
+  const snap = await getDocs(
+    query(collection(db, "invitations"), where("groupId", "==", groupId)),
+  );
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Invitation & { id: string }));
+};
+
+// --- PM Requests ---
+
+export const createPmRequest = async (req: Omit<PmRequest, "id">): Promise<string> => {
+  const ref = doc(collection(db, "pm_requests"));
+  await setDoc(ref, req);
+  return ref.id;
+};
+
+export const getPmRequest = async (requestId: string): Promise<(PmRequest & { id: string }) | null> => {
+  const snap = await getDoc(doc(db, "pm_requests", requestId));
+  return snap.exists() ? ({ id: snap.id, ...snap.data() } as PmRequest & { id: string }) : null;
+};
+
+export const getAllPmRequests = async (): Promise<(PmRequest & { id: string })[]> => {
+  const snap = await getDocs(collection(db, "pm_requests"));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as PmRequest & { id: string }));
+};
+
+export const updatePmRequest = async (requestId: string, updates: Partial<PmRequest>): Promise<void> => {
+  await updateDoc(doc(db, "pm_requests", requestId), updates as Record<string, unknown>);
 };

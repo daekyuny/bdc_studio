@@ -144,3 +144,25 @@ export interface Group {
   ownerId: string;
   createdAt: string;
 }
+
+export interface Invitation {
+  email: string;
+  groupId: string;
+  teamIds: string[];
+  invitedBy: string;
+  status: "pending" | "accepted" | "declined";
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface PmRequest {
+  email: string;
+  displayName: string;
+  groupName: string;
+  organization: string;
+  description: string;
+  status: "pending" | "approved" | "rejected";
+  createdAt: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+}
