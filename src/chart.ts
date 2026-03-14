@@ -215,15 +215,13 @@ export const drawChart = (
   actualLine.style.animation = "dash 1.6s ease forwards";
   dom.chart.appendChild(actualLine);
 
-  // Actual line projected flat extension from last recorded value to sprint end
+  // Actual line projected flat extension from last recorded value to sprint end (solid)
   const actualLast = lastNonNull(actual);
   if (actualLast && actualLast.idx < N) {
     const projLine = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
     projLine.setAttribute("fill", "none");
     projLine.setAttribute("stroke", "#ef4444");
-    projLine.setAttribute("stroke-width", "1");
-    projLine.setAttribute("stroke-dasharray", "3 4");
-    projLine.setAttribute("opacity", "0.4");
+    projLine.setAttribute("stroke-width", "1.5");
     projLine.setAttribute("points", `${toPoint(actualLast.val, actualLast.idx)} ${toPoint(actualLast.val, N)}`);
     dom.chart.appendChild(projLine);
   }

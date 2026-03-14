@@ -22690,9 +22690,7 @@ ${marker.label}`;
       const projLine = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
       projLine.setAttribute("fill", "none");
       projLine.setAttribute("stroke", "#ef4444");
-      projLine.setAttribute("stroke-width", "1");
-      projLine.setAttribute("stroke-dasharray", "3 4");
-      projLine.setAttribute("opacity", "0.4");
+      projLine.setAttribute("stroke-width", "1.5");
       projLine.setAttribute("points", `${toPoint(actualLast.val, actualLast.idx)} ${toPoint(actualLast.val, N2)}`);
       dom.chart.appendChild(projLine);
     }
