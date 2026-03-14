@@ -26,6 +26,8 @@ import {
   getPmRequest,
   getAllPmRequests,
   updatePmRequest,
+  getAppSettings,
+  setAppSetting,
 } from "./db.ts";
 import { httpsCallable } from "firebase/functions";
 import { functions } from "./firebase.ts";
@@ -90,32 +92,44 @@ export const showLandingPage = (): void => {
   const loginError = sessionStorage.getItem("loginError");
   if (loginError) sessionStorage.removeItem("loginError");
 
-  let bannerHtml = "";
+  const burndownLogoSvg = `
+    <svg width="44" height="44" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <line x1="6" y1="38" x2="38" y2="38" stroke="#ddd" stroke-width="1.2"/>
+      <line x1="6" y1="6" x2="6" y2="38" stroke="#ddd" stroke-width="1.2"/>
+      <line x1="6" y1="8" x2="38" y2="36" stroke="#6c7ee1" stroke-width="1.5" stroke-dasharray="3,2" opacity="0.7"/>
+      <polyline points="6,8 13,13 19,18 25,16 31,26 38,30" stroke="#e06c75" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`;
 
   getContainer().innerHTML = `
     <div class="screen-overlay" id="landingScreen">
       <div class="landing-layout">
+
         <div class="landing-brand">
-          <h1 class="landing-title">Burndown Studio</h1>
-          <p class="landing-subtitle">Sprint burndown tracking for teams</p>
+          <div class="landing-logo">${burndownLogoSvg}</div>
+          <div>
+            <h1 class="landing-title">Burndown Studio</h1>
+            <p class="landing-subtitle">Sprint burndown tracking for teams</p>
+          </div>
         </div>
-        ${bannerHtml}
+
         <div class="landing-card">
           <p class="landing-card-label">Already a user?</p>
-          <div class="login-form">
-            <input type="email" id="landingEmail" class="screen-input" placeholder="Email" autocomplete="email" />
-            <input type="password" id="landingPassword" class="screen-input" placeholder="Password" autocomplete="current-password" />
+          <input type="email" id="landingEmail" class="screen-input" placeholder="Email" autocomplete="email" />
+          <input type="password" id="landingPassword" class="screen-input" placeholder="Password" autocomplete="current-password" />
+          <div class="landing-signin-row">
             <button class="btn" id="landingSignInBtn">Sign In</button>
           </div>
           <div class="login-divider"><span>or</span></div>
           <button class="login-google-btn" id="loginGoogleBtn">${googleSvg} Sign in with Google</button>
           <div class="screen-error" id="loginError"${loginError ? "" : " hidden"}>${loginError ? escapeHtml(loginError) : ""}</div>
         </div>
+
         <div class="landing-card landing-pm-card">
-          <p class="landing-card-label">Want to bring your team?</p>
-          <p class="pref-hint" style="margin:0 0 12px">Apply for a PM account to create your group and manage teams.</p>
+          <p class="landing-pm-title">Want to bring your team?</p>
+          <p class="landing-pm-sub">Apply for a PM account to create your group and manage teams.</p>
           <button class="btn ghost" id="requestPmBtn">Request PM Account</button>
         </div>
+
       </div>
     </div>
   `;
@@ -152,7 +166,17 @@ export const showLandingPage = (): void => {
       errEl().hidden = false;
     }
   });
-  document.getElementById("requestPmBtn")!.addEventListener("click", () => showPmRequestForm());
+  const requestPmBtn = document.getElementById("requestPmBtn") as HTMLButtonElement;
+  requestPmBtn.addEventListener("click", () => showPmRequestForm());
+
+  // Disable "Request PM Account" if SM has turned off PM requests
+  getAppSettings().then((settings) => {
+    if (settings.pmRequestDisabled) {
+      requestPmBtn.disabled = true;
+      requestPmBtn.title = "PM account requests are currently closed.";
+      requestPmBtn.textContent = "Requests Closed";
+    }
+  }).catch(() => { /* silently ignore — button stays enabled on error */ });
 };
 
 // Dedicated page shown when arriving via the PM approval email link
@@ -1082,7 +1106,7 @@ const loadAdminSection = (section: string): void => {
     void loadAdminGroups();
   } else if (section === "requests") {
     title.textContent = "PM Requests";
-    content.innerHTML = `<div id="adminRequestTable" class="admin-table-wrap"><em>Loading requests…</em></div>`;
+    content.innerHTML = `<div id="adminRequestsToggle"></div><div id="adminRequestTable" class="admin-table-wrap"><em>Loading requests…</em></div>`;
     void loadAdminRequests();
   }
 };
@@ -1140,7 +1164,33 @@ const loadAdminRequests = async (): Promise<void> => {
   const tableEl = document.getElementById("adminRequestTable");
   if (!tableEl) return;
   try {
-    const requests = await getAllPmRequests();
+    const [requests, settings] = await Promise.all([getAllPmRequests(), getAppSettings()]);
+    const pmRequestDisabled = !!settings.pmRequestDisabled;
+
+    // Render the on/off toggle above the table
+    const toggleContainer = document.getElementById("adminRequestsToggle");
+    if (toggleContainer) {
+      toggleContainer.innerHTML = `
+        <div class="admin-setting-row">
+          <label class="toggle" style="cursor:pointer;gap:10px">
+            <input type="checkbox" id="pmRequestDisabledChk" ${pmRequestDisabled ? "checked" : ""} />
+            <span style="font-size:0.9rem">Disable PM Account Requests</span>
+          </label>
+          <p class="pref-hint" style="margin:4px 0 0 26px">When checked, the "Request PM Account" button on the landing page is disabled.</p>
+        </div>
+      `;
+      const chk = document.getElementById("pmRequestDisabledChk") as HTMLInputElement;
+      chk.addEventListener("change", async () => {
+        chk.disabled = true;
+        try {
+          await setAppSetting("pmRequestDisabled", chk.checked);
+        } catch {
+          chk.checked = !chk.checked; // revert on error
+        } finally {
+          chk.disabled = false;
+        }
+      });
+    }
     // Sort: pending first, then by createdAt desc
     requests.sort((a, b) => {
       if (a.status === "pending" && b.status !== "pending") return -1;

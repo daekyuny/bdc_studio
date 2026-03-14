@@ -45,6 +45,12 @@ service cloud.firestore {
       allow update: if request.auth != null;
     }
 
+    // App settings: anyone can read (landing page checks before login); only SM can write
+    match /settings/{docId} {
+      allow read: if true;
+      allow write: if isSuperManager();
+    }
+
     match /pm_requests/{id} {
       allow create: if true;
       // read: SM can read all; unauthenticated can read individual docs by ID

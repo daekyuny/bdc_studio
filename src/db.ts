@@ -355,3 +355,14 @@ export const getAllPmRequests = async (): Promise<(PmRequest & { id: string })[]
 export const updatePmRequest = async (requestId: string, updates: Partial<PmRequest>): Promise<void> => {
   await updateDoc(doc(db, "pm_requests", requestId), updates as Record<string, unknown>);
 };
+
+// --- App Settings ---
+
+export const getAppSettings = async (): Promise<{ pmRequestDisabled?: boolean }> => {
+  const snap = await getDoc(doc(db, "settings", "app"));
+  return snap.exists() ? (snap.data() as { pmRequestDisabled?: boolean }) : {};
+};
+
+export const setAppSetting = async (key: string, value: unknown): Promise<void> => {
+  await setDoc(doc(db, "settings", "app"), { [key]: value }, { merge: true });
+};

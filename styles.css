@@ -1803,6 +1803,88 @@ th.sortable.sort-desc::after {
   width: 100%;
 }
 
+/* Landing page layout */
+.landing-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 420px;
+}
+
+.landing-brand {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 4px 4px;
+}
+
+.landing-logo {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  border: 1.5px solid rgba(0, 0, 0, 0.12);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
+}
+
+.landing-title {
+  font-size: 1.7rem;
+  margin: 0 0 2px;
+  line-height: 1.2;
+}
+
+.landing-subtitle {
+  color: var(--muted, #888);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.landing-card {
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.landing-card-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted, #777);
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.landing-signin-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.landing-pm-card {
+  background: #f9f9fb;
+}
+
+.landing-pm-title {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0;
+  color: #222;
+}
+
+.landing-pm-sub {
+  font-size: 0.85rem;
+  color: var(--muted, #888);
+  margin: 0;
+}
+
 /* Login */
 .login-card {
   max-width: 420px;
@@ -1830,19 +1912,24 @@ th.sortable.sort-desc::after {
 .login-google-btn {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 5px 14px;
-  font-size: 0.82rem;
+  gap: 5px;
+  padding: 3px 10px;
+  font-size: 0.9rem;
   font-weight: 400;
   line-height: 1;
   white-space: nowrap;
-  color: #444;
+  color: #555;
   background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(0, 0, 0, 0.18);
   border-radius: 999px;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.07);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
   cursor: pointer;
   transition: background 0.15s, box-shadow 0.15s;
+}
+
+.login-google-btn svg {
+  width: 18px;
+  height: 18px;
 }
 
 .login-google-btn:hover {
@@ -2194,6 +2281,12 @@ th.sortable.sort-desc::after {
 
 .admin-table-wrap {
   overflow-x: auto;
+}
+
+.admin-setting-row {
+  padding: 14px 0 18px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+  margin-bottom: 16px;
 }
 
 .admin-table {
