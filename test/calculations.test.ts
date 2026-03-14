@@ -337,12 +337,15 @@ describe("calculateBurndown", () => {
     assert.equal(typeof result.todayIndex, "number");
   });
 
-  it("computes correct dates including extra day after sprint end", () => {
+  it("computes correct working dates for sprint range", () => {
     const result = calculateBurndown(makeSprint(), "2026-01-07");
-    assert.equal(result.dates.length, 6);
+    // 5 working days Mon–Fri Jan 5–9; no extra day in dates array
+    assert.equal(result.dates.length, 5);
     assert.equal(result.dates[0], "2026-01-05");
     assert.equal(result.dates[4], "2026-01-09");
-    assert.equal(result.dates[5], "2026-01-12");
+    // ideal/actual arrays have N+1 = 6 borders
+    assert.equal(result.ideal.length, 6);
+    assert.equal(result.actual.length, 6);
   });
 
   it("handles zero tasks", () => {
@@ -388,12 +391,14 @@ describe("calculateBurndown", () => {
     const sprint = makeSprint({ tasks });
     const result = calculateBurndown(sprint, "2026-01-09");
     assert.equal(result.totalPoints, 10);
-    // done tasks have remain=0, only task3's remain=2 is counted for undone tasks
-    assert.equal(result.actual[0], 2);
-    assert.equal(result.actual[1], 2);
-    assert.equal(result.actual[2], 2);
-    assert.equal(result.actual[3], 2);
-    assert.equal(result.actual[4], 2);
+    // N+1 model: actual[0] = initialScope (sum of all estimates), actual[i+1] = remain at end of dates[i]
+    assert.equal(result.actual[0], 10);  // initialScope = 5+3+2
+    // task1 done on Jan5, task2 done on Jan7; task3 remain=2 throughout
+    assert.equal(result.actual[1], 2);   // end of Jan5: task1 done→0, task2 remain=0, task3→2
+    assert.equal(result.actual[2], 2);   // end of Jan6
+    assert.equal(result.actual[3], 2);   // end of Jan7: task2 done→0, task3→2
+    assert.equal(result.actual[4], 2);   // end of Jan8
+    assert.equal(result.actual[5], 2);   // end of Jan9
   });
 
   it("actual line uses task.remain for in-progress tasks", () => {
@@ -403,8 +408,10 @@ describe("calculateBurndown", () => {
     const sprint = makeSprint({ tasks });
     const result = calculateBurndown(sprint, "2026-01-09");
     assert.equal(result.totalPoints, 5);
-    // remain=2 is the actual remaining work
-    assert.equal(result.actual[0], 2);
+    // actual[0] = initialScope = estimate = 5 (before any work logged)
+    assert.equal(result.actual[0], 5);
+    // actual[1..] = task.remain = 2 (no remainLog, uses top-level remain)
+    assert.equal(result.actual[1], 2);
   });
 
   it("actual line is null for days after today", () => {
@@ -413,10 +420,12 @@ describe("calculateBurndown", () => {
     });
     const result = calculateBurndown(sprint, "2026-01-07");
     assert.equal(result.todayIndex, 2);
+    // N+1 model: actual[0..todayIndex+1] are non-null (borders 0 through todayIndex+1)
     assert.notEqual(result.actual[0], null);
     assert.notEqual(result.actual[1], null);
     assert.notEqual(result.actual[2], null);
-    assert.equal(result.actual[3], null);
+    assert.notEqual(result.actual[3], null);  // todayIndex+1 = 3 is also filled
+    // actual[todayIndex+2..] are null
     assert.equal(result.actual[4], null);
     assert.equal(result.actual[5], null);
   });
@@ -468,7 +477,8 @@ describe("calculateBurndown", () => {
       tasks: [{ id: "1", name: "a", estimate: 6, worked: 0, remain: 6, status: "Todo" as const, doneDate: "" }],
     });
     const result = calculateBurndown(sprint, "2026-01-09", holidays);
-    assert.equal(result.dates.length, 4);
+    // 5 working days minus 2 holidays = 3 dates
+    assert.equal(result.dates.length, 3);
     assert.ok(!result.dates.includes("2026-01-07"));
     assert.ok(!result.dates.includes("2026-01-08"));
   });
