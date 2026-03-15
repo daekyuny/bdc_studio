@@ -150,7 +150,7 @@ export interface Invitation {
   groupId: string;
   teamIds: string[];
   invitedBy: string;
-  status: "pending" | "accepted" | "declined";
+  status: "pending" | "accepted" | "declined" | "cancelled";
   createdAt: string;
   expiresAt: string;
 }

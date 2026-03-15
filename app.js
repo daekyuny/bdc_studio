@@ -21773,6 +21773,9 @@ This typically indicates that your device does not have a healthy Internet conne
     const snap = await getDoc(doc(db, "invitations", inviteId));
     return snap.exists() ? { id: snap.id, ...snap.data() } : null;
   };
+  var updateInvitation = async (inviteId, updates) => {
+    await updateDoc(doc(db, "invitations", inviteId), updates);
+  };
   var getInvitationsByGroup = async (groupId) => {
     const snap = await getDocs(
       query(collection(db, "invitations"), where("groupId", "==", groupId))
@@ -24902,8 +24905,23 @@ All shared sprint data for this team will be permanently removed.`)) return;
               <span class="member-email">${escapeHtml(inv.email)}</span>
               <span class="member-role-badge" style="margin-left:8px">pending</span>
             </div>
+            <button class="btn ghost" data-cancel-invite="${inv.id}" style="font-size:0.8em;padding:2px 8px">Cancel</button>
           </div>
         `).join("");
+          pendingEl.querySelectorAll("[data-cancel-invite]").forEach((btn) => {
+            btn.addEventListener("click", async () => {
+              const id = btn.dataset.cancelInvite;
+              btn.disabled = true;
+              btn.textContent = "Cancelling\u2026";
+              try {
+                await updateInvitation(id, { status: "cancelled" });
+                void refreshPendingInvites();
+              } catch {
+                btn.disabled = false;
+                btn.textContent = "Cancel";
+              }
+            });
+          });
         }
       } catch {
         pendingEl.innerHTML = "<em>Failed to load.</em>";
@@ -24929,10 +24947,11 @@ All shared sprint data for this team will be permanently removed.`)) return;
       const btn = document.getElementById("inviteSendBtn");
       btn.disabled = true;
       btn.textContent = "Sending\u2026";
+      let inviteId = null;
       try {
         const now = /* @__PURE__ */ new Date();
         const expires = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1e3);
-        const inviteId = await createInvitation({
+        inviteId = await createInvitation({
           email,
           groupId,
           teamIds: [team.id],
@@ -24948,6 +24967,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
         successEl.hidden = false;
         void refreshPendingInvites();
       } catch (e) {
+        if (inviteId) void updateInvitation(inviteId, { status: "cancelled" });
         errInvEl.textContent = e instanceof Error ? e.message : "Failed to send invitation.";
         errInvEl.hidden = false;
       } finally {
@@ -25744,10 +25764,11 @@ All sprint data for this team will be permanently removed.`)) return;
       const confirmBtn = document.getElementById("groupInviteConfirm");
       confirmBtn.disabled = true;
       confirmBtn.textContent = "Sending\u2026";
+      let inviteId = null;
       try {
         const now = /* @__PURE__ */ new Date();
         const expires = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1e3);
-        const inviteId = await createInvitation({
+        inviteId = await createInvitation({
           email,
           groupId: group.id,
           teamIds: [],
@@ -25762,6 +25783,7 @@ All sprint data for this team will be permanently removed.`)) return;
         successEl.hidden = false;
         document.getElementById("groupInviteEmail").value = "";
       } catch (e) {
+        if (inviteId) void updateInvitation(inviteId, { status: "cancelled" });
         errEl.textContent = e instanceof Error ? e.message : "Failed to send invitation.";
         errEl.hidden = false;
       } finally {
@@ -26664,13 +26686,8 @@ They will also be removed from all teams within the group.`)) return;
               }
               if (profile2) {
                 const acceptInv = httpsCallable(functions, "acceptInvitation");
-                const result = await acceptInv({ inviteId: pendingInvite });
+                await acceptInv({ inviteId: pendingInvite });
                 _activeProfile = { ...profile2, groupId: invitation.groupId };
-                if (result.data.teamId) {
-                  hideAllScreens();
-                  startApp(result.data.teamId, _activeProfile, result.data.teamName ?? "");
-                  return;
-                }
                 showTeamScreen(user, _activeProfile, (teamId, teamName) => {
                   startApp(teamId, _activeProfile, teamName);
                 });

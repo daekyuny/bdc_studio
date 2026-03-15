@@ -933,14 +933,8 @@ if (!isFirebaseConfigured) {
               // marks invitation accepted, sets groupId, adds to team(s).
               // This avoids the Firestore rule that blocks client-side team updates.
               const acceptInv = httpsCallable<{ inviteId: string }, { teamId: string | null; teamName: string | null }>(functions, "acceptInvitation");
-              const result = await acceptInv({ inviteId: pendingInvite });
+              await acceptInv({ inviteId: pendingInvite });
               _activeProfile = { ...profile, groupId: invitation.groupId };
-              // If invited directly to a single team, skip team selection and go straight in
-              if (result.data.teamId) {
-                hideAllScreens();
-                startApp(result.data.teamId, _activeProfile!, result.data.teamName ?? "");
-                return;
-              }
               showTeamScreen(user, _activeProfile, (teamId, teamName) => {
                 startApp(teamId, _activeProfile!, teamName);
               });

@@ -21,6 +21,7 @@ import {
   linkExistingTeamsToGroup,
   createInvitation,
   getInvitation,
+  updateInvitation,
   getInvitationsByGroup,
   createPmRequest,
   getPmRequest,
@@ -1007,8 +1008,23 @@ const showManageMembers = (team: Team, profile: UserProfile, onDone?: () => void
               <span class="member-email">${escapeHtml(inv.email)}</span>
               <span class="member-role-badge" style="margin-left:8px">pending</span>
             </div>
+            <button class="btn ghost" data-cancel-invite="${inv.id}" style="font-size:0.8em;padding:2px 8px">Cancel</button>
           </div>
         `).join("");
+        pendingEl.querySelectorAll<HTMLButtonElement>("[data-cancel-invite]").forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            const id = btn.dataset.cancelInvite!;
+            btn.disabled = true;
+            btn.textContent = "Cancelling…";
+            try {
+              await updateInvitation(id, { status: "cancelled" });
+              void refreshPendingInvites();
+            } catch {
+              btn.disabled = false;
+              btn.textContent = "Cancel";
+            }
+          });
+        });
       }
     } catch {
       pendingEl.innerHTML = "<em>Failed to load.</em>";
@@ -1036,10 +1052,11 @@ const showManageMembers = (team: Team, profile: UserProfile, onDone?: () => void
     const btn = document.getElementById("inviteSendBtn") as HTMLButtonElement;
     btn.disabled = true;
     btn.textContent = "Sending…";
+    let inviteId: string | null = null;
     try {
       const now = new Date();
       const expires = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-      const inviteId = await createInvitation({
+      inviteId = await createInvitation({
         email,
         groupId,
         teamIds: [team.id],
@@ -1055,6 +1072,8 @@ const showManageMembers = (team: Team, profile: UserProfile, onDone?: () => void
       successEl.hidden = false;
       void refreshPendingInvites();
     } catch (e: unknown) {
+      // Email failed — cancel the orphaned invitation doc so it doesn't linger
+      if (inviteId) void updateInvitation(inviteId, { status: "cancelled" });
       errInvEl.textContent = e instanceof Error ? e.message : "Failed to send invitation.";
       errInvEl.hidden = false;
     } finally {
@@ -1930,10 +1949,11 @@ const showInviteMemberModal = (group: Group, profile: UserProfile, onDone: () =>
     const confirmBtn = document.getElementById("groupInviteConfirm") as HTMLButtonElement;
     confirmBtn.disabled = true;
     confirmBtn.textContent = "Sending…";
+    let inviteId: string | null = null;
     try {
       const now = new Date();
       const expires = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-      const inviteId = await createInvitation({
+      inviteId = await createInvitation({
         email,
         groupId: group.id,
         teamIds: [],
@@ -1948,6 +1968,8 @@ const showInviteMemberModal = (group: Group, profile: UserProfile, onDone: () =>
       successEl.hidden = false;
       (document.getElementById("groupInviteEmail") as HTMLInputElement).value = "";
     } catch (e: unknown) {
+      // Email failed — cancel the orphaned invitation doc so it doesn't linger
+      if (inviteId) void updateInvitation(inviteId, { status: "cancelled" });
       errEl.textContent = e instanceof Error ? e.message : "Failed to send invitation.";
       errEl.hidden = false;
     } finally {
