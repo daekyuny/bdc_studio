@@ -44,6 +44,12 @@ export const updateUserProfile = async (
   if ("groupId" in updates && updates.groupId === null) {
     firestoreUpdates.groupId = deleteField();
   }
+  if ("photoThumb" in updates && updates.photoThumb === null) {
+    firestoreUpdates.photoThumb = deleteField();
+  }
+  if ("photoFull" in updates && updates.photoFull === null) {
+    firestoreUpdates.photoFull = deleteField();
+  }
   await updateDoc(doc(db, "users", uid), firestoreUpdates);
 };
 
@@ -231,6 +237,11 @@ export const createGroup = async (name: string, ownerId: string): Promise<string
   await setDoc(ref, { name, ownerId, createdAt: new Date().toISOString() });
   await updateDoc(doc(db, "users", ownerId), { groupId: ref.id });
   return ref.id;
+};
+
+export const getGroupById = async (groupId: string): Promise<Group | null> => {
+  const snap = await getDoc(doc(db, "groups", groupId));
+  return snap.exists() ? ({ id: snap.id, ...snap.data() } as Group) : null;
 };
 
 export const getGroupByOwner = async (ownerId: string): Promise<Group | null> => {

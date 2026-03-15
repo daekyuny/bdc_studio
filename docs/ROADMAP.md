@@ -1,7 +1,7 @@
 # Burndown Studio — Project Roadmap
 
-**Version:** 1.2
-**Last updated:** 2026-03-14
+**Version:** 1.3
+**Last updated:** 2026-03-16
 **Status:** Draft — open for review
 
 ---
@@ -9,10 +9,10 @@
 ## Roadmap Overview
 
 ```
-Phase 0 (Done)     Phase 1 (Done)     Phase 2 (Done)     Phase 3            Phase 4 (Done)     Phase 5 (Done)
-──────────────     ────────────       ────────────       ────────────       ────────────       ────────────
-MVP baseline       Data Safety        Daily Usability    Insights           Multi-user         SaaS Hardening
-+ Tech Foundation  & Accuracy                            & History          & Integrations     & Onboarding
+Phase 0 (Done)     Phase 1 (Done)     Phase 2 (Done)     Phase 3            Phase 4 (Done)     Phase 5 (Done)     Phase 6 (Done)
+──────────────     ────────────       ────────────       ────────────       ────────────       ────────────       ────────────
+MVP baseline       Data Safety        Daily Usability    Insights           Multi-user         SaaS Hardening     User Profiles
++ Tech Foundation  & Accuracy                            & History          & Integrations     & Onboarding       & Avatars
 ```
 
 ---
@@ -208,6 +208,30 @@ MVP baseline       Data Safety        Daily Usability    Insights           Mult
 
 ---
 
+## Phase 6 — User Profiles & Avatars (DONE)
+
+**Goal:** Give every user a face — profile photos with fallback avatars, shown consistently throughout the app.
+
+### Delivered
+
+| ID | Feature | Status | Description |
+|---|---|---|---|
+| F-601 | Profile photo upload | **Done** | Client-side canvas resize to 640px (full) + 80px (thumb); stored as base64 JPEG in Firestore user doc (`photoFull`, `photoThumb`); remove button clears both fields |
+| F-602 | Initial-letter avatar fallback | **Done** | Canvas-drawn colored circle with user's initial; deterministic color from name hash; module-level cache keyed by name+size |
+| F-603 | `avatarSrc()` helper | **Done** | Exported from `screens.ts`; returns `photoFull` (≥80px), else `photoThumb`, else generated avatar |
+| F-604 | Full-size photo popup | **Done** | `showPhotoPopup(src)` exported; click avatar/thumbnail anywhere in the app to view full size; dismiss with Escape or click outside |
+| F-605 | Change password | **Done** | Sub-modal in edit profile (email accounts only, hidden for Google sign-in); reauthenticate with current password before updating |
+| F-606 | Avatar in app header | **Done** | 24px circle left of user name in BDS header; set via `updateHeaderUser` in `main.ts` |
+| F-607 | Avatar strip on team cards | **Done** | Up to 5 member avatars (28px) + overflow count badge on each team card (PM group screen and member team selection screen) |
+| F-608 | Avatar in PM sidebar footer | **Done** | 36px avatar + name + ✎ edit button in a row; Sign Out stacked below |
+| F-609 | Avatar in member team selection | **Done** | Group name shown in left header; avatar + name + edit profile button on right |
+| F-610 | Avatar in member list (Preferences) | **Done** | 32px avatar left of each member name row; click popup avatar (48px) to view full-size photo |
+| F-611 | Responsive BDS header | **Done** | Wide viewport: flat row (title left, user info right); narrow (<900px): stacks vertically, centered |
+
+**Delivered:** 2026-03-16
+
+---
+
 ## Effort Estimates Key
 
 | Label | Meaning |
@@ -235,3 +259,4 @@ MVP baseline       Data Safety        Daily Usability    Insights           Mult
 | 2026-03-06 | 1.0 | Phase 4 shipped: F-401/F-402/F-403 marked Done. Phase 2 marked Done. Updated roadmap overview. Added "Also Delivered" section for Phase 4 extras (user profiles, memos, multi-assign, pickers, sign-in UX). |
 | 2026-03-07 | 1.1 | Extended "Also Delivered" for Phase 4: burndown N+1 border model, last-day Move/Split, login register prompt, projectToday holiday skip, admin enhancements, member removal guards. |
 | 2026-03-14 | 1.2 | Added Phase 5 (SaaS Hardening & Onboarding): invitation registration page, wrong-user guard, landing page error handling, "Add Group Members", PM removal warning dialog, PM display name edit, projectToday future-date cap, getMostRecentWorkingDay, sprint defaults by member count, team data isolation fix, resilient member loading, GitHub Actions CI/CD. Updated roadmap overview to include Phase 5. |
+| 2026-03-16 | 1.3 | Added Phase 6 (User Profiles & Avatars): profile photo upload, initial-letter avatar fallback, avatarSrc helper, full-size photo popup, change password modal, avatar in header/team cards/sidebar/member list, responsive BDS header. Updated roadmap overview. |

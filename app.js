@@ -4950,6 +4950,9 @@
       return debugFail("not implemented");
     }
   };
+  async function updateEmailPassword(auth2, request) {
+    return _performApiRequest(auth2, "POST", "/v1/accounts:update", request);
+  }
   async function linkEmailPassword(auth2, request) {
     return _performApiRequest(auth2, "POST", "/v1/accounts:signUp", request);
   }
@@ -5870,6 +5873,9 @@
   async function signInWithCredential(auth2, credential) {
     return _signInWithCredential(_castAuth(auth2), credential);
   }
+  async function reauthenticateWithCredential(user, credential) {
+    return _reauthenticate(getModularInstance(user), credential);
+  }
   async function recachePasswordPolicy(auth2) {
     const authInternal = _castAuth(auth2);
     if (authInternal._getPasswordPolicyInternal()) {
@@ -5916,6 +5922,29 @@
       }
       throw error;
     });
+  }
+  function updatePassword(user, newPassword) {
+    return updateEmailOrPassword(getModularInstance(user), null, newPassword);
+  }
+  async function updateEmailOrPassword(user, email, password) {
+    const { auth: auth2 } = user;
+    const idToken = await user.getIdToken();
+    const request = {
+      idToken,
+      returnSecureToken: true
+    };
+    if (email) {
+      request.email = email;
+    }
+    if (password) {
+      request.password = password;
+    }
+    const response = await _logoutIfInvalidated(user, updateEmailPassword(auth2, request));
+    await user._updateTokensIfNecessary(
+      response,
+      /* reload */
+      true
+    );
   }
   function onIdTokenChanged(auth2, nextOrObserver, error, completed) {
     return getModularInstance(auth2).onIdTokenChanged(nextOrObserver, error, completed);
@@ -21579,6 +21608,12 @@ This typically indicates that your device does not have a healthy Internet conne
     if ("groupId" in updates && updates.groupId === null) {
       firestoreUpdates.groupId = deleteField();
     }
+    if ("photoThumb" in updates && updates.photoThumb === null) {
+      firestoreUpdates.photoThumb = deleteField();
+    }
+    if ("photoFull" in updates && updates.photoFull === null) {
+      firestoreUpdates.photoFull = deleteField();
+    }
     await updateDoc(doc(db, "users", uid), firestoreUpdates);
   };
   var getTeamsManagedBy = async (userId) => {
@@ -21637,6 +21672,11 @@ This typically indicates that your device does not have a healthy Internet conne
   var getTeamById = async (teamId) => {
     const snap = await getDoc(doc(db, "teams", teamId));
     return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+  };
+  var getUsersByIds = async (uids) => {
+    if (uids.length === 0) return [];
+    const profiles = await Promise.all(uids.map((uid) => getUserProfile(uid)));
+    return profiles.filter((p) => p !== null);
   };
   var deleteTeam = async (teamId) => {
     const teamSnap = await getDoc(doc(db, "teams", teamId));
@@ -21697,6 +21737,10 @@ This typically indicates that your device does not have a healthy Internet conne
     await setDoc(ref, { name: name5, ownerId, createdAt: (/* @__PURE__ */ new Date()).toISOString() });
     await updateDoc(doc(db, "users", ownerId), { groupId: ref.id });
     return ref.id;
+  };
+  var getGroupById = async (groupId) => {
+    const snap = await getDoc(doc(db, "groups", groupId));
+    return snap.exists() ? { id: snap.id, ...snap.data() } : null;
   };
   var getGroupByOwner = async (ownerId) => {
     const snap = await getDocs(
@@ -24019,6 +24063,11 @@ ${marker.label}`;
   var signOut2 = async () => {
     await signOut(auth);
   };
+  var changePassword = async (user, currentPassword, newPassword) => {
+    const credential = EmailAuthProvider.credential(user.email, currentPassword);
+    await reauthenticateWithCredential(user, credential);
+    await updatePassword(user, newPassword);
+  };
   var ensureUserProfile = async (user) => {
     return await getUserProfile(user.uid);
   };
@@ -24056,6 +24105,162 @@ ${marker.label}`;
   };
   var hideAllScreens = () => clearContainer();
   var escapeHtml = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  var AVATAR_COLORS = [
+    "#6c7ee1",
+    "#e06c75",
+    "#56b6c2",
+    "#e5c07b",
+    "#98c379",
+    "#d19a66",
+    "#c678dd",
+    "#61afef",
+    "#888faa",
+    "#f08d49"
+  ];
+  var _avatarCache = /* @__PURE__ */ new Map();
+  var makeInitialAvatar = (name5, size) => {
+    const key = `${name5}:${size}`;
+    const cached = _avatarCache.get(key);
+    if (cached) return cached;
+    const initial = Array.from(name5.trim())[0]?.toUpperCase() ?? "?";
+    const colorIdx = (name5.charCodeAt(0) || 0) % AVATAR_COLORS.length;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = AVATAR_COLORS[colorIdx];
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.font = `bold ${Math.round(size * 0.42)}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(initial, size / 2, size / 2);
+    const result = canvas.toDataURL("image/png");
+    _avatarCache.set(key, result);
+    return result;
+  };
+  var avatarSrc = (profile, size) => {
+    if (size >= 80 && profile.photoFull) return profile.photoFull;
+    if (profile.photoThumb) return profile.photoThumb;
+    return makeInitialAvatar(profile.displayName, size);
+  };
+  var resizeImage = (file, maxDim) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", 0.85));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+  var showPhotoPopup = (src) => {
+    document.getElementById("photoPopupOverlay")?.remove();
+    const popup = document.createElement("div");
+    popup.id = "photoPopupOverlay";
+    popup.className = "team-modal-overlay";
+    popup.style.cssText = "cursor:pointer";
+    popup.innerHTML = `<img src="${escapeHtml(src)}" style="max-width:90vw;max-height:90vh;border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,0.4)" />`;
+    document.body.appendChild(popup);
+    const close = () => popup.remove();
+    popup.addEventListener("click", close);
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        close();
+        document.removeEventListener("keydown", onKey);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+  };
+  var showChangePasswordModal = (user) => {
+    document.getElementById("changePasswordModal")?.remove();
+    const modal = document.createElement("div");
+    modal.id = "changePasswordModal";
+    modal.className = "team-modal-overlay";
+    modal.innerHTML = `
+    <div class="team-modal">
+      <h3>Change Password</h3>
+      <label class="screen-label">
+        Current Password
+        <input type="password" id="cpCurrent" class="screen-input" placeholder="Current password" autocomplete="current-password" />
+      </label>
+      <label class="screen-label">
+        New Password
+        <input type="password" id="cpNew" class="screen-input" placeholder="Min 6 characters" autocomplete="new-password" />
+      </label>
+      <label class="screen-label">
+        Confirm New Password
+        <input type="password" id="cpConfirm" class="screen-input" placeholder="Confirm new password" autocomplete="new-password" />
+      </label>
+      <div class="screen-error" id="cpError" hidden></div>
+      <div class="screen-success" id="cpSuccess" hidden></div>
+      <div class="team-modal-footer">
+        <button class="btn ghost" id="cpCancel">Cancel</button>
+        <button class="btn" id="cpSave">Change Password</button>
+      </div>
+    </div>
+  `;
+    document.body.appendChild(modal);
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) modal.remove();
+    });
+    document.getElementById("cpCancel").addEventListener("click", () => modal.remove());
+    const doChange = async () => {
+      const current = document.getElementById("cpCurrent").value;
+      const newPw = document.getElementById("cpNew").value;
+      const confirm2 = document.getElementById("cpConfirm").value;
+      const errEl = document.getElementById("cpError");
+      const successEl = document.getElementById("cpSuccess");
+      errEl.hidden = true;
+      successEl.hidden = true;
+      if (!current) {
+        errEl.textContent = "Current password is required.";
+        errEl.hidden = false;
+        return;
+      }
+      if (newPw.length < 6) {
+        errEl.textContent = "New password must be at least 6 characters.";
+        errEl.hidden = false;
+        return;
+      }
+      if (newPw !== confirm2) {
+        errEl.textContent = "Passwords do not match.";
+        errEl.hidden = false;
+        return;
+      }
+      const btn = document.getElementById("cpSave");
+      btn.disabled = true;
+      btn.textContent = "Saving\u2026";
+      try {
+        await changePassword(user, current, newPw);
+        successEl.textContent = "Password changed successfully!";
+        successEl.hidden = false;
+        setTimeout(() => modal.remove(), 1500);
+      } catch (e) {
+        errEl.textContent = e instanceof Error ? e.message : "Failed to change password.";
+        errEl.hidden = false;
+        btn.disabled = false;
+        btn.textContent = "Change Password";
+      }
+    };
+    document.getElementById("cpSave").addEventListener("click", doChange);
+    document.getElementById("cpConfirm").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") void doChange();
+    });
+    setTimeout(() => document.getElementById("cpCurrent").focus(), 50);
+  };
   var googleSvg = `
   <svg width="14" height="14" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908C16.658 14.234 17.64 11.926 17.64 9.2z" fill="#4285F4"/>
@@ -24449,7 +24654,7 @@ ${marker.label}`;
     });
     setTimeout(() => document.getElementById("pmReqName").focus(), 50);
   };
-  var showTeamScreen = (user, profile, onTeamSelected) => {
+  var showTeamScreen = (user, profile, onTeamSelected, onProfileUpdated) => {
     _currentUser = user;
     _currentProfile = profile;
     _onTeamSelected = onTeamSelected;
@@ -24459,11 +24664,15 @@ ${marker.label}`;
       <div class="screen-card team-screen-card">
         <div class="team-screen-header">
           <div>
-            <p class="eyebrow">Sprint Burndown</p>
-            <h2 class="screen-title">Select a Team</h2>
+            <p class="eyebrow">GROUP</p>
+            <p class="admin-sidebar-group-name" id="teamScreenGroupName"></p>
           </div>
           <div class="team-screen-user">
-            <span class="team-user-name">${escapeHtml(profile.displayName)}</span>
+            <img id="teamUserAvatar" class="team-user-avatar" />
+            <div class="team-user-info">
+              <span class="team-user-name" id="teamUserName">${escapeHtml(profile.displayName)}</span>
+            </div>
+            <button class="btn ghost small" id="teamEditProfileBtn" title="Edit profile" style="padding:4px 8px">\u270E</button>
             <button class="btn ghost small" id="teamSignOutBtn">Sign Out</button>
           </div>
         </div>
@@ -24474,7 +24683,28 @@ ${marker.label}`;
       </div>
     </div>
   `;
+    const avatarImg = document.getElementById("teamUserAvatar");
+    avatarImg.src = avatarSrc(profile, 36);
+    if (profile.groupId) {
+      getGroupById(profile.groupId).then((group) => {
+        const header = document.getElementById("teamScreenGroupName");
+        if (header) header.textContent = group?.name ?? "";
+      }).catch(() => {
+      });
+    }
     document.getElementById("teamSignOutBtn").addEventListener("click", () => signOut2());
+    document.getElementById("teamEditProfileBtn").addEventListener("click", () => {
+      showProfileEditModal(profile, false, (updated) => {
+        _currentProfile = updated;
+        profile = updated;
+        const nameEl = document.getElementById("teamUserName");
+        if (nameEl) nameEl.textContent = updated.displayName;
+        const avImg = document.getElementById("teamUserAvatar");
+        if (avImg) avImg.src = avatarSrc(updated, 36);
+        onProfileUpdated?.(updated);
+        loadAndRenderTeams(user, updated);
+      }, user);
+    });
     loadAndRenderTeams(user, profile);
   };
   var loadAndRenderTeams = async (user, profile) => {
@@ -24482,7 +24712,10 @@ ${marker.label}`;
     if (!grid) return;
     try {
       const teams = await getTeamsForUser(user.uid, profile.role);
-      renderTeamGrid(grid, teams, profile);
+      const allUids = Array.from(new Set(teams.flatMap((t) => t.memberIds)));
+      const memberProfiles = await getUsersByIds(allUids);
+      const memberMap = new Map(memberProfiles.map((p) => [p.uid, p]));
+      renderTeamGrid(grid, teams, profile, memberMap);
     } catch (e) {
       const err = document.getElementById("teamError");
       if (err) {
@@ -24492,17 +24725,37 @@ ${marker.label}`;
       grid.innerHTML = "";
     }
   };
-  var renderTeamGrid = (grid, teams, profile) => {
+  var renderTeamGrid = (grid, teams, profile, memberMap = /* @__PURE__ */ new Map()) => {
     grid.innerHTML = "";
     for (const team of teams) {
       const card = document.createElement("button");
       card.className = "team-card";
+      const MAX_SHOWN = 5;
+      const memberProfs = team.memberIds.map((uid) => memberMap.get(uid)).filter((p) => !!p);
+      const shown = memberProfs.slice(0, MAX_SHOWN);
+      const overflow = memberProfs.length - shown.length;
+      const avatarRowHtml = shown.length > 0 ? `
+      <div class="team-card-avatars">
+        ${shown.map((p) => `<img class="team-card-avatar" src="${escapeHtml(avatarSrc(p, 28))}" title="${escapeHtml(p.displayName)}" data-uid="${p.uid}" />`).join("")}
+        ${overflow > 0 ? `<div class="team-card-avatar-more">+${overflow}</div>` : ""}
+      </div>
+    ` : `<div class="team-card-meta">${team.memberIds.length} member${team.memberIds.length !== 1 ? "s" : ""}</div>`;
       card.innerHTML = `
       <div class="team-card-name">${escapeHtml(team.name)}</div>
-      <div class="team-card-meta">${team.memberIds.length} member${team.memberIds.length !== 1 ? "s" : ""}</div>
+      ${avatarRowHtml}
     `;
       card.addEventListener("click", () => _onTeamSelected?.(team.id, team.name));
       grid.appendChild(card);
+      card.querySelectorAll(".team-card-avatar").forEach((img) => {
+        img.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const uid = img.dataset.uid;
+          const p = uid ? memberMap.get(uid) : void 0;
+          if (p?.photoFull) showPhotoPopup(p.photoFull);
+          else if (p?.photoThumb) showPhotoPopup(p.photoThumb);
+          else if (p) showPhotoPopup(makeInitialAvatar(p.displayName, 200));
+        });
+      });
       const canManage = profile.role === "product_manager";
       const canDelete = team.ownerId === profile.uid;
       if (canManage) {
@@ -25359,8 +25612,12 @@ All shared sprint data for this team will be permanently removed.`)) return;
       tableEl.innerHTML = `<em>Failed to load users: ${e instanceof Error ? escapeHtml(e.message) : "Unknown error"}</em>`;
     }
   };
-  var showProfileEditModal = (profile, isNew, onSaved) => {
+  var showProfileEditModal = (profile, isNew, onSaved, user) => {
     document.getElementById("profileEditModal")?.remove();
+    let pendingThumb = null;
+    let pendingFull = null;
+    const isGoogleUser = user?.providerData.some((p) => p.providerId === "google.com") ?? false;
+    const currentAvatarSrc = avatarSrc(profile, 80);
     const modal = document.createElement("div");
     modal.id = "profileEditModal";
     modal.className = "team-modal-overlay";
@@ -25368,6 +25625,14 @@ All shared sprint data for this team will be permanently removed.`)) return;
     <div class="team-modal">
       <h3>${isNew ? "Complete Your Profile" : "Edit Profile"}</h3>
       ${isNew ? '<p class="pref-hint">Welcome! Please confirm your name and optionally add your phone number.</p>' : ""}
+      <div class="profile-photo-section">
+        <img id="profilePhotoImg" class="profile-photo-img" src="${escapeHtml(currentAvatarSrc)}" title="Click to view" />
+        <div class="profile-photo-actions">
+          <button type="button" class="btn ghost small" id="profileChangePhotoBtn">Change Photo</button>
+          ${profile.photoThumb ? '<button type="button" class="btn ghost small danger" id="profileRemovePhotoBtn">Remove</button>' : ""}
+        </div>
+        <input type="file" id="profilePhotoFile" accept="image/*" style="display:none" />
+      </div>
       <div class="profile-email-row">${escapeHtml(profile.email)}</div>
       <label class="screen-label">
         Name
@@ -25379,12 +25644,50 @@ All shared sprint data for this team will be permanently removed.`)) return;
       </label>
       <div class="screen-error" id="profileEditError" hidden></div>
       <div class="team-modal-footer">
+        ${!isNew && user && !isGoogleUser ? '<button class="btn ghost" id="profileChangePwBtn">Change Password</button>' : ""}
         ${isNew ? "" : '<button class="btn ghost" id="profileEditCancel">Cancel</button>'}
         <button class="btn" id="profileEditSave">Save</button>
       </div>
     </div>
   `;
     document.body.appendChild(modal);
+    const photoImg = document.getElementById("profilePhotoImg");
+    photoImg.addEventListener("click", () => {
+      const src = pendingFull ?? profile.photoFull ?? pendingThumb ?? profile.photoThumb;
+      if (src) showPhotoPopup(src);
+    });
+    const fileInput = document.getElementById("profilePhotoFile");
+    document.getElementById("profileChangePhotoBtn").addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", async () => {
+      const file = fileInput.files?.[0];
+      if (!file) return;
+      fileInput.value = "";
+      const errEl = document.getElementById("profileEditError");
+      errEl.hidden = true;
+      if (file.size > 10 * 1024 * 1024) {
+        errEl.textContent = "Image file is too large (max 10 MB).";
+        errEl.hidden = false;
+        return;
+      }
+      try {
+        [pendingFull, pendingThumb] = await Promise.all([
+          resizeImage(file, 640),
+          resizeImage(file, 80)
+        ]);
+        photoImg.src = pendingFull;
+      } catch {
+        errEl.textContent = "Failed to process image.";
+        errEl.hidden = false;
+      }
+    });
+    document.getElementById("profileRemovePhotoBtn")?.addEventListener("click", () => {
+      pendingThumb = "";
+      pendingFull = "";
+      photoImg.src = makeInitialAvatar(profile.displayName, 80);
+    });
+    document.getElementById("profileChangePwBtn")?.addEventListener("click", () => {
+      if (user) showChangePasswordModal(user);
+    });
     if (!isNew) {
       modal.addEventListener("click", (e) => {
         if (e.target === modal) modal.remove();
@@ -25401,21 +25704,45 @@ All shared sprint data for this team will be permanently removed.`)) return;
         errEl.hidden = false;
         return;
       }
+      const btn = document.getElementById("profileEditSave");
+      btn.disabled = true;
+      btn.textContent = "Saving\u2026";
       try {
-        await updateUserProfile(profile.uid, { displayName: name5, phoneNumber: phone || null });
+        const photoUpdates = {};
+        if (pendingThumb !== null) photoUpdates.photoThumb = pendingThumb || null;
+        if (pendingFull !== null) photoUpdates.photoFull = pendingFull || null;
+        await updateUserProfile(profile.uid, {
+          displayName: name5,
+          phoneNumber: phone || null,
+          ...photoUpdates
+        });
         const updated = { ...profile, displayName: name5 };
         if (phone) updated.phoneNumber = phone;
         else delete updated.phoneNumber;
+        if (pendingThumb !== null) {
+          if (pendingThumb) updated.photoThumb = pendingThumb;
+          else delete updated.photoThumb;
+        }
+        if (pendingFull !== null) {
+          if (pendingFull) updated.photoFull = pendingFull;
+          else delete updated.photoFull;
+        }
+        _avatarCache.delete(`${profile.displayName}:36`);
+        _avatarCache.delete(`${profile.displayName}:80`);
+        _avatarCache.delete(`${profile.displayName}:28`);
+        _avatarCache.delete(`${profile.displayName}:24`);
         modal.remove();
         onSaved(updated);
       } catch (e) {
         errEl.textContent = e instanceof Error ? e.message : "Failed to save profile.";
         errEl.hidden = false;
+        btn.disabled = false;
+        btn.textContent = "Save";
       }
     };
     document.getElementById("profileEditSave").addEventListener("click", doSave);
     document.getElementById("profileNameInput").addEventListener("keydown", (e) => {
-      if (e.key === "Enter") doSave();
+      if (e.key === "Enter") void doSave();
     });
     setTimeout(() => document.getElementById("profileNameInput").focus(), 50);
   };
@@ -25487,7 +25814,11 @@ All shared sprint data for this team will be permanently removed.`)) return;
             <button class="admin-nav-item" data-section="members">Members</button>
           </nav>
           <div class="admin-sidebar-footer">
-            <span class="admin-footer-name">${escapeHtml(profile.displayName)}</span>
+            <div class="admin-footer-user">
+              <img id="groupFooterAvatar" class="member-avatar-sm" src="${escapeHtml(avatarSrc(profile, 32))}" />
+              <span class="admin-footer-name" id="groupFooterName">${escapeHtml(profile.displayName)}</span>
+              <button class="btn ghost small" id="groupEditProfileBtn" title="Edit profile" style="padding:3px 7px;flex-shrink:0">\u270E</button>
+            </div>
             <button class="btn ghost small" id="groupSignOutBtn">Sign Out</button>
           </div>
         </aside>
@@ -25502,6 +25833,16 @@ All shared sprint data for this team will be permanently removed.`)) return;
     </div>
   `;
     document.getElementById("groupSignOutBtn").addEventListener("click", () => signOut2());
+    document.getElementById("groupEditProfileBtn").addEventListener("click", () => {
+      showProfileEditModal(profile, false, (updated) => {
+        profile = updated;
+        _currentProfile = updated;
+        const nameEl = document.getElementById("groupFooterName");
+        if (nameEl) nameEl.textContent = updated.displayName;
+        const avImg = document.getElementById("groupFooterAvatar");
+        if (avImg) avImg.src = avatarSrc(updated, 32);
+      }, user);
+    });
     document.getElementById("editGroupNameBtn").addEventListener("click", () => {
       showEditGroupModal(group, profile, (newName, newDisplayName) => {
         group.name = newName;
@@ -25510,7 +25851,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
         if (newDisplayName !== profile.displayName) {
           profile.displayName = newDisplayName;
           _currentProfile = profile;
-          const footerName = document.querySelector(".admin-footer-name");
+          const footerName = document.getElementById("groupFooterName");
           if (footerName) footerName.textContent = newDisplayName;
         }
       });
@@ -25608,7 +25949,10 @@ All shared sprint data for this team will be permanently removed.`)) return;
     if (errEl) errEl.hidden = true;
     try {
       const teams = await getTeamsByGroup(group.id, profile.uid);
-      renderGroupTeamGrid(grid, teams, group, profile);
+      const allUids = Array.from(new Set(teams.flatMap((t) => t.memberIds)));
+      const memberProfiles = await getUsersByIds(allUids);
+      const memberMap = new Map(memberProfiles.map((p) => [p.uid, p]));
+      renderGroupTeamGrid(grid, teams, group, profile, memberMap);
     } catch (e) {
       if (errEl) {
         errEl.textContent = e instanceof Error ? e.message : "Failed to load teams.";
@@ -25617,16 +25961,36 @@ All shared sprint data for this team will be permanently removed.`)) return;
       grid.innerHTML = "";
     }
   };
-  var renderGroupTeamGrid = (grid, teams, group, profile) => {
+  var renderGroupTeamGrid = (grid, teams, group, profile, memberMap = /* @__PURE__ */ new Map()) => {
     grid.innerHTML = "";
     for (const team of teams) {
       const card = document.createElement("button");
       card.className = "team-card";
+      const MAX_SHOWN = 5;
+      const memberProfs = team.memberIds.map((uid) => memberMap.get(uid)).filter((p) => !!p);
+      const shown = memberProfs.slice(0, MAX_SHOWN);
+      const overflow = memberProfs.length - shown.length;
+      const avatarRowHtml = shown.length > 0 ? `
+      <div class="team-card-avatars">
+        ${shown.map((p) => `<img class="team-card-avatar" src="${escapeHtml(avatarSrc(p, 28))}" title="${escapeHtml(p.displayName)}" data-uid="${p.uid}" />`).join("")}
+        ${overflow > 0 ? `<div class="team-card-avatar-more">+${overflow}</div>` : ""}
+      </div>
+    ` : `<div class="team-card-meta">${team.memberIds.length} member${team.memberIds.length !== 1 ? "s" : ""}</div>`;
       card.innerHTML = `
       <div class="team-card-name">${escapeHtml(team.name)}</div>
-      <div class="team-card-meta">${team.memberIds.length} member${team.memberIds.length !== 1 ? "s" : ""}</div>
+      ${avatarRowHtml}
     `;
       card.addEventListener("click", () => _onTeamSelected?.(team.id, team.name));
+      card.querySelectorAll(".team-card-avatar").forEach((img) => {
+        img.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const uid = img.dataset.uid;
+          const p = uid ? memberMap.get(uid) : void 0;
+          if (p?.photoFull) showPhotoPopup(p.photoFull);
+          else if (p?.photoThumb) showPhotoPopup(p.photoThumb);
+          else if (p) showPhotoPopup(makeInitialAvatar(p.displayName, 200));
+        });
+      });
       const manageBtn = document.createElement("button");
       manageBtn.className = "btn ghost small team-manage-btn";
       manageBtn.textContent = "Manage";
@@ -25835,6 +26199,7 @@ All sprint data for this team will be permanently removed.`)) return;
       const row = document.createElement("div");
       row.className = "manage-member-row";
       row.innerHTML = `
+      <img class="member-avatar-sm" src="${escapeHtml(avatarSrc(member, 32))}" title="${escapeHtml(member.displayName)}" />
       <div class="manage-member-info">
         <span class="member-name">${escapeHtml(member.displayName)}${isOwner ? ' <span class="member-role-badge">Owner</span>' : ""}</span>
         <span class="member-email">${escapeHtml(member.email)}</span>
@@ -25849,6 +26214,13 @@ All sprint data for this team will be permanently removed.`)) return;
         </button>
       ` : ""}
     `;
+      const img = row.querySelector(".member-avatar-sm");
+      img.addEventListener("click", () => {
+        if (member.photoFull) showPhotoPopup(member.photoFull);
+        else if (member.photoThumb) showPhotoPopup(member.photoThumb);
+        else showPhotoPopup(makeInitialAvatar(member.displayName, 200));
+      });
+      img.style.cursor = "pointer";
       listEl.appendChild(row);
     }
     listEl.querySelectorAll(".group-member-remove-btn").forEach((btn) => {
@@ -26376,7 +26748,7 @@ They will also be removed from all teams within the group.`)) return;
     popup.innerHTML = `
     <div class="team-modal member-profile-popup">
       <div class="member-profile-popup-header">
-        <span class="member-profile-popup-avatar">${Array.from(name5)[0]?.toUpperCase() ?? "?"}</span>
+        ${p ? `<img id="memberPopupAvatar" class="member-profile-popup-avatar-img" style="width:48px;height:48px;border-radius:50%;object-fit:cover;flex-shrink:0" />` : `<span class="member-profile-popup-avatar">${Array.from(name5)[0]?.toUpperCase() ?? "?"}</span>`}
         <div>
           <div class="member-profile-popup-name">${name5}</div>
           ${p ? `<div class="member-profile-popup-role">${p.role.replace("_", " ")}</div>` : ""}
@@ -26396,6 +26768,18 @@ They will also be removed from all teams within the group.`)) return;
     </div>
   `;
     document.body.appendChild(popup);
+    if (p) {
+      const img = document.getElementById("memberPopupAvatar");
+      if (img) {
+        img.src = avatarSrc(p, 48);
+        img.style.cursor = "pointer";
+        img.addEventListener("click", () => {
+          if (p.photoFull) showPhotoPopup(p.photoFull);
+          else if (p.photoThumb) showPhotoPopup(p.photoThumb);
+          else showPhotoPopup(avatarSrc(p, 200));
+        });
+      }
+    }
     popup.addEventListener("click", (e) => {
       if (e.target === popup) popup.remove();
     });
@@ -26571,11 +26955,15 @@ They will also be removed from all teams within the group.`)) return;
     }
     showTeamScreen(_activeUser, _activeProfile, (teamId, teamName) => {
       startApp(teamId, _activeProfile, teamName);
+    }, (updated) => {
+      _activeProfile = updated;
     });
   };
   var updateHeaderUser = (profile) => {
-    const btn = document.getElementById("headerUserName");
-    btn.textContent = profile.displayName;
+    const avatarEl = document.getElementById("headerUserAvatar");
+    const nameEl = document.getElementById("headerUserNameText");
+    if (avatarEl) avatarEl.src = avatarSrc(profile, 24);
+    if (nameEl) nameEl.textContent = profile.displayName;
   };
   var startApp = async (teamId, profile, teamName) => {
     setMemberPairs([]);
@@ -26608,7 +26996,7 @@ They will also be removed from all teams within the group.`)) return;
     showProfileEditModal(_activeProfile, false, (updated) => {
       _activeProfile = updated;
       updateHeaderUser(updated);
-    });
+    }, _activeUser ?? void 0);
   });
   var getContainer2 = () => {
     let el = document.getElementById("screen-overlays");
@@ -26679,7 +27067,7 @@ They will also be removed from all teams within the group.`)) return;
                   showProfileEditModal(newProfile, true, async (updated) => {
                     _activeProfile = updated;
                     resolve();
-                  });
+                  }, user);
                 });
                 profile2 = _activeProfile;
               } else {
@@ -26691,6 +27079,8 @@ They will also be removed from all teams within the group.`)) return;
                 _activeProfile = { ...profile2, groupId: invitation.groupId };
                 showTeamScreen(user, _activeProfile, (teamId, teamName) => {
                   startApp(teamId, _activeProfile, teamName);
+                }, (updated) => {
+                  _activeProfile = updated;
                 });
               }
               return;
@@ -26764,6 +27154,8 @@ They will also be removed from all teams within the group.`)) return;
           }
           showTeamScreen(user, profile, (teamId, teamName) => {
             startApp(teamId, profile, teamName);
+          }, (updated) => {
+            _activeProfile = updated;
           });
         } catch (e) {
           console.error("Auth error:", e);

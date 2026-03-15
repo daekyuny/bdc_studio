@@ -1,4 +1,4 @@
-import { signInWithGoogle, signInWithEmail, createAccountWithEmail, signOut } from "./auth.ts";
+import { signInWithGoogle, signInWithEmail, createAccountWithEmail, signOut, changePassword } from "./auth.ts";
 import {
   getTeamsForUser,
   getTeamsManagedBy,
@@ -15,6 +15,7 @@ import {
   createGroup,
   updateGroupName,
   getAllGroups,
+  getGroupById,
   getTeamsByGroup,
   getGroupMemberProfiles,
   removeGroupMember,
@@ -29,6 +30,7 @@ import {
   updatePmRequest,
   getAppSettings,
   setAppSetting,
+  getUsersByIds,
 } from "./db.ts";
 import { httpsCallable } from "firebase/functions";
 import { functions } from "./firebase.ts";
@@ -59,6 +61,151 @@ export const hideAllScreens = (): void => clearContainer();
 
 const escapeHtml = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+// ---------------------------------------------------------------------------
+// Avatar helpers
+// ---------------------------------------------------------------------------
+
+const AVATAR_COLORS = [
+  "#6c7ee1","#e06c75","#56b6c2","#e5c07b","#98c379",
+  "#d19a66","#c678dd","#61afef","#888faa","#f08d49",
+];
+
+const _avatarCache = new Map<string, string>();
+
+const makeInitialAvatar = (name: string, size: number): string => {
+  const key = `${name}:${size}`;
+  const cached = _avatarCache.get(key);
+  if (cached) return cached;
+  const initial = Array.from(name.trim())[0]?.toUpperCase() ?? "?";
+  const colorIdx = (name.charCodeAt(0) || 0) % AVATAR_COLORS.length;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = AVATAR_COLORS[colorIdx];
+  ctx.beginPath();
+  ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.font = `bold ${Math.round(size * 0.42)}px sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(initial, size / 2, size / 2);
+  const result = canvas.toDataURL("image/png");
+  _avatarCache.set(key, result);
+  return result;
+};
+
+export const avatarSrc = (profile: UserProfile, size: number): string => {
+  if (size >= 80 && profile.photoFull) return profile.photoFull;
+  if (profile.photoThumb) return profile.photoThumb;
+  return makeInitialAvatar(profile.displayName, size);
+};
+
+const resizeImage = (file: File, maxDim: number): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", 0.85));
+      };
+      img.onerror = reject;
+      img.src = e.target!.result as string;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+export const showPhotoPopup = (src: string): void => {
+  document.getElementById("photoPopupOverlay")?.remove();
+  const popup = document.createElement("div");
+  popup.id = "photoPopupOverlay";
+  popup.className = "team-modal-overlay";
+  popup.style.cssText = "cursor:pointer";
+  popup.innerHTML = `<img src="${escapeHtml(src)}" style="max-width:90vw;max-height:90vh;border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,0.4)" />`;
+  document.body.appendChild(popup);
+  const close = () => popup.remove();
+  popup.addEventListener("click", close);
+  const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { close(); document.removeEventListener("keydown", onKey); } };
+  document.addEventListener("keydown", onKey);
+};
+
+const showChangePasswordModal = (user: User): void => {
+  document.getElementById("changePasswordModal")?.remove();
+
+  const modal = document.createElement("div");
+  modal.id = "changePasswordModal";
+  modal.className = "team-modal-overlay";
+  modal.innerHTML = `
+    <div class="team-modal">
+      <h3>Change Password</h3>
+      <label class="screen-label">
+        Current Password
+        <input type="password" id="cpCurrent" class="screen-input" placeholder="Current password" autocomplete="current-password" />
+      </label>
+      <label class="screen-label">
+        New Password
+        <input type="password" id="cpNew" class="screen-input" placeholder="Min 6 characters" autocomplete="new-password" />
+      </label>
+      <label class="screen-label">
+        Confirm New Password
+        <input type="password" id="cpConfirm" class="screen-input" placeholder="Confirm new password" autocomplete="new-password" />
+      </label>
+      <div class="screen-error" id="cpError" hidden></div>
+      <div class="screen-success" id="cpSuccess" hidden></div>
+      <div class="team-modal-footer">
+        <button class="btn ghost" id="cpCancel">Cancel</button>
+        <button class="btn" id="cpSave">Change Password</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  modal.addEventListener("click", (e) => { if (e.target === modal) modal.remove(); });
+  document.getElementById("cpCancel")!.addEventListener("click", () => modal.remove());
+
+  const doChange = async () => {
+    const current = (document.getElementById("cpCurrent") as HTMLInputElement).value;
+    const newPw = (document.getElementById("cpNew") as HTMLInputElement).value;
+    const confirm = (document.getElementById("cpConfirm") as HTMLInputElement).value;
+    const errEl = document.getElementById("cpError")!;
+    const successEl = document.getElementById("cpSuccess")!;
+    errEl.hidden = true;
+    successEl.hidden = true;
+    if (!current) { errEl.textContent = "Current password is required."; errEl.hidden = false; return; }
+    if (newPw.length < 6) { errEl.textContent = "New password must be at least 6 characters."; errEl.hidden = false; return; }
+    if (newPw !== confirm) { errEl.textContent = "Passwords do not match."; errEl.hidden = false; return; }
+    const btn = document.getElementById("cpSave") as HTMLButtonElement;
+    btn.disabled = true;
+    btn.textContent = "Saving…";
+    try {
+      await changePassword(user, current, newPw);
+      successEl.textContent = "Password changed successfully!";
+      successEl.hidden = false;
+      setTimeout(() => modal.remove(), 1500);
+    } catch (e: unknown) {
+      errEl.textContent = e instanceof Error ? e.message : "Failed to change password.";
+      errEl.hidden = false;
+      btn.disabled = false;
+      btn.textContent = "Change Password";
+    }
+  };
+
+  document.getElementById("cpSave")!.addEventListener("click", doChange);
+  (document.getElementById("cpConfirm") as HTMLInputElement).addEventListener("keydown", (e) => {
+    if (e.key === "Enter") void doChange();
+  });
+  setTimeout(() => (document.getElementById("cpCurrent") as HTMLInputElement).focus(), 50);
+};
 
 // ---------------------------------------------------------------------------
 // Landing Page (replaces login screen)
@@ -526,6 +673,7 @@ export const showTeamScreen = (
   user: User,
   profile: UserProfile,
   onTeamSelected: (teamId: string, teamName: string) => void,
+  onProfileUpdated?: (updated: UserProfile) => void,
 ): void => {
   _currentUser = user;
   _currentProfile = profile;
@@ -537,11 +685,15 @@ export const showTeamScreen = (
       <div class="screen-card team-screen-card">
         <div class="team-screen-header">
           <div>
-            <p class="eyebrow">Sprint Burndown</p>
-            <h2 class="screen-title">Select a Team</h2>
+            <p class="eyebrow">GROUP</p>
+            <p class="admin-sidebar-group-name" id="teamScreenGroupName"></p>
           </div>
           <div class="team-screen-user">
-            <span class="team-user-name">${escapeHtml(profile.displayName)}</span>
+            <img id="teamUserAvatar" class="team-user-avatar" />
+            <div class="team-user-info">
+              <span class="team-user-name" id="teamUserName">${escapeHtml(profile.displayName)}</span>
+            </div>
+            <button class="btn ghost small" id="teamEditProfileBtn" title="Edit profile" style="padding:4px 8px">✎</button>
             <button class="btn ghost small" id="teamSignOutBtn">Sign Out</button>
           </div>
         </div>
@@ -553,7 +705,33 @@ export const showTeamScreen = (
     </div>
   `;
 
+  // Set avatar
+  const avatarImg = document.getElementById("teamUserAvatar") as HTMLImageElement;
+  avatarImg.src = avatarSrc(profile, 36);
+
+  // Load group name for members
+  if (profile.groupId) {
+    getGroupById(profile.groupId).then((group) => {
+      const header = document.getElementById("teamScreenGroupName");
+      if (header) header.textContent = group?.name ?? "";
+    }).catch(() => {});
+  }
+
   document.getElementById("teamSignOutBtn")!.addEventListener("click", () => signOut());
+
+  document.getElementById("teamEditProfileBtn")!.addEventListener("click", () => {
+    showProfileEditModal(profile, false, (updated) => {
+      _currentProfile = updated;
+      profile = updated;
+      const nameEl = document.getElementById("teamUserName");
+      if (nameEl) nameEl.textContent = updated.displayName;
+      const avImg = document.getElementById("teamUserAvatar") as HTMLImageElement | null;
+      if (avImg) avImg.src = avatarSrc(updated, 36);
+      onProfileUpdated?.(updated);
+      // Refresh team grid to reflect any name changes
+      loadAndRenderTeams(user, updated);
+    }, user);
+  });
 
   loadAndRenderTeams(user, profile);
 };
@@ -563,7 +741,11 @@ const loadAndRenderTeams = async (user: User, profile: UserProfile): Promise<voi
   if (!grid) return;
   try {
     const teams = await getTeamsForUser(user.uid, profile.role);
-    renderTeamGrid(grid, teams, profile);
+    // Collect all unique member UIDs across all teams
+    const allUids = Array.from(new Set(teams.flatMap((t) => t.memberIds)));
+    const memberProfiles = await getUsersByIds(allUids);
+    const memberMap = new Map(memberProfiles.map((p) => [p.uid, p]));
+    renderTeamGrid(grid, teams, profile, memberMap);
   } catch (e: unknown) {
     const err = document.getElementById("teamError");
     if (err) {
@@ -574,18 +756,50 @@ const loadAndRenderTeams = async (user: User, profile: UserProfile): Promise<voi
   }
 };
 
-const renderTeamGrid = (grid: HTMLElement, teams: Team[], profile: UserProfile): void => {
+const renderTeamGrid = (
+  grid: HTMLElement,
+  teams: Team[],
+  profile: UserProfile,
+  memberMap: Map<string, UserProfile> = new Map(),
+): void => {
   grid.innerHTML = "";
 
   for (const team of teams) {
     const card = document.createElement("button");
     card.className = "team-card";
+
+    // Build member avatar row (max 5 shown + overflow count)
+    const MAX_SHOWN = 5;
+    const memberProfs = team.memberIds
+      .map((uid) => memberMap.get(uid))
+      .filter((p): p is UserProfile => !!p);
+    const shown = memberProfs.slice(0, MAX_SHOWN);
+    const overflow = memberProfs.length - shown.length;
+    const avatarRowHtml = shown.length > 0 ? `
+      <div class="team-card-avatars">
+        ${shown.map((p) => `<img class="team-card-avatar" src="${escapeHtml(avatarSrc(p, 28))}" title="${escapeHtml(p.displayName)}" data-uid="${p.uid}" />`).join("")}
+        ${overflow > 0 ? `<div class="team-card-avatar-more">+${overflow}</div>` : ""}
+      </div>
+    ` : `<div class="team-card-meta">${team.memberIds.length} member${team.memberIds.length !== 1 ? "s" : ""}</div>`;
+
     card.innerHTML = `
       <div class="team-card-name">${escapeHtml(team.name)}</div>
-      <div class="team-card-meta">${team.memberIds.length} member${team.memberIds.length !== 1 ? "s" : ""}</div>
+      ${avatarRowHtml}
     `;
     card.addEventListener("click", () => _onTeamSelected?.(team.id, team.name));
     grid.appendChild(card);
+
+    // Avatar click → popup profile
+    card.querySelectorAll<HTMLImageElement>(".team-card-avatar").forEach((img) => {
+      img.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const uid = img.dataset.uid;
+        const p = uid ? memberMap.get(uid) : undefined;
+        if (p?.photoFull) showPhotoPopup(p.photoFull);
+        else if (p?.photoThumb) showPhotoPopup(p.photoThumb);
+        else if (p) showPhotoPopup(makeInitialAvatar(p.displayName, 200));
+      });
+    });
 
     const canManage = profile.role === "product_manager";
     const canDelete = team.ownerId === profile.uid;
@@ -1509,8 +1723,16 @@ export const showProfileEditModal = (
   profile: UserProfile,
   isNew: boolean,
   onSaved: (updatedProfile: UserProfile) => void,
+  user?: User,
 ): void => {
   document.getElementById("profileEditModal")?.remove();
+
+  // Track pending photo changes (not persisted until Save)
+  let pendingThumb: string | null = null;
+  let pendingFull: string | null = null;
+
+  const isGoogleUser = user?.providerData.some((p) => p.providerId === "google.com") ?? false;
+  const currentAvatarSrc = avatarSrc(profile, 80);
 
   const modal = document.createElement("div");
   modal.id = "profileEditModal";
@@ -1519,6 +1741,14 @@ export const showProfileEditModal = (
     <div class="team-modal">
       <h3>${isNew ? "Complete Your Profile" : "Edit Profile"}</h3>
       ${isNew ? '<p class="pref-hint">Welcome! Please confirm your name and optionally add your phone number.</p>' : ""}
+      <div class="profile-photo-section">
+        <img id="profilePhotoImg" class="profile-photo-img" src="${escapeHtml(currentAvatarSrc)}" title="Click to view" />
+        <div class="profile-photo-actions">
+          <button type="button" class="btn ghost small" id="profileChangePhotoBtn">Change Photo</button>
+          ${profile.photoThumb ? '<button type="button" class="btn ghost small danger" id="profileRemovePhotoBtn">Remove</button>' : ""}
+        </div>
+        <input type="file" id="profilePhotoFile" accept="image/*" style="display:none" />
+      </div>
       <div class="profile-email-row">${escapeHtml(profile.email)}</div>
       <label class="screen-label">
         Name
@@ -1530,12 +1760,58 @@ export const showProfileEditModal = (
       </label>
       <div class="screen-error" id="profileEditError" hidden></div>
       <div class="team-modal-footer">
+        ${!isNew && user && !isGoogleUser ? '<button class="btn ghost" id="profileChangePwBtn">Change Password</button>' : ""}
         ${isNew ? "" : '<button class="btn ghost" id="profileEditCancel">Cancel</button>'}
         <button class="btn" id="profileEditSave">Save</button>
       </div>
     </div>
   `;
   document.body.appendChild(modal);
+
+  // Photo preview click → popup
+  const photoImg = document.getElementById("profilePhotoImg") as HTMLImageElement;
+  photoImg.addEventListener("click", () => {
+    const src = pendingFull ?? profile.photoFull ?? pendingThumb ?? profile.photoThumb;
+    if (src) showPhotoPopup(src);
+  });
+
+  // Change photo
+  const fileInput = document.getElementById("profilePhotoFile") as HTMLInputElement;
+  document.getElementById("profileChangePhotoBtn")!.addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", async () => {
+    const file = fileInput.files?.[0];
+    if (!file) return;
+    fileInput.value = "";
+    const errEl = document.getElementById("profileEditError")!;
+    errEl.hidden = true;
+    if (file.size > 10 * 1024 * 1024) {
+      errEl.textContent = "Image file is too large (max 10 MB).";
+      errEl.hidden = false;
+      return;
+    }
+    try {
+      [pendingFull, pendingThumb] = await Promise.all([
+        resizeImage(file, 640),
+        resizeImage(file, 80),
+      ]);
+      photoImg.src = pendingFull;
+    } catch {
+      errEl.textContent = "Failed to process image.";
+      errEl.hidden = false;
+    }
+  });
+
+  // Remove photo
+  document.getElementById("profileRemovePhotoBtn")?.addEventListener("click", () => {
+    pendingThumb = "";
+    pendingFull = "";
+    photoImg.src = makeInitialAvatar(profile.displayName, 80);
+  });
+
+  // Change password button
+  document.getElementById("profileChangePwBtn")?.addEventListener("click", () => {
+    if (user) showChangePasswordModal(user);
+  });
 
   if (!isNew) {
     modal.addEventListener("click", (e) => { if (e.target === modal) modal.remove(); });
@@ -1552,21 +1828,44 @@ export const showProfileEditModal = (
       errEl.hidden = false;
       return;
     }
+    const btn = document.getElementById("profileEditSave") as HTMLButtonElement;
+    btn.disabled = true;
+    btn.textContent = "Saving…";
     try {
-      await updateUserProfile(profile.uid, { displayName: name, phoneNumber: phone || null } as Parameters<typeof updateUserProfile>[1]);
+      const photoUpdates: Record<string, string | null> = {};
+      if (pendingThumb !== null) photoUpdates.photoThumb = pendingThumb || null;
+      if (pendingFull !== null) photoUpdates.photoFull = pendingFull || null;
+      await updateUserProfile(profile.uid, {
+        displayName: name,
+        phoneNumber: phone || null,
+        ...photoUpdates,
+      } as Parameters<typeof updateUserProfile>[1]);
       const updated: UserProfile = { ...profile, displayName: name };
       if (phone) updated.phoneNumber = phone; else delete updated.phoneNumber;
+      if (pendingThumb !== null) {
+        if (pendingThumb) updated.photoThumb = pendingThumb; else delete updated.photoThumb;
+      }
+      if (pendingFull !== null) {
+        if (pendingFull) updated.photoFull = pendingFull; else delete updated.photoFull;
+      }
+      // Invalidate avatar cache for this name
+      _avatarCache.delete(`${profile.displayName}:36`);
+      _avatarCache.delete(`${profile.displayName}:80`);
+      _avatarCache.delete(`${profile.displayName}:28`);
+      _avatarCache.delete(`${profile.displayName}:24`);
       modal.remove();
       onSaved(updated);
     } catch (e: unknown) {
       errEl.textContent = e instanceof Error ? e.message : "Failed to save profile.";
       errEl.hidden = false;
+      btn.disabled = false;
+      btn.textContent = "Save";
     }
   };
 
   document.getElementById("profileEditSave")!.addEventListener("click", doSave);
   (document.getElementById("profileNameInput") as HTMLInputElement).addEventListener("keydown", (e) => {
-    if (e.key === "Enter") doSave();
+    if (e.key === "Enter") void doSave();
   });
   setTimeout(() => (document.getElementById("profileNameInput") as HTMLInputElement).focus(), 50);
 };
@@ -1662,7 +1961,11 @@ export const showGroupScreen = (
             <button class="admin-nav-item" data-section="members">Members</button>
           </nav>
           <div class="admin-sidebar-footer">
-            <span class="admin-footer-name">${escapeHtml(profile.displayName)}</span>
+            <div class="admin-footer-user">
+              <img id="groupFooterAvatar" class="member-avatar-sm" src="${escapeHtml(avatarSrc(profile, 32))}" />
+              <span class="admin-footer-name" id="groupFooterName">${escapeHtml(profile.displayName)}</span>
+              <button class="btn ghost small" id="groupEditProfileBtn" title="Edit profile" style="padding:3px 7px;flex-shrink:0">✎</button>
+            </div>
             <button class="btn ghost small" id="groupSignOutBtn">Sign Out</button>
           </div>
         </aside>
@@ -1679,6 +1982,17 @@ export const showGroupScreen = (
 
   document.getElementById("groupSignOutBtn")!.addEventListener("click", () => signOut());
 
+  document.getElementById("groupEditProfileBtn")!.addEventListener("click", () => {
+    showProfileEditModal(profile, false, (updated) => {
+      profile = updated;
+      _currentProfile = updated;
+      const nameEl = document.getElementById("groupFooterName");
+      if (nameEl) nameEl.textContent = updated.displayName;
+      const avImg = document.getElementById("groupFooterAvatar") as HTMLImageElement | null;
+      if (avImg) avImg.src = avatarSrc(updated, 32);
+    }, user);
+  });
+
   document.getElementById("editGroupNameBtn")!.addEventListener("click", () => {
     showEditGroupModal(group, profile, (newName, newDisplayName) => {
       group.name = newName;
@@ -1687,7 +2001,7 @@ export const showGroupScreen = (
       if (newDisplayName !== profile.displayName) {
         profile.displayName = newDisplayName;
         _currentProfile = profile;
-        const footerName = document.querySelector(".admin-footer-name");
+        const footerName = document.getElementById("groupFooterName");
         if (footerName) footerName.textContent = newDisplayName;
       }
     });
@@ -1784,7 +2098,10 @@ const loadAndRenderGroupTeams = async (group: Group, profile: UserProfile): Prom
   if (errEl) errEl.hidden = true;
   try {
     const teams = await getTeamsByGroup(group.id, profile.uid);
-    renderGroupTeamGrid(grid, teams, group, profile);
+    const allUids = Array.from(new Set(teams.flatMap((t) => t.memberIds)));
+    const memberProfiles = await getUsersByIds(allUids);
+    const memberMap = new Map(memberProfiles.map((p) => [p.uid, p]));
+    renderGroupTeamGrid(grid, teams, group, profile, memberMap);
   } catch (e: unknown) {
     if (errEl) {
       errEl.textContent = e instanceof Error ? e.message : "Failed to load teams.";
@@ -1794,17 +2111,48 @@ const loadAndRenderGroupTeams = async (group: Group, profile: UserProfile): Prom
   }
 };
 
-const renderGroupTeamGrid = (grid: HTMLElement, teams: Team[], group: Group, profile: UserProfile): void => {
+const renderGroupTeamGrid = (
+  grid: HTMLElement,
+  teams: Team[],
+  group: Group,
+  profile: UserProfile,
+  memberMap: Map<string, UserProfile> = new Map(),
+): void => {
   grid.innerHTML = "";
 
   for (const team of teams) {
     const card = document.createElement("button");
     card.className = "team-card";
+
+    const MAX_SHOWN = 5;
+    const memberProfs = team.memberIds
+      .map((uid) => memberMap.get(uid))
+      .filter((p): p is UserProfile => !!p);
+    const shown = memberProfs.slice(0, MAX_SHOWN);
+    const overflow = memberProfs.length - shown.length;
+    const avatarRowHtml = shown.length > 0 ? `
+      <div class="team-card-avatars">
+        ${shown.map((p) => `<img class="team-card-avatar" src="${escapeHtml(avatarSrc(p, 28))}" title="${escapeHtml(p.displayName)}" data-uid="${p.uid}" />`).join("")}
+        ${overflow > 0 ? `<div class="team-card-avatar-more">+${overflow}</div>` : ""}
+      </div>
+    ` : `<div class="team-card-meta">${team.memberIds.length} member${team.memberIds.length !== 1 ? "s" : ""}</div>`;
+
     card.innerHTML = `
       <div class="team-card-name">${escapeHtml(team.name)}</div>
-      <div class="team-card-meta">${team.memberIds.length} member${team.memberIds.length !== 1 ? "s" : ""}</div>
+      ${avatarRowHtml}
     `;
     card.addEventListener("click", () => _onTeamSelected?.(team.id, team.name));
+
+    card.querySelectorAll<HTMLImageElement>(".team-card-avatar").forEach((img) => {
+      img.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const uid = img.dataset.uid;
+        const p = uid ? memberMap.get(uid) : undefined;
+        if (p?.photoFull) showPhotoPopup(p.photoFull);
+        else if (p?.photoThumb) showPhotoPopup(p.photoThumb);
+        else if (p) showPhotoPopup(makeInitialAvatar(p.displayName, 200));
+      });
+    });
 
     const manageBtn = document.createElement("button");
     manageBtn.className = "btn ghost small team-manage-btn";
@@ -2031,6 +2379,7 @@ const renderGroupMemberList = (
     const row = document.createElement("div");
     row.className = "manage-member-row";
     row.innerHTML = `
+      <img class="member-avatar-sm" src="${escapeHtml(avatarSrc(member, 32))}" title="${escapeHtml(member.displayName)}" />
       <div class="manage-member-info">
         <span class="member-name">${escapeHtml(member.displayName)}${isOwner ? ' <span class="member-role-badge">Owner</span>' : ""}</span>
         <span class="member-email">${escapeHtml(member.email)}</span>
@@ -2045,6 +2394,14 @@ const renderGroupMemberList = (
         </button>
       ` : ""}
     `;
+    // Click avatar to view full photo
+    const img = row.querySelector<HTMLImageElement>(".member-avatar-sm")!;
+    img.addEventListener("click", () => {
+      if (member.photoFull) showPhotoPopup(member.photoFull);
+      else if (member.photoThumb) showPhotoPopup(member.photoThumb);
+      else showPhotoPopup(makeInitialAvatar(member.displayName, 200));
+    });
+    img.style.cursor = "pointer";
     listEl.appendChild(row);
   }
 

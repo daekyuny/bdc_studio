@@ -127,6 +127,8 @@ export interface UserProfile {
   role: UserRole;
   groupId?: string;
   createdAt: string;
+  photoThumb?: string;
+  photoFull?: string;
 }
 
 export interface Team {

@@ -15,9 +15,9 @@ service cloud.firestore {
       allow update, delete: if isSuperManager();
     }
 
-    // Groups: PM can create/read/update their own; SM can read all and delete
+    // Groups: any authenticated user can read (members need group name); PM can create/update their own; SM can delete
     match /groups/{groupId} {
-      allow read: if request.auth.uid == resource.data.ownerId || isSuperManager();
+      allow read: if request.auth != null;
       allow create: if isPurePM()
         && request.resource.data.ownerId == request.auth.uid;
       allow update: if request.auth.uid == resource.data.ownerId;

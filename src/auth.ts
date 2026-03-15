@@ -4,6 +4,9 @@ import {
   GoogleAuthProvider,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  updatePassword,
+  reauthenticateWithCredential,
+  EmailAuthProvider,
   signOut as firebaseSignOut,
   type User,
 } from "firebase/auth";
@@ -47,6 +50,16 @@ export const createAccountWithEmail = async (email: string, password: string): P
 
 export const signOut = async (): Promise<void> => {
   await firebaseSignOut(auth);
+};
+
+export const changePassword = async (
+  user: User,
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> => {
+  const credential = EmailAuthProvider.credential(user.email!, currentPassword);
+  await reauthenticateWithCredential(user, credential);
+  await updatePassword(user, newPassword);
 };
 
 // Returns the existing profile, or null if the user has never registered.

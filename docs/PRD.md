@@ -1,7 +1,7 @@
 # Burndown Studio — Product Requirements Document
 
-**Version:** 1.2
-**Last updated:** 2026-03-10
+**Version:** 1.3
+**Last updated:** 2026-03-16
 **Author:** [Your Name]
 **Status:** Draft — open for review
 
@@ -108,7 +108,9 @@ Key pain points:
 | Group model | Group is top-level tenant; PM owns one Group; Teams and Members scoped to Group; SM can view all Groups read-only | Done |
 | Member removal guard | Removing a member blocked if assigned to tasks in the team (PM) or across all teams (SM); also blocked if member owns any teams | Done |
 | User profiles | Name + phone; first-time "register?" prompt on unknown login; registration modal; edit via header button | Done |
-| Member list in Preferences | Read-only, auto-synced from Firebase; click row for full profile popup | Done |
+| Profile photo & avatar | Upload photo (client-side canvas resize to 640px/80px, base64 in Firestore); canvas initial-letter fallback; shown in header, team cards, member lists, popups; click to view full size | Done |
+| Change password | Sub-modal in edit profile (email accounts only); reauthenticate with current password, then update | Done |
+| Member list in Preferences | Read-only, auto-synced from Firebase; click row for full profile popup; click avatar in popup to view full-size photo | Done |
 | Private memo | Per-user, per-team Markdown notes in Preferences; auto-saved; deleted when team is deleted | Done |
 | Last-day Move / Split | On the last working day of the current sprint: Todo tasks get a Move button (ScopeDrop + add to target sprint); In Progress tasks get a Split button (mark Done + create continuation task with suffix b in target sprint) | Done |
 
@@ -202,3 +204,4 @@ Key pain points:
 | 2026-03-06 | 0.9 | Phase 4 features shipped: F-401/F-402/F-403 marked Done. Added Multi-user & Authentication and General feature tables. Updated Assigned To to multi-select string[]. Added user profiles, member list, private memo features. Updated Out of Scope. |
 | 2026-03-07 | 1.0 | Updated to v1.0. Added Last-day Move/Split feature. Updated burndown chart description (N+1 border model, Today band). Updated Admin screen (sortable table, confirm dialog, PM-owns-teams guard). Added Member removal guard row. Updated User profiles (register prompt). |
 | 2026-03-09 | 1.1 | Corrected General table: module count updated to 14 (firebase.ts, auth.ts, db.ts, screens.ts added). Clarified super_manager bootstrap: all new users register as member; first super_manager must be set manually via Firebase Console. Firestore rules enforce role = member on self-create. |
+| 2026-03-16 | 1.3 | User photos & avatars: profile photo upload (client-side canvas resize to 640px full / 80px thumb, base64 stored in Firestore user doc); canvas-generated initial-letter avatar fallback with deterministic color; `avatarSrc()` helper returns best available size; change password sub-modal (email accounts only, reauthenticate + updatePassword); avatar strip on team cards (max 5 + overflow); click any avatar to view full-size photo; group name shown on left side of member team selection screen; BDS header responsive (flat row at wide viewport, stacked centered at narrow). |

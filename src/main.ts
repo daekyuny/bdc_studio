@@ -32,7 +32,7 @@ import type { Sprint } from "./types.ts";
 import { isFirebaseConfigured, functions, DECLINE_INVITATION_URL } from "./firebase.ts";
 import { httpsCallable } from "firebase/functions";
 import { initAuth, ensureUserProfile, createNewUserProfile, createAccountWithEmail, signOut, type User } from "./auth.ts";
-import { showLandingPage, showTeamScreen, showAdminScreen, showGroupScreen, showCreateGroupScreen, hideAllScreens, showProfileEditModal } from "./screens.ts";
+import { showLandingPage, showTeamScreen, showAdminScreen, showGroupScreen, showCreateGroupScreen, hideAllScreens, showProfileEditModal, avatarSrc, showPhotoPopup } from "./screens.ts";
 import { getUserMemo, saveUserMemo, getTeamById, getUsersByIds, getUserProfile, getUserProfileByEmail, getGroupByOwner, getInvitation, updateUserProfile, getPmRequest, createGroup, linkExistingTeamsToGroup } from "./db.ts";
 import type { UserProfile } from "./types.ts";
 
@@ -568,7 +568,10 @@ const showMemberProfilePopup = (name: string): void => {
   popup.innerHTML = `
     <div class="team-modal member-profile-popup">
       <div class="member-profile-popup-header">
-        <span class="member-profile-popup-avatar">${Array.from(name)[0]?.toUpperCase() ?? "?"}</span>
+        ${p
+          ? `<img id="memberPopupAvatar" class="member-profile-popup-avatar-img" style="width:48px;height:48px;border-radius:50%;object-fit:cover;flex-shrink:0" />`
+          : `<span class="member-profile-popup-avatar">${Array.from(name)[0]?.toUpperCase() ?? "?"}</span>`
+        }
         <div>
           <div class="member-profile-popup-name">${name}</div>
           ${p ? `<div class="member-profile-popup-role">${p.role.replace("_", " ")}</div>` : ""}
@@ -588,6 +591,18 @@ const showMemberProfilePopup = (name: string): void => {
     </div>
   `;
   document.body.appendChild(popup);
+  if (p) {
+    const img = document.getElementById("memberPopupAvatar") as HTMLImageElement | null;
+    if (img) {
+      img.src = avatarSrc(p, 48);
+      img.style.cursor = "pointer";
+      img.addEventListener("click", () => {
+        if (p.photoFull) showPhotoPopup(p.photoFull);
+        else if (p.photoThumb) showPhotoPopup(p.photoThumb);
+        else showPhotoPopup(avatarSrc(p, 200));
+      });
+    }
+  }
   popup.addEventListener("click", (e) => { if (e.target === popup) popup.remove(); });
   popup.querySelector(".member-profile-popup-close")!.addEventListener("click", () => popup.remove());
 };
@@ -778,12 +793,14 @@ const goToTeamScreen = (): void => {
   }
   showTeamScreen(_activeUser, _activeProfile, (teamId, teamName) => {
     startApp(teamId, _activeProfile!, teamName);
-  });
+  }, (updated) => { _activeProfile = updated; });
 };
 
 const updateHeaderUser = (profile: UserProfile): void => {
-  const btn = document.getElementById("headerUserName") as HTMLButtonElement;
-  btn.textContent = profile.displayName;
+  const avatarEl = document.getElementById("headerUserAvatar") as HTMLImageElement | null;
+  const nameEl = document.getElementById("headerUserNameText");
+  if (avatarEl) avatarEl.src = avatarSrc(profile, 24);
+  if (nameEl) nameEl.textContent = profile.displayName;
 };
 
 const startApp = async (teamId: string, profile: UserProfile, teamName: string): Promise<void> => {
@@ -831,7 +848,7 @@ document.getElementById("headerUserName")?.addEventListener("click", () => {
   showProfileEditModal(_activeProfile, false, (updated) => {
     _activeProfile = updated;
     updateHeaderUser(updated);
-  });
+  }, _activeUser ?? undefined);
 });
 
 // ---------------------------------------------------------------------------
@@ -922,7 +939,7 @@ if (!isFirebaseConfigured) {
                 showProfileEditModal(newProfile, true, async (updated) => {
                   _activeProfile = updated;
                   resolve();
-                });
+                }, user);
               });
               profile = _activeProfile;
             } else {
@@ -937,7 +954,7 @@ if (!isFirebaseConfigured) {
               _activeProfile = { ...profile, groupId: invitation.groupId };
               showTeamScreen(user, _activeProfile, (teamId, teamName) => {
                 startApp(teamId, _activeProfile!, teamName);
-              });
+              }, (updated) => { _activeProfile = updated; });
             }
             return;
           }
@@ -1019,7 +1036,7 @@ if (!isFirebaseConfigured) {
         }
         showTeamScreen(user, profile, (teamId, teamName) => {
           startApp(teamId, profile, teamName);
-        });
+        }, (updated) => { _activeProfile = updated; });
       } catch (e) {
         console.error("Auth error:", e);
         showLandingPage();
