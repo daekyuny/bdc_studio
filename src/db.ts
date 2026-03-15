@@ -24,6 +24,11 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
   return snap.exists() ? (snap.data() as UserProfile) : null;
 };
 
+export const getUserProfileByEmail = async (email: string): Promise<UserProfile | null> => {
+  const snap = await getDocs(query(collection(db, "users"), where("email", "==", email)));
+  return snap.empty ? null : (snap.docs[0].data() as UserProfile);
+};
+
 export const createUserProfile = async (profile: UserProfile): Promise<void> => {
   await setDoc(doc(db, "users", profile.uid), profile);
 };

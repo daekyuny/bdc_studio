@@ -33,7 +33,7 @@ import { isFirebaseConfigured, functions, DECLINE_INVITATION_URL } from "./fireb
 import { httpsCallable } from "firebase/functions";
 import { initAuth, ensureUserProfile, createNewUserProfile, createAccountWithEmail, signOut, type User } from "./auth.ts";
 import { showLandingPage, showTeamScreen, showAdminScreen, showGroupScreen, showCreateGroupScreen, hideAllScreens, showProfileEditModal } from "./screens.ts";
-import { getUserMemo, saveUserMemo, getTeamById, getUsersByIds, getUserProfile, getGroupByOwner, getInvitation, updateInvitation, addMemberToTeamById, updateUserProfile, getPmRequest, createGroup, linkExistingTeamsToGroup } from "./db.ts";
+import { getUserMemo, saveUserMemo, getTeamById, getUsersByIds, getUserProfile, getUserProfileByEmail, getGroupByOwner, getInvitation, updateInvitation, addMemberToTeamById, updateUserProfile, getPmRequest, createGroup, linkExistingTeamsToGroup } from "./db.ts";
 import type { UserProfile } from "./types.ts";
 
 setOnStateChange(render);
@@ -907,6 +907,14 @@ if (!isFirebaseConfigured) {
             sessionStorage.removeItem("pendingInvite");
             let profile = await ensureUserProfile(user);
             if (!profile) {
+              // Guard: check if a profile already exists for this email under a different uid
+              // (happens when Firebase "multiple accounts per email" is on and user registered twice)
+              const existingByEmail = await getUserProfileByEmail(user.email ?? "");
+              if (existingByEmail) {
+                sessionStorage.setItem("loginError", "This email is already registered under a different sign-in method. Please sign in with your original account (e.g. Google).");
+                await signOut();
+                return;
+              }
               const newProfile = await createNewUserProfile(user);
               _activeProfile = newProfile;
               // Show profile edit, then accept invite
@@ -927,6 +935,15 @@ if (!isFirebaseConfigured) {
                 await addMemberToTeamById(teamId, profile.uid);
               }
               _activeProfile = { ...(profile), groupId: invitation.groupId };
+              // If invited directly to a single team, skip team selection and go straight in
+              if (invitation.teamIds.length === 1) {
+                const team = await getTeamById(invitation.teamIds[0]);
+                if (team) {
+                  hideAllScreens();
+                  startApp(team.id, _activeProfile!, team.name);
+                  return;
+                }
+              }
               showTeamScreen(user, _activeProfile, (teamId, teamName) => {
                 startApp(teamId, _activeProfile!, teamName);
               });
@@ -946,6 +963,13 @@ if (!isFirebaseConfigured) {
             if (pmReq && pmReq.status === "approved" && pmReq.email === user.email) {
               let profile = await ensureUserProfile(user);
               if (!profile) {
+                // Guard: check if a profile already exists for this email under a different uid
+                const existingByEmail = await getUserProfileByEmail(user.email ?? "");
+                if (existingByEmail) {
+                  sessionStorage.setItem("loginError", "This email is already registered under a different sign-in method. Please sign in with your original account (e.g. Google).");
+                  await signOut();
+                  return;
+                }
                 const newProfile = await createNewUserProfile(user);
                 _activeProfile = { ...newProfile, role: "product_manager" };
                 await updateUserProfile(newProfile.uid, { role: "product_manager" } as Parameters<typeof updateUserProfile>[1]);

@@ -211,7 +211,7 @@ const renderPmRegistrationPage = (requestId: string): void => {
               Confirm Password
               <input type="password" id="regPassword2" class="screen-input" placeholder="Confirm password" autocomplete="new-password" />
             </label>
-            <button class="btn" id="regCreateBtn" style="width:100%;margin-top:4px">Create Account &amp; Continue</button>
+            <button class="btn" id="regCreateBtn" style="width:100%;margin-top:4px">Continue</button>
             <div class="screen-error" id="regError" hidden></div>
             ${isGmail ? `
               <div class="login-divider"><span>or, if this is your primary Google account</span></div>
@@ -234,15 +234,28 @@ const renderPmRegistrationPage = (requestId: string): void => {
       if (pw1.length < 6) { errEl.textContent = "Password must be at least 6 characters."; errEl.hidden = false; return; }
       const btn = document.getElementById("regCreateBtn") as HTMLButtonElement;
       btn.disabled = true;
-      btn.textContent = "Creating…";
+      btn.textContent = "Processing…";
       try {
         await createAccountWithEmail(email, pw1);
         // Auth callback picks up pendingPmApproved from sessionStorage
       } catch (e: unknown) {
-        errEl.textContent = e instanceof Error ? e.message : "Failed to create account.";
-        errEl.hidden = false;
-        btn.disabled = false;
-        btn.textContent = "Create Account & Continue";
+        const code = (e as { code?: string }).code;
+        if (code === "auth/email-already-in-use") {
+          // Account already exists — try signing in with the provided password
+          try {
+            await signInWithEmail(email, pw1);
+          } catch {
+            errEl.textContent = "An account with this email already exists. Enter your existing password in both fields, or use Google sign-in.";
+            errEl.hidden = false;
+            btn.disabled = false;
+            btn.textContent = "Continue";
+          }
+        } else {
+          errEl.textContent = e instanceof Error ? e.message : "Failed to create account.";
+          errEl.hidden = false;
+          btn.disabled = false;
+          btn.textContent = "Continue";
+        }
       }
     };
 
@@ -309,7 +322,7 @@ const renderInvitationRegistrationPage = (inviteId: string): void => {
               Confirm Password
               <input type="password" id="invPassword2" class="screen-input" placeholder="Confirm password" autocomplete="new-password" />
             </label>
-            <button class="btn" id="invCreateBtn" style="width:100%;margin-top:4px">Create Account &amp; Accept</button>
+            <button class="btn" id="invCreateBtn" style="width:100%;margin-top:4px">Continue</button>
             <div class="login-divider"><span>or</span></div>
             <button class="login-google-btn" id="invGoogleBtn">${googleSvg} Continue with Google</button>
           </div>
@@ -338,14 +351,27 @@ const renderInvitationRegistrationPage = (inviteId: string): void => {
       if (pw1.length < 6) { errEl.textContent = "Password must be at least 6 characters."; errEl.hidden = false; return; }
       const btn = document.getElementById("invCreateBtn") as HTMLButtonElement;
       btn.disabled = true;
-      btn.textContent = "Creating…";
+      btn.textContent = "Processing…";
       try {
         await createAccountWithEmail(email, pw1);
       } catch (e: unknown) {
-        errEl.textContent = e instanceof Error ? e.message : "Failed to create account.";
-        errEl.hidden = false;
-        btn.disabled = false;
-        btn.textContent = "Create Account & Accept";
+        const code = (e as { code?: string }).code;
+        if (code === "auth/email-already-in-use") {
+          // Account already exists — try signing in with the provided password
+          try {
+            await signInWithEmail(email, pw1);
+          } catch {
+            errEl.textContent = "An account with this email already exists. Enter your existing password in both fields, or use Google sign-in.";
+            errEl.hidden = false;
+            btn.disabled = false;
+            btn.textContent = "Continue";
+          }
+        } else {
+          errEl.textContent = e instanceof Error ? e.message : "Failed to create account.";
+          errEl.hidden = false;
+          btn.disabled = false;
+          btn.textContent = "Continue";
+        }
       }
     };
 

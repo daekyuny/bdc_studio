@@ -21564,6 +21564,10 @@ This typically indicates that your device does not have a healthy Internet conne
     const snap = await getDoc(doc(db, "users", uid));
     return snap.exists() ? snap.data() : null;
   };
+  var getUserProfileByEmail = async (email) => {
+    const snap = await getDocs(query(collection(db, "users"), where("email", "==", email)));
+    return snap.empty ? null : snap.docs[0].data();
+  };
   var createUserProfile = async (profile) => {
     await setDoc(doc(db, "users", profile.uid), profile);
   };
@@ -24185,7 +24189,7 @@ ${marker.label}`;
               Confirm Password
               <input type="password" id="regPassword2" class="screen-input" placeholder="Confirm password" autocomplete="new-password" />
             </label>
-            <button class="btn" id="regCreateBtn" style="width:100%;margin-top:4px">Create Account &amp; Continue</button>
+            <button class="btn" id="regCreateBtn" style="width:100%;margin-top:4px">Continue</button>
             <div class="screen-error" id="regError" hidden></div>
             ${isGmail ? `
               <div class="login-divider"><span>or, if this is your primary Google account</span></div>
@@ -24218,14 +24222,26 @@ ${marker.label}`;
         }
         const btn = document.getElementById("regCreateBtn");
         btn.disabled = true;
-        btn.textContent = "Creating\u2026";
+        btn.textContent = "Processing\u2026";
         try {
           await createAccountWithEmail(email, pw1);
         } catch (e) {
-          errEl.textContent = e instanceof Error ? e.message : "Failed to create account.";
-          errEl.hidden = false;
-          btn.disabled = false;
-          btn.textContent = "Create Account & Continue";
+          const code = e.code;
+          if (code === "auth/email-already-in-use") {
+            try {
+              await signInWithEmail(email, pw1);
+            } catch {
+              errEl.textContent = "An account with this email already exists. Enter your existing password in both fields, or use Google sign-in.";
+              errEl.hidden = false;
+              btn.disabled = false;
+              btn.textContent = "Continue";
+            }
+          } else {
+            errEl.textContent = e instanceof Error ? e.message : "Failed to create account.";
+            errEl.hidden = false;
+            btn.disabled = false;
+            btn.textContent = "Continue";
+          }
         }
       };
       document.getElementById("regCreateBtn").addEventListener("click", doCreate);
@@ -24281,7 +24297,7 @@ ${marker.label}`;
               Confirm Password
               <input type="password" id="invPassword2" class="screen-input" placeholder="Confirm password" autocomplete="new-password" />
             </label>
-            <button class="btn" id="invCreateBtn" style="width:100%;margin-top:4px">Create Account &amp; Accept</button>
+            <button class="btn" id="invCreateBtn" style="width:100%;margin-top:4px">Continue</button>
             <div class="login-divider"><span>or</span></div>
             <button class="login-google-btn" id="invGoogleBtn">${googleSvg} Continue with Google</button>
           </div>
@@ -24319,14 +24335,26 @@ ${marker.label}`;
         }
         const btn = document.getElementById("invCreateBtn");
         btn.disabled = true;
-        btn.textContent = "Creating\u2026";
+        btn.textContent = "Processing\u2026";
         try {
           await createAccountWithEmail(email, pw1);
         } catch (e) {
-          errEl.textContent = e instanceof Error ? e.message : "Failed to create account.";
-          errEl.hidden = false;
-          btn.disabled = false;
-          btn.textContent = "Create Account & Accept";
+          const code = e.code;
+          if (code === "auth/email-already-in-use") {
+            try {
+              await signInWithEmail(email, pw1);
+            } catch {
+              errEl.textContent = "An account with this email already exists. Enter your existing password in both fields, or use Google sign-in.";
+              errEl.hidden = false;
+              btn.disabled = false;
+              btn.textContent = "Continue";
+            }
+          } else {
+            errEl.textContent = e instanceof Error ? e.message : "Failed to create account.";
+            errEl.hidden = false;
+            btn.disabled = false;
+            btn.textContent = "Continue";
+          }
         }
       };
       document.getElementById("invCreateBtn").addEventListener("click", doCreate);
@@ -26622,6 +26650,12 @@ They will also be removed from all teams within the group.`)) return;
               sessionStorage.removeItem("pendingInvite");
               let profile2 = await ensureUserProfile(user);
               if (!profile2) {
+                const existingByEmail = await getUserProfileByEmail(user.email ?? "");
+                if (existingByEmail) {
+                  sessionStorage.setItem("loginError", "This email is already registered under a different sign-in method. Please sign in with your original account (e.g. Google).");
+                  await signOut2();
+                  return;
+                }
                 const newProfile = await createNewUserProfile(user);
                 _activeProfile = newProfile;
                 await new Promise((resolve) => {
@@ -26641,6 +26675,14 @@ They will also be removed from all teams within the group.`)) return;
                   await addMemberToTeamById(teamId, profile2.uid);
                 }
                 _activeProfile = { ...profile2, groupId: invitation.groupId };
+                if (invitation.teamIds.length === 1) {
+                  const team = await getTeamById(invitation.teamIds[0]);
+                  if (team) {
+                    hideAllScreens();
+                    startApp(team.id, _activeProfile, team.name);
+                    return;
+                  }
+                }
                 showTeamScreen(user, _activeProfile, (teamId, teamName) => {
                   startApp(teamId, _activeProfile, teamName);
                 });
@@ -26657,6 +26699,12 @@ They will also be removed from all teams within the group.`)) return;
               if (pmReq && pmReq.status === "approved" && pmReq.email === user.email) {
                 let profile2 = await ensureUserProfile(user);
                 if (!profile2) {
+                  const existingByEmail = await getUserProfileByEmail(user.email ?? "");
+                  if (existingByEmail) {
+                    sessionStorage.setItem("loginError", "This email is already registered under a different sign-in method. Please sign in with your original account (e.g. Google).");
+                    await signOut2();
+                    return;
+                  }
                   const newProfile = await createNewUserProfile(user);
                   _activeProfile = { ...newProfile, role: "product_manager" };
                   await updateUserProfile(newProfile.uid, { role: "product_manager" });
