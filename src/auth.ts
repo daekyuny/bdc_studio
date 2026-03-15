@@ -17,8 +17,14 @@ export const initAuth = (
   onLogin: (user: User) => void,
   onLogout: () => void,
 ): void => {
-  onAuthStateChanged(auth, (user) => {
+  onAuthStateChanged(auth, async (user) => {
     if (user) {
+      // Await the ID token before proceeding so the Firestore SDK has time to
+      // propagate the new auth state. Without this, the very first Firestore
+      // call after a Google popup sign-in can fail with "Missing or insufficient
+      // permissions" because onAuthStateChanged fires before Firestore's internal
+      // auth listener has finished processing the new token.
+      await user.getIdToken();
       onLogin(user);
     } else {
       onLogout();

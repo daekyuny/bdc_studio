@@ -23997,8 +23997,9 @@ ${marker.label}`;
 
   // src/auth.ts
   var initAuth = (onLogin, onLogout) => {
-    onAuthStateChanged(auth, (user) => {
+    onAuthStateChanged(auth, async (user) => {
       if (user) {
+        await user.getIdToken();
         onLogin(user);
       } else {
         onLogout();
