@@ -21612,9 +21612,6 @@ This typically indicates that your device does not have a healthy Internet conne
     const snap = await getDocs(collection(db, "teams"));
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   };
-  var addMemberToTeamById = async (teamId, userId) => {
-    await updateDoc(doc(db, "teams", teamId), { memberIds: arrayUnion(userId) });
-  };
   var addMemberToTeamWithPrefs = async (teamId, userId, displayName) => {
     await updateDoc(doc(db, "teams", teamId), { memberIds: arrayUnion(userId) });
     const appState = await loadTeamState(teamId);
@@ -21775,9 +21772,6 @@ This typically indicates that your device does not have a healthy Internet conne
   var getInvitation = async (inviteId) => {
     const snap = await getDoc(doc(db, "invitations", inviteId));
     return snap.exists() ? { id: snap.id, ...snap.data() } : null;
-  };
-  var updateInvitation = async (inviteId, updates) => {
-    await updateDoc(doc(db, "invitations", inviteId), updates);
   };
   var getInvitationsByGroup = async (groupId) => {
     const snap = await getDocs(
@@ -26669,19 +26663,13 @@ They will also be removed from all teams within the group.`)) return;
                 _activeProfile = profile2;
               }
               if (profile2) {
-                await updateInvitation(pendingInvite, { status: "accepted" });
-                await updateUserProfile(profile2.uid, { groupId: invitation.groupId });
-                for (const teamId of invitation.teamIds) {
-                  await addMemberToTeamById(teamId, profile2.uid);
-                }
+                const acceptInv = httpsCallable(functions, "acceptInvitation");
+                const result = await acceptInv({ inviteId: pendingInvite });
                 _activeProfile = { ...profile2, groupId: invitation.groupId };
-                if (invitation.teamIds.length === 1) {
-                  const team = await getTeamById(invitation.teamIds[0]);
-                  if (team) {
-                    hideAllScreens();
-                    startApp(team.id, _activeProfile, team.name);
-                    return;
-                  }
+                if (result.data.teamId) {
+                  hideAllScreens();
+                  startApp(result.data.teamId, _activeProfile, result.data.teamName ?? "");
+                  return;
                 }
                 showTeamScreen(user, _activeProfile, (teamId, teamName) => {
                   startApp(teamId, _activeProfile, teamName);

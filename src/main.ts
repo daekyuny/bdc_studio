@@ -33,7 +33,7 @@ import { isFirebaseConfigured, functions, DECLINE_INVITATION_URL } from "./fireb
 import { httpsCallable } from "firebase/functions";
 import { initAuth, ensureUserProfile, createNewUserProfile, createAccountWithEmail, signOut, type User } from "./auth.ts";
 import { showLandingPage, showTeamScreen, showAdminScreen, showGroupScreen, showCreateGroupScreen, hideAllScreens, showProfileEditModal } from "./screens.ts";
-import { getUserMemo, saveUserMemo, getTeamById, getUsersByIds, getUserProfile, getUserProfileByEmail, getGroupByOwner, getInvitation, updateInvitation, addMemberToTeamById, updateUserProfile, getPmRequest, createGroup, linkExistingTeamsToGroup } from "./db.ts";
+import { getUserMemo, saveUserMemo, getTeamById, getUsersByIds, getUserProfile, getUserProfileByEmail, getGroupByOwner, getInvitation, updateUserProfile, getPmRequest, createGroup, linkExistingTeamsToGroup } from "./db.ts";
 import type { UserProfile } from "./types.ts";
 
 setOnStateChange(render);
@@ -929,20 +929,17 @@ if (!isFirebaseConfigured) {
               _activeProfile = profile;
             }
             if (profile) {
-              await updateInvitation(pendingInvite, { status: "accepted" });
-              await updateUserProfile(profile.uid, { groupId: invitation.groupId });
-              for (const teamId of invitation.teamIds) {
-                await addMemberToTeamById(teamId, profile.uid);
-              }
-              _activeProfile = { ...(profile), groupId: invitation.groupId };
+              // Single Cloud Function call — Admin SDK handles all writes atomically:
+              // marks invitation accepted, sets groupId, adds to team(s).
+              // This avoids the Firestore rule that blocks client-side team updates.
+              const acceptInv = httpsCallable<{ inviteId: string }, { teamId: string | null; teamName: string | null }>(functions, "acceptInvitation");
+              const result = await acceptInv({ inviteId: pendingInvite });
+              _activeProfile = { ...profile, groupId: invitation.groupId };
               // If invited directly to a single team, skip team selection and go straight in
-              if (invitation.teamIds.length === 1) {
-                const team = await getTeamById(invitation.teamIds[0]);
-                if (team) {
-                  hideAllScreens();
-                  startApp(team.id, _activeProfile!, team.name);
-                  return;
-                }
+              if (result.data.teamId) {
+                hideAllScreens();
+                startApp(result.data.teamId, _activeProfile!, result.data.teamName ?? "");
+                return;
               }
               showTeamScreen(user, _activeProfile, (teamId, teamName) => {
                 startApp(teamId, _activeProfile!, teamName);
