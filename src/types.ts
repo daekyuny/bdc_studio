@@ -157,6 +157,17 @@ export interface Invitation {
   expiresAt: string;
 }
 
+export interface PreRegistration {
+  email: string;       // always lowercase-trimmed
+  groupId: string;
+  teamIds: string[];
+  createdBy: string;   // PM uid
+  createdAt: string;
+  status: "pending" | "claimed" | "cancelled";
+  claimedBy?: string;
+  claimedAt?: string;
+}
+
 export interface PmRequest {
   email: string;
   displayName: string;

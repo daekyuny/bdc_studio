@@ -15,7 +15,7 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "./firebase.ts";
-import type { AppState, UserProfile, Team, UserRole, Group, Invitation, PmRequest } from "./types.ts";
+import type { AppState, UserProfile, Team, UserRole, Group, Invitation, PmRequest, PreRegistration } from "./types.ts";
 
 // --- User Profile ---
 
@@ -162,10 +162,10 @@ export const deleteTeam = async (teamId: string): Promise<void> => {
   // Best-effort cleanup of shared appdata
   try { await deleteDoc(doc(db, "appdata", teamId)); } catch { /* ignore */ }
 
-  // Clean up each member's memo for this team
+  // Clean up each member's private memo for this team
   await Promise.allSettled(
     memberIds.map((uid) =>
-      updateDoc(doc(db, "users", uid), { [`memos.${teamId}`]: deleteField() })
+      deleteDoc(doc(db, "users", uid, "memos", teamId))
     )
   );
 };
@@ -216,18 +216,17 @@ export const deleteUserProfile = async (userId: string): Promise<void> => {
   await deleteDoc(doc(db, "users", userId));
 };
 
-// --- Private Memos (per-user, per-team, not shared) ---
+// --- Private Memos (per-user, per-team; stored in /users/{uid}/memos/{teamId}) ---
+// Only readable/writable by the owning user or a super_manager (Firestore rules enforce this).
 
 export const getUserMemo = async (uid: string, teamId: string): Promise<string> => {
-  const snap = await getDoc(doc(db, "users", uid));
+  const snap = await getDoc(doc(db, "users", uid, "memos", teamId));
   if (!snap.exists()) return "";
-  const data = snap.data() as Record<string, unknown>;
-  const memos = data.memos as Record<string, string> | undefined;
-  return memos?.[teamId] ?? "";
+  return (snap.data() as { text?: string }).text ?? "";
 };
 
 export const saveUserMemo = async (uid: string, teamId: string, text: string): Promise<void> => {
-  await updateDoc(doc(db, "users", uid), { [`memos.${teamId}`]: text });
+  await setDoc(doc(db, "users", uid, "memos", teamId), { text });
 };
 
 // --- Groups ---
@@ -370,6 +369,40 @@ export const getAllPmRequests = async (): Promise<(PmRequest & { id: string })[]
 
 export const updatePmRequest = async (requestId: string, updates: Partial<PmRequest>): Promise<void> => {
   await updateDoc(doc(db, "pm_requests", requestId), updates as Record<string, unknown>);
+};
+
+// --- Pre-Registrations ---
+
+export const createPreregistrations = async (entries: Omit<PreRegistration, "claimedBy" | "claimedAt">[]): Promise<string[]> => {
+  const ids: string[] = [];
+  await Promise.all(
+    entries.map(async (entry) => {
+      const ref = doc(collection(db, "preregistrations"));
+      await setDoc(ref, { ...entry, email: entry.email.toLowerCase().trim() });
+      ids.push(ref.id);
+    }),
+  );
+  return ids;
+};
+
+export const getPreregistrationByEmail = async (email: string): Promise<(PreRegistration & { id: string }) | null> => {
+  const normalised = email.toLowerCase().trim();
+  const snap = await getDocs(
+    query(collection(db, "preregistrations"), where("email", "==", normalised), where("status", "==", "pending")),
+  );
+  if (snap.empty) return null;
+  return { id: snap.docs[0].id, ...snap.docs[0].data() } as PreRegistration & { id: string };
+};
+
+export const getPreregistrationsByGroup = async (groupId: string): Promise<(PreRegistration & { id: string })[]> => {
+  const snap = await getDocs(
+    query(collection(db, "preregistrations"), where("groupId", "==", groupId)),
+  );
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as PreRegistration & { id: string }));
+};
+
+export const updatePreregistration = async (id: string, updates: Partial<PreRegistration>): Promise<void> => {
+  await updateDoc(doc(db, "preregistrations", id), updates as Record<string, unknown>);
 };
 
 // --- App Settings ---

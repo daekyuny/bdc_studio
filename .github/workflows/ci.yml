@@ -10,15 +10,18 @@ jobs:
   ci:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
 
-      - name: Install dependencies
+      - name: Install root dependencies
         run: npm ci
+
+      - name: Install functions dependencies
+        run: npm ci --prefix functions
 
       - name: Generate firebase-config.ts
         run: |
@@ -34,8 +37,11 @@ jobs:
           };
           EOF
 
-      - name: Typecheck
+      - name: Typecheck app
         run: npm run typecheck
+
+      - name: Typecheck functions
+        run: npm run build --prefix functions
 
       - name: Test
         run: npm run test

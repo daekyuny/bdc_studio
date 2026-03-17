@@ -100,6 +100,9 @@ export const acceptInvitation = onCall(
     if (invitation.status !== "pending") {
       throw new HttpsError("failed-precondition", "Invitation is no longer pending.");
     }
+    if (invitation.expiresAt && new Date(invitation.expiresAt as string) < new Date()) {
+      throw new HttpsError("failed-precondition", "Invitation has expired.");
+    }
     if (invitation.email !== request.auth.token.email) {
       throw new HttpsError("permission-denied", "Invitation email does not match signed-in account.");
     }
@@ -201,6 +204,65 @@ export const declineInvitation = onRequest(
     }
 
     res.json({ success: true });
+  },
+);
+
+// ---------------------------------------------------------------------------
+// claimPreregistration — called by a student on first sign-in when a pending
+// pre-registration exists for their email. Uses Admin SDK to bypass Firestore
+// security rules (a new member cannot update team.memberIds directly).
+// Atomically: marks pre-reg claimed, sets user groupId, adds to team(s).
+// ---------------------------------------------------------------------------
+
+export const claimPreregistration = onCall(
+  { region: REGION },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Must be signed in.");
+    }
+
+    const { preregId } = request.data as { preregId: string };
+    if (!preregId) throw new HttpsError("invalid-argument", "preregId required.");
+
+    const preregRef = db.collection("preregistrations").doc(preregId);
+    const preregSnap = await preregRef.get();
+    if (!preregSnap.exists) throw new HttpsError("not-found", "Pre-registration not found.");
+
+    const prereg = preregSnap.data()!;
+
+    if (prereg.status !== "pending") {
+      throw new HttpsError("failed-precondition", "Pre-registration is no longer pending.");
+    }
+    if (prereg.email !== (request.auth.token.email ?? "").toLowerCase()) {
+      throw new HttpsError("permission-denied", "Email does not match signed-in account.");
+    }
+
+    const uid = request.auth.uid;
+    const groupId = prereg.groupId as string;
+    const teamIds = (prereg.teamIds as string[]) ?? [];
+    const now = new Date().toISOString();
+
+    const batch = db.batch();
+
+    batch.update(preregRef, { status: "claimed", claimedBy: uid, claimedAt: now });
+    batch.update(db.collection("users").doc(uid), { groupId });
+
+    for (const teamId of teamIds) {
+      batch.update(db.collection("teams").doc(teamId), {
+        memberIds: admin.firestore.FieldValue.arrayUnion(uid),
+      });
+    }
+
+    await batch.commit();
+
+    if (teamIds.length >= 1) {
+      const teamSnap = await db.collection("teams").doc(teamIds[0]).get();
+      if (teamSnap.exists) {
+        return { teamId: teamIds[0], teamName: (teamSnap.data()!.name as string) ?? "" };
+      }
+    }
+
+    return { teamId: null, teamName: null };
   },
 );
 

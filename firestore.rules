@@ -2,7 +2,8 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Users: any authenticated user can read; self can create/update own profile; SM can do anything
+    // Users: any authenticated user can read profiles (needed for avatars/names);
+    // self can create/update own profile; SM can do anything
     match /users/{uid} {
       allow read: if request.auth != null;
       // Self-create: role must be 'member' (bootstrap super_manager via Firebase Console)
@@ -13,6 +14,11 @@ service cloud.firestore {
         && request.resource.data.role == resource.data.role;
       // Super manager can update any field (including role) and delete
       allow update, delete: if isSuperManager();
+
+      // Private memos: only the owner or SM can read/write
+      match /memos/{teamId} {
+        allow read, write: if request.auth.uid == uid || isSuperManager();
+      }
     }
 
     // Groups: any authenticated user can read (members need group name); PM can create/update their own; SM can delete
@@ -43,6 +49,21 @@ service cloud.firestore {
       allow read: if true;
       allow create: if isPurePM();
       allow update: if request.auth != null;
+    }
+
+    // Pre-registrations: PM can create/read/cancel for their group; SM can do anything
+    // Claiming is done via Cloud Function (Admin SDK) and bypasses these rules
+    match /preregistrations/{id} {
+      allow read: if (isPurePM() && resource.data.createdBy == request.auth.uid)
+                  || isSuperManager();
+      allow create: if isPurePM()
+                    && request.resource.data.createdBy == request.auth.uid
+                    && request.resource.data.status == 'pending';
+      // PM can only cancel their own pre-registrations
+      allow update: if isPurePM()
+                    && resource.data.createdBy == request.auth.uid
+                    && request.resource.data.status == 'cancelled';
+      allow delete: if isSuperManager();
     }
 
     // App settings: anyone can read (landing page checks before login); only SM can write

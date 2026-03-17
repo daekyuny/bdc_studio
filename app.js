@@ -21688,7 +21688,7 @@ This typically indicates that your device does not have a healthy Internet conne
     }
     await Promise.allSettled(
       memberIds.map(
-        (uid) => updateDoc(doc(db, "users", uid), { [`memos.${teamId}`]: deleteField() })
+        (uid) => deleteDoc(doc(db, "users", uid, "memos", teamId))
       )
     );
   };
@@ -21723,14 +21723,12 @@ This typically indicates that your device does not have a healthy Internet conne
     await deleteDoc(doc(db, "users", userId));
   };
   var getUserMemo = async (uid, teamId) => {
-    const snap = await getDoc(doc(db, "users", uid));
+    const snap = await getDoc(doc(db, "users", uid, "memos", teamId));
     if (!snap.exists()) return "";
-    const data = snap.data();
-    const memos = data.memos;
-    return memos?.[teamId] ?? "";
+    return snap.data().text ?? "";
   };
   var saveUserMemo = async (uid, teamId, text) => {
-    await updateDoc(doc(db, "users", uid), { [`memos.${teamId}`]: text });
+    await setDoc(doc(db, "users", uid, "memos", teamId), { text });
   };
   var createGroup = async (name5, ownerId) => {
     const ref = doc(collection(db, "groups"));
@@ -21841,6 +21839,34 @@ This typically indicates that your device does not have a healthy Internet conne
   };
   var updatePmRequest = async (requestId, updates) => {
     await updateDoc(doc(db, "pm_requests", requestId), updates);
+  };
+  var createPreregistrations = async (entries) => {
+    const ids = [];
+    await Promise.all(
+      entries.map(async (entry) => {
+        const ref = doc(collection(db, "preregistrations"));
+        await setDoc(ref, { ...entry, email: entry.email.toLowerCase().trim() });
+        ids.push(ref.id);
+      })
+    );
+    return ids;
+  };
+  var getPreregistrationByEmail = async (email) => {
+    const normalised = email.toLowerCase().trim();
+    const snap = await getDocs(
+      query(collection(db, "preregistrations"), where("email", "==", normalised), where("status", "==", "pending"))
+    );
+    if (snap.empty) return null;
+    return { id: snap.docs[0].id, ...snap.docs[0].data() };
+  };
+  var getPreregistrationsByGroup = async (groupId) => {
+    const snap = await getDocs(
+      query(collection(db, "preregistrations"), where("groupId", "==", groupId))
+    );
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  };
+  var updatePreregistration = async (id, updates) => {
+    await updateDoc(doc(db, "preregistrations", id), updates);
   };
   var getAppSettings = async () => {
     const snap = await getDoc(doc(db, "settings", "app"));
@@ -24146,7 +24172,12 @@ ${marker.label}`;
     if (profile.photoThumb) return profile.photoThumb;
     return makeInitialAvatar(profile.displayName, size);
   };
+  var MAX_AVATAR_FILE_SIZE = 5 * 1024 * 1024;
   var resizeImage = (file, maxDim) => new Promise((resolve, reject) => {
+    if (file.size > MAX_AVATAR_FILE_SIZE) {
+      reject(new Error("Image file too large (max 5 MB)."));
+      return;
+    }
     const reader = new FileReader();
     reader.onload = (e) => {
       const img = new Image();
@@ -24998,6 +25029,14 @@ All shared sprint data for this team will be permanently removed.`)) return;
           <div class="screen-success" id="inviteSuccess" hidden></div>
           <div class="manage-members-col-title" style="margin-top:16px">Pending Invitations</div>
           <div id="pendingInviteList" class="manage-member-list"><em>Loading\u2026</em></div>
+          <div class="manage-members-col-title" style="margin-top:16px">Pre-register Students</div>
+          <p class="pref-hint" style="margin:4px 0 8px">Students with Google accounts are auto-joined on first sign-in \u2014 no email needed.</p>
+          <textarea id="preregEmailsInput" class="screen-input" rows="4" placeholder="student1@school.edu&#10;student2@school.edu&#10;student3@school.edu" style="width:100%;resize:vertical"></textarea>
+          <div class="screen-error" id="preregError" hidden></div>
+          <div class="screen-success" id="preregSuccess" hidden></div>
+          <button class="btn" id="preregSubmitBtn" style="margin-top:6px">Pre-register</button>
+          <div class="manage-members-col-title" style="margin-top:16px">Pending Pre-registrations</div>
+          <div id="pendingPreregList" class="manage-member-list"><em>Loading\u2026</em></div>
         </div>
       </div>
       <div class="team-modal-footer">
@@ -25229,8 +25268,103 @@ All shared sprint data for this team will be permanently removed.`)) return;
         btn.textContent = "Send Invite";
       }
     });
+    const refreshPendingPreregs = async () => {
+      const listEl = document.getElementById("pendingPreregList");
+      if (!groupId) {
+        listEl.innerHTML = "<em>No group context.</em>";
+        return;
+      }
+      try {
+        const all = await getPreregistrationsByGroup(groupId);
+        const pending = all.filter((p) => p.status === "pending");
+        if (pending.length === 0) {
+          listEl.innerHTML = "<em>No pending pre-registrations.</em>";
+        } else {
+          listEl.innerHTML = pending.map((p) => `
+          <div class="manage-member-row">
+            <div class="manage-member-info">
+              <span class="member-email">${escapeHtml(p.email)}</span>
+              <span class="member-role-badge" style="margin-left:8px">pending</span>
+            </div>
+            <button class="btn ghost" data-cancel-prereg="${p.id}" style="font-size:0.8em;padding:2px 8px">Cancel</button>
+          </div>
+        `).join("");
+          listEl.querySelectorAll("[data-cancel-prereg]").forEach((btn) => {
+            btn.addEventListener("click", async () => {
+              const id = btn.dataset.cancelPrereg;
+              btn.disabled = true;
+              btn.textContent = "Cancelling\u2026";
+              try {
+                await updatePreregistration(id, { status: "cancelled" });
+                void refreshPendingPreregs();
+              } catch {
+                btn.disabled = false;
+                btn.textContent = "Cancel";
+              }
+            });
+          });
+        }
+      } catch {
+        listEl.innerHTML = "<em>Failed to load.</em>";
+      }
+    };
+    document.getElementById("preregSubmitBtn").addEventListener("click", async () => {
+      const textarea = document.getElementById("preregEmailsInput");
+      const errEl = document.getElementById("preregError");
+      const successEl = document.getElementById("preregSuccess");
+      const btn = document.getElementById("preregSubmitBtn");
+      errEl.hidden = true;
+      successEl.hidden = true;
+      if (!groupId) {
+        errEl.textContent = "No group context.";
+        errEl.hidden = false;
+        return;
+      }
+      const emails = [...new Set(
+        textarea.value.split("\n").map((e) => e.trim().toLowerCase()).filter((e) => e.includes("@"))
+      )];
+      if (emails.length === 0) {
+        errEl.textContent = "Enter at least one valid email address.";
+        errEl.hidden = false;
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = "Pre-registering\u2026";
+      try {
+        const existing = await getPreregistrationsByGroup(groupId);
+        const pendingEmails = new Set(existing.filter((p) => p.status === "pending").map((p) => p.email));
+        const toCreate = emails.filter((e) => !pendingEmails.has(e));
+        const skipped = emails.length - toCreate.length;
+        if (toCreate.length > 0) {
+          const now = (/* @__PURE__ */ new Date()).toISOString();
+          await createPreregistrations(
+            toCreate.map((email) => ({
+              email,
+              groupId,
+              teamIds: [team.id],
+              createdBy: profile.uid,
+              createdAt: now,
+              status: "pending"
+            }))
+          );
+        }
+        textarea.value = "";
+        let msg = toCreate.length > 0 ? `${toCreate.length} student(s) pre-registered.` : "";
+        if (skipped > 0) msg += ` ${skipped} already pending (skipped).`;
+        successEl.textContent = msg.trim();
+        successEl.hidden = false;
+        void refreshPendingPreregs();
+      } catch (e) {
+        errEl.textContent = e instanceof Error ? e.message : "Failed to pre-register.";
+        errEl.hidden = false;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Pre-register";
+      }
+    });
     void refreshMembers();
     void refreshPendingInvites();
+    void refreshPendingPreregs();
   };
   var showAdminScreen = (profile) => {
     clearContainer();
@@ -26928,11 +27062,81 @@ They will also be removed from all teams within the group.`)) return;
   var _activeUser = null;
   var _activeProfile = null;
   var _teamMemberProfiles = [];
+  var SM_TIMEOUT_MS = 10 * 60 * 1e3;
+  var SM_WARN_MS = 9 * 60 * 1e3;
+  var _smTimeoutId = null;
+  var _smWarnId = null;
+  var _smWarnEl = null;
+  var _smActivityHandler = null;
+  var _dismissSmWarn = () => {
+    _smWarnEl?.remove();
+    _smWarnEl = null;
+  };
+  var _showSmWarn = () => {
+    _dismissSmWarn();
+    const el = document.createElement("div");
+    el.id = "smTimeoutWarn";
+    el.style.cssText = [
+      "position:fixed",
+      "bottom:24px",
+      "left:50%",
+      "transform:translateX(-50%)",
+      "background:#b91c1c",
+      "color:#fff",
+      "padding:12px 24px",
+      "border-radius:8px",
+      "font-size:14px",
+      "font-weight:600",
+      "z-index:99999",
+      "box-shadow:0 4px 16px rgba(0,0,0,0.4)",
+      "pointer-events:none"
+    ].join(";");
+    el.textContent = "Session expiring in 1 minute due to inactivity.";
+    document.body.appendChild(el);
+    _smWarnEl = el;
+  };
+  var _clearSmTimers = () => {
+    if (_smTimeoutId !== null) {
+      clearTimeout(_smTimeoutId);
+      _smTimeoutId = null;
+    }
+    if (_smWarnId !== null) {
+      clearTimeout(_smWarnId);
+      _smWarnId = null;
+    }
+    _dismissSmWarn();
+  };
+  var _resetSmTimer = () => {
+    _clearSmTimers();
+    _smWarnId = setTimeout(_showSmWarn, SM_WARN_MS);
+    _smTimeoutId = setTimeout(() => {
+      void signOut2();
+    }, SM_TIMEOUT_MS);
+  };
+  var SM_ACTIVITY_EVENTS = ["mousemove", "mousedown", "keydown", "touchstart", "scroll"];
+  var startSmInactivityTimer = () => {
+    stopSmInactivityTimer();
+    _smActivityHandler = () => _resetSmTimer();
+    for (const ev of SM_ACTIVITY_EVENTS) {
+      document.addEventListener(ev, _smActivityHandler, { passive: true });
+    }
+    _resetSmTimer();
+  };
+  var stopSmInactivityTimer = () => {
+    _clearSmTimers();
+    if (_smActivityHandler) {
+      for (const ev of SM_ACTIVITY_EVENTS) {
+        document.removeEventListener(ev, _smActivityHandler);
+      }
+      _smActivityHandler = null;
+    }
+  };
   var goToTeamScreen = () => {
     if (!_activeUser || !_activeProfile) return;
     hideApp();
     if (_activeProfile.role === "super_manager") {
       showAdminScreen(_activeProfile);
+      startSmInactivityTimer();
       return;
     }
     if (_activeProfile.role === "product_manager") {
@@ -27128,6 +27332,32 @@ They will also be removed from all teams within the group.`)) return;
           }
           const profile = await ensureUserProfile(user);
           if (!profile) {
+            const prereg = await getPreregistrationByEmail(user.email ?? "");
+            if (prereg) {
+              const existingByEmail = await getUserProfileByEmail(user.email ?? "");
+              if (existingByEmail) {
+                sessionStorage.setItem("loginError", "This email is already registered under a different sign-in method. Please sign in with your original account.");
+                await signOut2();
+                return;
+              }
+              const newProfile = await createNewUserProfile(user);
+              _activeProfile = newProfile;
+              await new Promise((resolve) => {
+                showProfileEditModal(newProfile, true, async (updated) => {
+                  _activeProfile = updated;
+                  resolve();
+                }, user);
+              });
+              const claimFn = httpsCallable(functions, "claimPreregistration");
+              await claimFn({ preregId: prereg.id });
+              _activeProfile = { ..._activeProfile, groupId: prereg.groupId };
+              showTeamScreen(user, _activeProfile, (teamId, teamName) => {
+                startApp(teamId, _activeProfile, teamName);
+              }, (updated) => {
+                _activeProfile = updated;
+              });
+              return;
+            }
             sessionStorage.setItem("loginError", "No account found. Please use your invitation link to register.");
             await signOut2();
             return;
@@ -27135,6 +27365,7 @@ They will also be removed from all teams within the group.`)) return;
           _activeProfile = profile;
           if (profile.role === "super_manager") {
             showAdminScreen(profile);
+            startSmInactivityTimer();
             return;
           }
           if (profile.role === "product_manager") {
@@ -27167,6 +27398,7 @@ They will also be removed from all teams within the group.`)) return;
         _activeProfile = null;
         _currentTeamIdForMemo = null;
         _currentUidForMemo = null;
+        stopSmInactivityTimer();
         hideApp();
         const headerUserInfo = document.getElementById("headerUserInfo");
         if (headerUserInfo) headerUserInfo.hidden = true;

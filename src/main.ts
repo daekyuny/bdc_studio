@@ -33,7 +33,7 @@ import { isFirebaseConfigured, functions, DECLINE_INVITATION_URL } from "./fireb
 import { httpsCallable } from "firebase/functions";
 import { initAuth, ensureUserProfile, createNewUserProfile, createAccountWithEmail, signOut, type User } from "./auth.ts";
 import { showLandingPage, showTeamScreen, showAdminScreen, showGroupScreen, showCreateGroupScreen, hideAllScreens, showProfileEditModal, avatarSrc, showPhotoPopup } from "./screens.ts";
-import { getUserMemo, saveUserMemo, getTeamById, getUsersByIds, getUserProfile, getUserProfileByEmail, getGroupByOwner, getInvitation, updateUserProfile, getPmRequest, createGroup, linkExistingTeamsToGroup } from "./db.ts";
+import { getUserMemo, saveUserMemo, getTeamById, getUsersByIds, getUserProfile, getUserProfileByEmail, getGroupByOwner, getInvitation, updateUserProfile, getPmRequest, createGroup, linkExistingTeamsToGroup, getPreregistrationByEmail } from "./db.ts";
 import type { UserProfile } from "./types.ts";
 
 setOnStateChange(render);
@@ -766,11 +766,77 @@ let _activeUser: User | null = null;
 let _activeProfile: UserProfile | null = null;
 let _teamMemberProfiles: UserProfile[] = [];
 
+// ---------------------------------------------------------------------------
+// SM inactivity timeout — auto-logout after 10 minutes of no activity
+// ---------------------------------------------------------------------------
+const SM_TIMEOUT_MS = 10 * 60 * 1000;   // 10 minutes
+const SM_WARN_MS   =  9 * 60 * 1000;    //  9 minutes (1-minute warning)
+
+let _smTimeoutId: ReturnType<typeof setTimeout> | null = null;
+let _smWarnId:    ReturnType<typeof setTimeout> | null = null;
+let _smWarnEl:    HTMLElement | null = null;
+let _smActivityHandler: (() => void) | null = null;
+
+const _dismissSmWarn = (): void => {
+  _smWarnEl?.remove();
+  _smWarnEl = null;
+};
+
+const _showSmWarn = (): void => {
+  _dismissSmWarn();
+  const el = document.createElement("div");
+  el.id = "smTimeoutWarn";
+  el.style.cssText = [
+    "position:fixed", "bottom:24px", "left:50%", "transform:translateX(-50%)",
+    "background:#b91c1c", "color:#fff", "padding:12px 24px", "border-radius:8px",
+    "font-size:14px", "font-weight:600", "z-index:99999",
+    "box-shadow:0 4px 16px rgba(0,0,0,0.4)", "pointer-events:none",
+  ].join(";");
+  el.textContent = "Session expiring in 1 minute due to inactivity.";
+  document.body.appendChild(el);
+  _smWarnEl = el;
+};
+
+const _clearSmTimers = (): void => {
+  if (_smTimeoutId !== null) { clearTimeout(_smTimeoutId); _smTimeoutId = null; }
+  if (_smWarnId    !== null) { clearTimeout(_smWarnId);    _smWarnId    = null; }
+  _dismissSmWarn();
+};
+
+const _resetSmTimer = (): void => {
+  _clearSmTimers();
+  _smWarnId    = setTimeout(_showSmWarn,                   SM_WARN_MS);
+  _smTimeoutId = setTimeout(() => { void signOut(); }, SM_TIMEOUT_MS);
+};
+
+const SM_ACTIVITY_EVENTS = ["mousemove", "mousedown", "keydown", "touchstart", "scroll"] as const;
+
+const startSmInactivityTimer = (): void => {
+  // Avoid double-registering listeners if called more than once
+  stopSmInactivityTimer();
+  _smActivityHandler = (): void => _resetSmTimer();
+  for (const ev of SM_ACTIVITY_EVENTS) {
+    document.addEventListener(ev, _smActivityHandler, { passive: true });
+  }
+  _resetSmTimer();
+};
+
+const stopSmInactivityTimer = (): void => {
+  _clearSmTimers();
+  if (_smActivityHandler) {
+    for (const ev of SM_ACTIVITY_EVENTS) {
+      document.removeEventListener(ev, _smActivityHandler);
+    }
+    _smActivityHandler = null;
+  }
+};
+
 const goToTeamScreen = (): void => {
   if (!_activeUser || !_activeProfile) return;
   hideApp();
   if (_activeProfile.role === "super_manager") {
     showAdminScreen(_activeProfile);
+    startSmInactivityTimer();
     return;
   }
   if (_activeProfile.role === "product_manager") {
@@ -1009,7 +1075,33 @@ if (!isFirebaseConfigured) {
         // --- Normal login flow ---
         const profile = await ensureUserProfile(user);
         if (!profile) {
-          // No Firestore profile — not a registered user; sign out and show error
+          // Check for a pending pre-registration before rejecting
+          const prereg = await getPreregistrationByEmail(user.email ?? "");
+          if (prereg) {
+            const existingByEmail = await getUserProfileByEmail(user.email ?? "");
+            if (existingByEmail) {
+              sessionStorage.setItem("loginError", "This email is already registered under a different sign-in method. Please sign in with your original account.");
+              await signOut();
+              return;
+            }
+            const newProfile = await createNewUserProfile(user);
+            _activeProfile = newProfile;
+            // Let the student set their display name before joining
+            await new Promise<void>((resolve) => {
+              showProfileEditModal(newProfile, true, async (updated) => {
+                _activeProfile = updated;
+                resolve();
+              }, user);
+            });
+            const claimFn = httpsCallable<{ preregId: string }, { teamId: string | null; teamName: string | null }>(functions, "claimPreregistration");
+            await claimFn({ preregId: prereg.id });
+            _activeProfile = { ..._activeProfile!, groupId: prereg.groupId };
+            showTeamScreen(user, _activeProfile!, (teamId, teamName) => {
+              startApp(teamId, _activeProfile!, teamName);
+            }, (updated) => { _activeProfile = updated; });
+            return;
+          }
+          // No pre-registration found — truly unregistered
           sessionStorage.setItem("loginError", "No account found. Please use your invitation link to register.");
           await signOut();
           return;
@@ -1017,6 +1109,7 @@ if (!isFirebaseConfigured) {
         _activeProfile = profile;
         if (profile.role === "super_manager") {
           showAdminScreen(profile);
+          startSmInactivityTimer();
           return;
         }
         if (profile.role === "product_manager") {
@@ -1047,6 +1140,7 @@ if (!isFirebaseConfigured) {
       _activeProfile = null;
       _currentTeamIdForMemo = null;
       _currentUidForMemo = null;
+      stopSmInactivityTimer();
       hideApp();
       const headerUserInfo = document.getElementById("headerUserInfo");
       if (headerUserInfo) headerUserInfo.hidden = true;

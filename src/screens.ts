@@ -24,6 +24,9 @@ import {
   getInvitation,
   updateInvitation,
   getInvitationsByGroup,
+  createPreregistrations,
+  getPreregistrationsByGroup,
+  updatePreregistration,
   createPmRequest,
   getPmRequest,
   getAllPmRequests,
@@ -103,8 +106,14 @@ export const avatarSrc = (profile: UserProfile, size: number): string => {
   return makeInitialAvatar(profile.displayName, size);
 };
 
+const MAX_AVATAR_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+
 const resizeImage = (file: File, maxDim: number): Promise<string> =>
   new Promise((resolve, reject) => {
+    if (file.size > MAX_AVATAR_FILE_SIZE) {
+      reject(new Error("Image file too large (max 5 MB)."));
+      return;
+    }
     const reader = new FileReader();
     reader.onload = (e) => {
       const img = new Image();
@@ -1057,6 +1066,14 @@ const showManageMembers = (team: Team, profile: UserProfile, onDone?: () => void
           <div class="screen-success" id="inviteSuccess" hidden></div>
           <div class="manage-members-col-title" style="margin-top:16px">Pending Invitations</div>
           <div id="pendingInviteList" class="manage-member-list"><em>Loading…</em></div>
+          <div class="manage-members-col-title" style="margin-top:16px">Pre-register Students</div>
+          <p class="pref-hint" style="margin:4px 0 8px">Students with Google accounts are auto-joined on first sign-in — no email needed.</p>
+          <textarea id="preregEmailsInput" class="screen-input" rows="4" placeholder="student1@school.edu&#10;student2@school.edu&#10;student3@school.edu" style="width:100%;resize:vertical"></textarea>
+          <div class="screen-error" id="preregError" hidden></div>
+          <div class="screen-success" id="preregSuccess" hidden></div>
+          <button class="btn" id="preregSubmitBtn" style="margin-top:6px">Pre-register</button>
+          <div class="manage-members-col-title" style="margin-top:16px">Pending Pre-registrations</div>
+          <div id="pendingPreregList" class="manage-member-list"><em>Loading…</em></div>
         </div>
       </div>
       <div class="team-modal-footer">
@@ -1296,8 +1313,112 @@ const showManageMembers = (team: Team, profile: UserProfile, onDone?: () => void
     }
   });
 
+  const refreshPendingPreregs = async () => {
+    const listEl = document.getElementById("pendingPreregList")!;
+    if (!groupId) { listEl.innerHTML = "<em>No group context.</em>"; return; }
+    try {
+      const all = await getPreregistrationsByGroup(groupId);
+      const pending = all.filter((p) => p.status === "pending");
+      if (pending.length === 0) {
+        listEl.innerHTML = "<em>No pending pre-registrations.</em>";
+      } else {
+        listEl.innerHTML = pending.map((p) => `
+          <div class="manage-member-row">
+            <div class="manage-member-info">
+              <span class="member-email">${escapeHtml(p.email)}</span>
+              <span class="member-role-badge" style="margin-left:8px">pending</span>
+            </div>
+            <button class="btn ghost" data-cancel-prereg="${p.id}" style="font-size:0.8em;padding:2px 8px">Cancel</button>
+          </div>
+        `).join("");
+        listEl.querySelectorAll<HTMLButtonElement>("[data-cancel-prereg]").forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            const id = btn.dataset.cancelPrereg!;
+            btn.disabled = true;
+            btn.textContent = "Cancelling…";
+            try {
+              await updatePreregistration(id, { status: "cancelled" });
+              void refreshPendingPreregs();
+            } catch {
+              btn.disabled = false;
+              btn.textContent = "Cancel";
+            }
+          });
+        });
+      }
+    } catch {
+      listEl.innerHTML = "<em>Failed to load.</em>";
+    }
+  };
+
+  // Wire pre-register button
+  document.getElementById("preregSubmitBtn")!.addEventListener("click", async () => {
+    const textarea = document.getElementById("preregEmailsInput") as HTMLTextAreaElement;
+    const errEl = document.getElementById("preregError")!;
+    const successEl = document.getElementById("preregSuccess")!;
+    const btn = document.getElementById("preregSubmitBtn") as HTMLButtonElement;
+    errEl.hidden = true;
+    successEl.hidden = true;
+
+    if (!groupId) {
+      errEl.textContent = "No group context.";
+      errEl.hidden = false;
+      return;
+    }
+
+    // Parse, normalise, deduplicate
+    const emails = [...new Set(
+      textarea.value.split("\n")
+        .map((e) => e.trim().toLowerCase())
+        .filter((e) => e.includes("@")),
+    )];
+    if (emails.length === 0) {
+      errEl.textContent = "Enter at least one valid email address.";
+      errEl.hidden = false;
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "Pre-registering…";
+    try {
+      // Skip emails that already have a pending pre-registration in this group
+      const existing = await getPreregistrationsByGroup(groupId);
+      const pendingEmails = new Set(existing.filter((p) => p.status === "pending").map((p) => p.email));
+      const toCreate = emails.filter((e) => !pendingEmails.has(e));
+      const skipped = emails.length - toCreate.length;
+
+      if (toCreate.length > 0) {
+        const now = new Date().toISOString();
+        await createPreregistrations(
+          toCreate.map((email) => ({
+            email,
+            groupId,
+            teamIds: [team.id],
+            createdBy: profile.uid,
+            createdAt: now,
+            status: "pending" as const,
+          })),
+        );
+      }
+
+      textarea.value = "";
+      let msg = toCreate.length > 0 ? `${toCreate.length} student(s) pre-registered.` : "";
+      if (skipped > 0) msg += ` ${skipped} already pending (skipped).`;
+      successEl.textContent = msg.trim();
+      successEl.hidden = false;
+      void refreshPendingPreregs();
+    } catch (e: unknown) {
+      errEl.textContent = e instanceof Error ? e.message : "Failed to pre-register.";
+      errEl.hidden = false;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Pre-register";
+    }
+  });
+
   void refreshMembers();
   void refreshPendingInvites();
+  void refreshPendingPreregs();
 };
 
 // ---------------------------------------------------------------------------
