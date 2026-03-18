@@ -25045,16 +25045,16 @@ All shared sprint data for this team will be permanently removed.`)) return;
     </div>
   `;
     getContainer().appendChild(modal);
-    modal.addEventListener("click", (e) => {
-      if (e.target === modal) {
-        modal.remove();
-        onDone?.();
-      }
-    });
-    document.getElementById("manageMembersDone").addEventListener("click", () => {
+    document.body.style.overflow = "hidden";
+    const closeModal2 = () => {
       modal.remove();
+      document.body.style.overflow = "";
       onDone?.();
+    };
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) closeModal2();
     });
+    document.getElementById("manageMembersDone").addEventListener("click", closeModal2);
     const refreshMembers = async () => {
       const errEl = document.getElementById("manageMemberError");
       errEl.hidden = true;

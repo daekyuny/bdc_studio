@@ -1082,9 +1082,16 @@ const showManageMembers = (team: Team, profile: UserProfile, onDone?: () => void
     </div>
   `;
   getContainer().appendChild(modal);
+  document.body.style.overflow = "hidden";
 
-  modal.addEventListener("click", (e) => { if (e.target === modal) { modal.remove(); onDone?.(); } });
-  document.getElementById("manageMembersDone")!.addEventListener("click", () => { modal.remove(); onDone?.(); });
+  const closeModal = () => {
+    modal.remove();
+    document.body.style.overflow = "";
+    onDone?.();
+  };
+
+  modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
+  document.getElementById("manageMembersDone")!.addEventListener("click", closeModal);
 
   const refreshMembers = async () => {
     const errEl = document.getElementById("manageMemberError")!;
