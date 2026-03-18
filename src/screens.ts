@@ -1317,7 +1317,7 @@ const showManageMembers = (team: Team, profile: UserProfile, onDone?: () => void
     const listEl = document.getElementById("pendingPreregList")!;
     if (!groupId) { listEl.innerHTML = "<em>No group context.</em>"; return; }
     try {
-      const all = await getPreregistrationsByGroup(groupId);
+      const all = await getPreregistrationsByGroup(groupId, profile.uid);
       const pending = all.filter((p) => p.status === "pending");
       if (pending.length === 0) {
         listEl.innerHTML = "<em>No pending pre-registrations.</em>";
@@ -1382,7 +1382,7 @@ const showManageMembers = (team: Team, profile: UserProfile, onDone?: () => void
     btn.textContent = "Pre-registering…";
     try {
       // Skip emails that already have a pending pre-registration in this group
-      const existing = await getPreregistrationsByGroup(groupId);
+      const existing = await getPreregistrationsByGroup(groupId, profile.uid);
       const pendingEmails = new Set(existing.filter((p) => p.status === "pending").map((p) => p.email));
       const toCreate = emails.filter((e) => !pendingEmails.has(e));
       const skipped = emails.length - toCreate.length;

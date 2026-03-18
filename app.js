@@ -21859,9 +21859,9 @@ This typically indicates that your device does not have a healthy Internet conne
     if (snap.empty) return null;
     return { id: snap.docs[0].id, ...snap.docs[0].data() };
   };
-  var getPreregistrationsByGroup = async (groupId) => {
+  var getPreregistrationsByGroup = async (groupId, createdBy) => {
     const snap = await getDocs(
-      query(collection(db, "preregistrations"), where("groupId", "==", groupId))
+      query(collection(db, "preregistrations"), where("groupId", "==", groupId), where("createdBy", "==", createdBy))
     );
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   };
@@ -25275,7 +25275,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
         return;
       }
       try {
-        const all = await getPreregistrationsByGroup(groupId);
+        const all = await getPreregistrationsByGroup(groupId, profile.uid);
         const pending = all.filter((p) => p.status === "pending");
         if (pending.length === 0) {
           listEl.innerHTML = "<em>No pending pre-registrations.</em>";
@@ -25331,7 +25331,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
       btn.disabled = true;
       btn.textContent = "Pre-registering\u2026";
       try {
-        const existing = await getPreregistrationsByGroup(groupId);
+        const existing = await getPreregistrationsByGroup(groupId, profile.uid);
         const pendingEmails = new Set(existing.filter((p) => p.status === "pending").map((p) => p.email));
         const toCreate = emails.filter((e) => !pendingEmails.has(e));
         const skipped = emails.length - toCreate.length;

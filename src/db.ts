@@ -394,9 +394,9 @@ export const getPreregistrationByEmail = async (email: string): Promise<(PreRegi
   return { id: snap.docs[0].id, ...snap.docs[0].data() } as PreRegistration & { id: string };
 };
 
-export const getPreregistrationsByGroup = async (groupId: string): Promise<(PreRegistration & { id: string })[]> => {
+export const getPreregistrationsByGroup = async (groupId: string, createdBy: string): Promise<(PreRegistration & { id: string })[]> => {
   const snap = await getDocs(
-    query(collection(db, "preregistrations"), where("groupId", "==", groupId)),
+    query(collection(db, "preregistrations"), where("groupId", "==", groupId), where("createdBy", "==", createdBy)),
   );
   return snap.docs.map((d) => ({ id: d.id, ...d.data() } as PreRegistration & { id: string }));
 };

@@ -4,8 +4,16 @@
       "collectionGroup": "preregistrations",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "email",  "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" }
+        { "fieldPath": "email",     "order": "ASCENDING" },
+        { "fieldPath": "status",    "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "preregistrations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "groupId",   "order": "ASCENDING" },
+        { "fieldPath": "createdBy", "order": "ASCENDING" }
       ]
     }
   ],
