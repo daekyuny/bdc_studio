@@ -54,7 +54,8 @@ service cloud.firestore {
     // Pre-registrations: PM can create/read/cancel for their group; SM can do anything
     // Claiming is done via Cloud Function (Admin SDK) and bypasses these rules
     match /preregistrations/{id} {
-      allow read: if (isPurePM() && resource.data.createdBy == request.auth.uid)
+      allow read: if resource.data.email == request.auth.token.email.lower()
+                  || (isPurePM() && resource.data.createdBy == request.auth.uid)
                   || isSuperManager();
       allow create: if isPurePM()
                     && request.resource.data.createdBy == request.auth.uid
