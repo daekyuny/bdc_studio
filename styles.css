@@ -2162,7 +2162,9 @@ th.sortable.sort-desc::after {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  padding-top: 4px;
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 /* Admin screen — sidebar layout */
