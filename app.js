@@ -25029,7 +25029,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
           <div class="screen-success" id="inviteSuccess" hidden></div>
           <div class="manage-members-col-title" style="margin-top:16px">Pending Invitations</div>
           <div id="pendingInviteList" class="manage-member-list"><em>Loading\u2026</em></div>
-          <div class="manage-members-col-title" style="margin-top:16px">Pre-register Students</div>
+          <div class="manage-members-col-title" style="margin-top:16px">Pre-register Users</div>
           <p class="pref-hint" style="margin:4px 0 8px">Students with Google accounts are auto-joined on first sign-in \u2014 no email needed.</p>
           <textarea id="preregEmailsInput" class="screen-input" rows="4" placeholder="student1@school.edu&#10;student2@school.edu&#10;student3@school.edu" style="width:100%;resize:vertical"></textarea>
           <div class="screen-error" id="preregError" hidden></div>
@@ -26335,7 +26335,10 @@ All sprint data for this team will be permanently removed.`)) return;
       row.innerHTML = `
       <img class="member-avatar-sm" src="${escapeHtml(avatarSrc(member, 32))}" title="${escapeHtml(member.displayName)}" />
       <div class="manage-member-info">
-        <span class="member-name">${escapeHtml(member.displayName)}${isOwner ? ' <span class="member-role-badge">Owner</span>' : ""}</span>
+        <div class="manage-member-name-row">
+          <span class="member-name">${escapeHtml(member.displayName)}</span>
+          ${isOwner ? '<span class="member-role-badge">Owner</span>' : ""}
+        </div>
         <span class="member-email">${escapeHtml(member.email)}</span>
         ${member.phoneNumber ? `<span class="member-phone">${escapeHtml(member.phoneNumber)}</span>` : ""}
       </div>
