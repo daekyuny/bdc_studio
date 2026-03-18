@@ -2341,6 +2341,21 @@ th.sortable.sort-desc::after {
   margin-bottom: 6px;
 }
 
+.manage-section-divider {
+  border: none;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  margin: 12px 0 10px;
+}
+
+.manage-section-input {
+  margin-bottom: 6px;
+}
+
+.manage-section-btn {
+  width: 100%;
+  margin-bottom: 4px;
+}
+
 .manage-member-list {
   display: flex;
   flex-direction: column;

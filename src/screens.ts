@@ -1057,22 +1057,22 @@ const showManageMembers = (team: Team, profile: UserProfile, onDone?: () => void
         <div class="manage-members-col">
           <div class="manage-members-col-title">Add Group Members</div>
           <div id="availableMemberList" class="manage-member-list"><em>Loading…</em></div>
-          <div class="manage-members-col-title" style="margin-top:16px">Invite by Email</div>
-          <div class="invite-input-row">
-            <input type="email" id="inviteEmailInput" class="screen-input" placeholder="invitee@example.com" />
-            <button class="btn" id="inviteSendBtn">Send Invite</button>
-          </div>
+          <hr class="manage-section-divider" />
+          <div class="manage-members-col-title">Invite by Email</div>
+          <textarea id="inviteEmailInput" class="screen-input manage-section-input" rows="4" placeholder="user1@example.com&#10;user2@example.com&#10;user3@example.com" style="width:100%;resize:vertical"></textarea>
+          <button class="btn manage-section-btn" id="inviteSendBtn">Send Invites</button>
           <div class="screen-error" id="inviteError" hidden></div>
           <div class="screen-success" id="inviteSuccess" hidden></div>
-          <div class="manage-members-col-title" style="margin-top:16px">Pending Invitations</div>
+          <div class="manage-members-col-title" style="margin-top:8px">Pending Invitations</div>
           <div id="pendingInviteList" class="manage-member-list"><em>Loading…</em></div>
-          <div class="manage-members-col-title" style="margin-top:16px">Pre-register Users</div>
-          <p class="pref-hint" style="margin:4px 0 8px">Students with Google accounts are auto-joined on first sign-in — no email needed.</p>
-          <textarea id="preregEmailsInput" class="screen-input" rows="4" placeholder="student1@school.edu&#10;student2@school.edu&#10;student3@school.edu" style="width:100%;resize:vertical"></textarea>
+          <hr class="manage-section-divider" />
+          <div class="manage-members-col-title">Pre-register Users</div>
+          <p class="pref-hint" style="margin:2px 0 6px">Users with Google accounts are auto-joined on first sign-in.</p>
+          <textarea id="preregEmailsInput" class="screen-input manage-section-input" rows="4" placeholder="user1@example.com&#10;user2@example.com&#10;user3@example.com" style="width:100%;resize:vertical"></textarea>
+          <button class="btn manage-section-btn" id="preregSubmitBtn">Pre-register</button>
           <div class="screen-error" id="preregError" hidden></div>
           <div class="screen-success" id="preregSuccess" hidden></div>
-          <button class="btn" id="preregSubmitBtn" style="margin-top:6px">Pre-register</button>
-          <div class="manage-members-col-title" style="margin-top:16px">Pending Pre-registrations</div>
+          <div class="manage-members-col-title" style="margin-top:8px">Pending Pre-registrations</div>
           <div id="pendingPreregList" class="manage-member-list"><em>Loading…</em></div>
         </div>
       </div>
@@ -1264,53 +1264,70 @@ const showManageMembers = (team: Team, profile: UserProfile, onDone?: () => void
 
   // Wire invite button
   document.getElementById("inviteSendBtn")!.addEventListener("click", async () => {
-    const emailInput = document.getElementById("inviteEmailInput") as HTMLInputElement;
+    const textarea = document.getElementById("inviteEmailInput") as HTMLTextAreaElement;
     const errInvEl = document.getElementById("inviteError")!;
     const successEl = document.getElementById("inviteSuccess")!;
-    const email = emailInput.value.trim();
+    const btn = document.getElementById("inviteSendBtn") as HTMLButtonElement;
     errInvEl.hidden = true;
     successEl.hidden = true;
-    if (!email) {
-      errInvEl.textContent = "Please enter an email address.";
-      errInvEl.hidden = false;
-      return;
-    }
+
     if (!groupId) {
       errInvEl.textContent = "No group context for invitation.";
       errInvEl.hidden = false;
       return;
     }
-    const btn = document.getElementById("inviteSendBtn") as HTMLButtonElement;
+
+    const emails = [...new Set(
+      textarea.value.split("\n")
+        .map((e) => e.trim().toLowerCase())
+        .filter((e) => e.includes("@")),
+    )];
+    if (emails.length === 0) {
+      errInvEl.textContent = "Please enter at least one valid email address.";
+      errInvEl.hidden = false;
+      return;
+    }
+
     btn.disabled = true;
     btn.textContent = "Sending…";
-    let inviteId: string | null = null;
-    try {
-      const now = new Date();
-      const expires = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-      inviteId = await createInvitation({
-        email,
-        groupId,
-        teamIds: [team.id],
-        invitedBy: profile.uid,
-        status: "pending",
-        createdAt: now.toISOString(),
-        expiresAt: expires.toISOString(),
-      });
-      const sendEmail = httpsCallable(functions, "sendInvitationEmail");
-      await sendEmail({ inviteId });
-      emailInput.value = "";
-      successEl.textContent = `Invitation sent to ${email}.`;
-      successEl.hidden = false;
-      void refreshPendingInvites();
-    } catch (e: unknown) {
-      // Email failed — cancel the orphaned invitation doc so it doesn't linger
-      if (inviteId) void updateInvitation(inviteId, { status: "cancelled" });
-      errInvEl.textContent = e instanceof Error ? e.message : "Failed to send invitation.";
-      errInvEl.hidden = false;
-    } finally {
-      btn.disabled = false;
-      btn.textContent = "Send Invite";
+    const failed: string[] = [];
+    const now = new Date();
+    const expires = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const sendEmail = httpsCallable(functions, "sendInvitationEmail");
+
+    for (const email of emails) {
+      let inviteId: string | null = null;
+      try {
+        inviteId = await createInvitation({
+          email,
+          groupId,
+          teamIds: [team.id],
+          invitedBy: profile.uid,
+          status: "pending",
+          createdAt: now.toISOString(),
+          expiresAt: expires.toISOString(),
+        });
+        await sendEmail({ inviteId });
+      } catch {
+        if (inviteId) void updateInvitation(inviteId, { status: "cancelled" });
+        failed.push(email);
+      }
     }
+
+    btn.disabled = false;
+    btn.textContent = "Send Invites";
+
+    const sent = emails.length - failed.length;
+    if (failed.length > 0) {
+      errInvEl.textContent = `Failed to send to: ${failed.join(", ")}`;
+      errInvEl.hidden = false;
+    }
+    if (sent > 0) {
+      textarea.value = "";
+      successEl.textContent = `Invitation${sent > 1 ? "s" : ""} sent to ${sent} recipient${sent > 1 ? "s" : ""}.`;
+      successEl.hidden = false;
+    }
+    void refreshPendingInvites();
   });
 
   const refreshPendingPreregs = async () => {
