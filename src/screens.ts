@@ -438,6 +438,7 @@ export const showLandingPage = (): void => {
     try {
       await signInWithEmail(email, password);
     } catch (e: unknown) {
+      if (e instanceof Error && e.message.includes("popup-closed-by-user")) return;
       errEl().textContent = e instanceof Error ? e.message : "Sign-in failed.";
       errEl().hidden = false;
     }
@@ -452,6 +453,7 @@ export const showLandingPage = (): void => {
     try {
       await signInWithGoogle();
     } catch (e: unknown) {
+      if (e instanceof Error && e.message.includes("popup-closed-by-user")) return;
       errEl().textContent = e instanceof Error ? e.message : "Sign-in failed.";
       errEl().hidden = false;
     }
