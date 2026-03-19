@@ -1079,6 +1079,9 @@ if (!isFirebaseConfigured) {
               return;
             }
             if (await setupPmAccount()) return;
+            sessionStorage.setItem("loginError", "Account setup failed. Please try again later.");
+            await signOut();
+            return;
           } else {
             // Check for a pending pre-registration before rejecting
             const prereg = await getPreregistrationByEmail(user.email ?? "");

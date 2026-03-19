@@ -27665,6 +27665,9 @@ They will also be removed from all teams within the group.`)) return;
                 return;
               }
               if (await setupPmAccount()) return;
+              sessionStorage.setItem("loginError", "Account setup failed. Please try again later.");
+              await signOut2();
+              return;
             } else {
               const prereg = await getPreregistrationByEmail(user.email ?? "");
               if (prereg) {
