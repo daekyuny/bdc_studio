@@ -2187,8 +2187,9 @@ th.sortable.sort-desc::after {
   display: flex;
   width: 100%;
   max-width: 960px;
-  min-height: 160px;
+  height: 600px;
   max-height: calc(100vh - 48px);
+  min-height: 160px;
   background: #fff;
   border-radius: 16px;
   overflow: hidden;
