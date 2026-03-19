@@ -1672,6 +1672,11 @@ th.sortable.sort-desc::after {
   margin: 0 0 8px;
 }
 
+.optional-hint {
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-weight: 400;
+}
 .pref-hint {
   font-size: 0.82rem;
   color: var(--muted);
@@ -2101,6 +2106,18 @@ th.sortable.sort-desc::after {
   gap: 14px;
 }
 
+@media (max-width: 500px) {
+  .team-modal {
+    padding: 20px 16px;
+  }
+  .team-modal-wide {
+    max-width: 100%;
+  }
+  .manage-members-body {
+    grid-template-columns: 1fr;
+  }
+}
+
 .team-modal h3 {
   margin: 0 0 4px;
   font-size: 1.1rem;
@@ -2327,7 +2344,7 @@ th.sortable.sort-desc::after {
 
 .manage-members-body {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 16px;
   min-height: 180px;
 }
@@ -2348,12 +2365,17 @@ th.sortable.sort-desc::after {
 }
 
 .manage-section-input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   margin-bottom: 6px;
 }
 
 .manage-section-btn {
   width: 100%;
+  min-width: 0;
   margin-bottom: 4px;
+  box-sizing: border-box;
 }
 
 .manage-member-list {
@@ -2846,4 +2868,121 @@ th.sortable.sort-desc::after {
   color: var(--muted, #888);
   flex-shrink: 0;
   cursor: default;
+}
+
+/* =========================================================
+   Team card drag-to-reorder
+   ========================================================= */
+
+.team-card-drag-handle {
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--muted, #bbb);
+  cursor: grab;
+  user-select: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.team-card:hover .team-card-drag-handle {
+  opacity: 0.8;
+}
+
+.team-card-placeholder {
+  pointer-events: none !important;
+  background: transparent !important;
+  border: 2px dashed rgba(92, 103, 242, 0.35) !important;
+  box-shadow: none !important;
+}
+
+.team-card-placeholder > * {
+  visibility: hidden;
+}
+
+.team-card-dragging {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+.team-card-drag-over {
+  border-color: var(--accent, #5c67f2) !important;
+  box-shadow: 0 0 0 2px rgba(92, 103, 242, 0.35);
+}
+
+.team-card-floating {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  background: #fff !important;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.22);
+  transform: rotate(1.5deg) scale(1.03);
+  opacity: 0.93;
+  cursor: grabbing;
+}
+
+/* =========================================================
+   Image crop modal
+   ========================================================= */
+
+.crop-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+}
+
+.crop-dialog {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.crop-title {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.85rem;
+  letter-spacing: 0.03em;
+}
+
+.crop-workspace {
+  position: relative;
+  line-height: 0;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  overflow: hidden;
+  cursor: crosshair;
+}
+
+.crop-selection {
+  position: absolute;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+  cursor: move;
+  box-sizing: border-box;
+}
+
+.crop-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.3);
+  border-radius: 2px;
+  box-sizing: border-box;
+}
+
+.crop-handle-nw { top: -5px; left: -5px; cursor: nw-resize; }
+.crop-handle-ne { top: -5px; right: -5px; cursor: ne-resize; }
+.crop-handle-sw { bottom: -5px; left: -5px; cursor: sw-resize; }
+.crop-handle-se { bottom: -5px; right: -5px; cursor: se-resize; }
+
+.crop-actions {
+  display: flex;
+  gap: 10px;
 }

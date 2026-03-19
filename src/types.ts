@@ -138,6 +138,7 @@ export interface Team {
   memberIds: string[];
   groupId: string;
   createdAt: string;
+  order?: number;
 }
 
 export interface Group {

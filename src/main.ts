@@ -33,7 +33,7 @@ import { isFirebaseConfigured, functions, DECLINE_INVITATION_URL } from "./fireb
 import { httpsCallable } from "firebase/functions";
 import { initAuth, ensureUserProfile, createNewUserProfile, createAccountWithEmail, signOut, type User } from "./auth.ts";
 import { showLandingPage, showTeamScreen, showAdminScreen, showGroupScreen, showCreateGroupScreen, hideAllScreens, showProfileEditModal, avatarSrc, showPhotoPopup } from "./screens.ts";
-import { getUserMemo, saveUserMemo, getTeamById, getUsersByIds, getUserProfile, getUserProfileByEmail, getGroupByOwner, getInvitation, updateUserProfile, getPmRequest, createGroup, linkExistingTeamsToGroup, getPreregistrationByEmail } from "./db.ts";
+import { getUserMemo, saveUserMemo, getTeamById, getUsersByIds, getUserProfile, getUserProfileByEmail, getGroupByOwner, getInvitation, updateUserProfile, getPmRequest, getApprovedPmRequestByEmail, createGroup, linkExistingTeamsToGroup, getPreregistrationByEmail } from "./db.ts";
 import type { UserProfile } from "./types.ts";
 
 setOnStateChange(render);
@@ -1115,7 +1115,9 @@ if (!isFirebaseConfigured) {
         if (profile.role === "product_manager") {
           const group = await getGroupByOwner(profile.uid);
           if (!group) {
-            showCreateGroupScreen(user, profile, `${profile.displayName}'s Group`, (newGroup) => {
+            const pmReq = await getApprovedPmRequestByEmail(profile.email).catch(() => null);
+            const defaultGroupName = pmReq?.groupName ?? `${profile.displayName}'s Group`;
+            showCreateGroupScreen(user, profile, defaultGroupName, (newGroup) => {
               showGroupScreen(user, profile, newGroup, (teamId, teamName) => {
                 startApp(teamId, profile, teamName);
               });

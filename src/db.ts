@@ -170,6 +170,10 @@ export const deleteTeam = async (teamId: string): Promise<void> => {
   );
 };
 
+export const updateTeamOrder = async (teamId: string, order: number): Promise<void> => {
+  await updateDoc(doc(db, "teams", teamId), { order });
+};
+
 // --- AppState ---
 
 export const loadTeamState = async (teamId: string): Promise<AppState | null> => {
@@ -367,8 +371,17 @@ export const getAllPmRequests = async (): Promise<(PmRequest & { id: string })[]
   return snap.docs.map((d) => ({ id: d.id, ...d.data() } as PmRequest & { id: string }));
 };
 
+export const getApprovedPmRequestByEmail = async (email: string): Promise<(PmRequest & { id: string }) | null> => {
+  const snap = await getDocs(query(collection(db, "pm_requests"), where("email", "==", email), where("status", "==", "approved")));
+  return snap.empty ? null : ({ id: snap.docs[0].id, ...snap.docs[0].data() } as PmRequest & { id: string });
+};
+
 export const updatePmRequest = async (requestId: string, updates: Partial<PmRequest>): Promise<void> => {
   await updateDoc(doc(db, "pm_requests", requestId), updates as Record<string, unknown>);
+};
+
+export const deletePmRequest = async (requestId: string): Promise<void> => {
+  await deleteDoc(doc(db, "pm_requests", requestId));
 };
 
 // --- Pre-Registrations ---

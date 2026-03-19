@@ -357,11 +357,19 @@ const renderTasks = (sprint: Sprint, holidaySet: Set<string>, workWeekendSet: Se
       }
       updateTask(task.id, { worked: latestWorked, remain: latestRemain, remainLog: newRemainLog, workedLog: newWorkedLog, status: newStatus, doneDate: newDoneDate });
     };
+    const cancelUpdate = (): void => {
+      workedInput.value = String(task.histWorked);
+      remainInput.value = String(task.histRemain);
+      closeActiveUpdate = null;
+      closeThisUpdate();
+    };
     workedInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") { e.preventDefault(); commitSave(); }
+      else if (e.key === "Escape") { e.preventDefault(); cancelUpdate(); }
     });
     remainInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") { e.preventDefault(); commitSave(); }
+      else if (e.key === "Escape") { e.preventDefault(); cancelUpdate(); }
     });
 
 

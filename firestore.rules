@@ -79,6 +79,7 @@ service cloud.firestore {
       // (the random doc ID acts as a bearer token for the approval email link)
       allow read: if true;
       allow update: if isSuperManager();
+      allow delete: if isSuperManager();
     }
 
     function isSuperManager() {

@@ -31,9 +31,12 @@ import {
   getPmRequest,
   getAllPmRequests,
   updatePmRequest,
+  deletePmRequest,
+  getUserProfileByEmail,
   getAppSettings,
   setAppSetting,
   getUsersByIds,
+  updateTeamOrder,
 } from "./db.ts";
 import { httpsCallable } from "firebase/functions";
 import { functions } from "./firebase.ts";
@@ -133,6 +136,136 @@ const resizeImage = (file: File, maxDim: number): Promise<string> =>
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+
+const resizeDataUrl = (dataUrl: string, maxDim: number): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL("image/jpeg", 0.85));
+    };
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+
+const showCropModal = (file: File, onCropped: (dataUrl: string) => void): void => {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX_DISPLAY = 480;
+      const scale = Math.min(1, MAX_DISPLAY / Math.max(img.width, img.height));
+      const dispW = Math.round(img.width * scale);
+      const dispH = Math.round(img.height * scale);
+
+      // Initial selection: centered square
+      const initSize = Math.round(Math.min(dispW, dispH) * 0.85);
+      let selX = Math.round((dispW - initSize) / 2);
+      let selY = Math.round((dispH - initSize) / 2);
+      let selW = initSize;
+      let selH = initSize;
+
+      const overlay = document.createElement("div");
+      overlay.className = "crop-overlay";
+      overlay.innerHTML = `
+        <div class="crop-dialog">
+          <div class="crop-title">Drag to select crop area</div>
+          <div class="crop-workspace" id="cropWorkspace" style="width:${dispW}px;height:${dispH}px">
+            <img src="${img.src}" style="width:${dispW}px;height:${dispH}px;display:block" draggable="false" />
+            <div class="crop-selection" id="cropSelection">
+              <div class="crop-handle crop-handle-nw" data-handle="nw"></div>
+              <div class="crop-handle crop-handle-ne" data-handle="ne"></div>
+              <div class="crop-handle crop-handle-sw" data-handle="sw"></div>
+              <div class="crop-handle crop-handle-se" data-handle="se"></div>
+            </div>
+          </div>
+          <div class="crop-actions">
+            <button class="btn ghost" id="cropCancel">Cancel</button>
+            <button class="btn" id="cropConfirm">Crop &amp; Use</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+
+      const sel = document.getElementById("cropSelection")!;
+
+      const updateSel = () => {
+        sel.style.left = selX + "px";
+        sel.style.top = selY + "px";
+        sel.style.width = selW + "px";
+        sel.style.height = selH + "px";
+      };
+      updateSel();
+
+      type DragType = "move" | "nw" | "ne" | "sw" | "se";
+      let drag: { type: DragType; sx: number; sy: number; ox: number; oy: number; ow: number; oh: number } | null = null;
+      const MIN = 20;
+      const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
+      sel.addEventListener("mousedown", (e) => {
+        if ((e.target as HTMLElement).dataset.handle) return;
+        e.preventDefault();
+        drag = { type: "move", sx: e.clientX, sy: e.clientY, ox: selX, oy: selY, ow: selW, oh: selH };
+      });
+      sel.querySelectorAll<HTMLElement>(".crop-handle").forEach((h) => {
+        h.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          drag = { type: h.dataset.handle as DragType, sx: e.clientX, sy: e.clientY, ox: selX, oy: selY, ow: selW, oh: selH };
+        });
+      });
+
+      const onMove = (e: MouseEvent) => {
+        if (!drag) return;
+        const dx = e.clientX - drag.sx;
+        const dy = e.clientY - drag.sy;
+        if (drag.type === "move") {
+          selX = clamp(drag.ox + dx, 0, dispW - selW);
+          selY = clamp(drag.oy + dy, 0, dispH - selH);
+        } else {
+          let x1 = drag.ox, y1 = drag.oy, x2 = drag.ox + drag.ow, y2 = drag.oy + drag.oh;
+          if (drag.type === "nw") { x1 = clamp(x1 + dx, 0, x2 - MIN); y1 = clamp(y1 + dy, 0, y2 - MIN); }
+          if (drag.type === "ne") { x2 = clamp(x2 + dx, x1 + MIN, dispW); y1 = clamp(y1 + dy, 0, y2 - MIN); }
+          if (drag.type === "sw") { x1 = clamp(x1 + dx, 0, x2 - MIN); y2 = clamp(y2 + dy, y1 + MIN, dispH); }
+          if (drag.type === "se") { x2 = clamp(x2 + dx, x1 + MIN, dispW); y2 = clamp(y2 + dy, y1 + MIN, dispH); }
+          selX = x1; selY = y1; selW = x2 - x1; selH = y2 - y1;
+        }
+        updateSel();
+      };
+      const onUp = () => { drag = null; };
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+
+      const cleanup = () => {
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+        overlay.remove();
+      };
+
+      document.getElementById("cropCancel")!.addEventListener("click", cleanup);
+      document.getElementById("cropConfirm")!.addEventListener("click", () => {
+        const origX = Math.round(selX / scale);
+        const origY = Math.round(selY / scale);
+        const origW = Math.round(selW / scale);
+        const origH = Math.round(selH / scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = origW;
+        canvas.height = origH;
+        canvas.getContext("2d")!.drawImage(img, origX, origY, origW, origH, 0, 0, origW, origH);
+        onCropped(canvas.toDataURL("image/jpeg", 0.95));
+        cleanup();
+      });
+    };
+    img.src = e.target!.result as string;
+  };
+  reader.readAsDataURL(file);
+};
 
 export const showPhotoPopup = (src: string): void => {
   document.getElementById("photoPopupOverlay")?.remove();
@@ -568,15 +701,15 @@ export const showPmRequestForm = (): void => {
         <input type="email" id="pmReqEmail" class="screen-input" placeholder="you@example.com" />
       </label>
       <label class="screen-label">
-        Group / Team Name
+        Group Name
         <input type="text" id="pmReqGroup" class="screen-input" placeholder="e.g. Acme Dev Team" />
       </label>
       <label class="screen-label">
-        Organization
+        Organization <span class="optional-hint">(optional)</span>
         <input type="text" id="pmReqOrg" class="screen-input" placeholder="Company or organization" />
       </label>
       <label class="screen-label">
-        Brief Description
+        Brief Description <span class="optional-hint">(optional)</span>
         <textarea id="pmReqDesc" class="screen-input" rows="3" placeholder="Purpose of the group, number of members, etc."></textarea>
       </label>
       <div class="screen-error" id="pmReqError" hidden></div>
@@ -603,7 +736,7 @@ export const showPmRequestForm = (): void => {
     errEl.hidden = true;
     successEl.hidden = true;
 
-    if (!name || !email || !groupName || !organization) {
+    if (!name || !email || !groupName) {
       errEl.textContent = "Please fill in all required fields.";
       errEl.hidden = false;
       return;
@@ -750,6 +883,11 @@ const loadAndRenderTeams = async (user: User, profile: UserProfile): Promise<voi
   if (!grid) return;
   try {
     const teams = await getTeamsForUser(user.uid, profile.role);
+    teams.sort((a, b) => {
+      const oa = a.order ?? Number.MAX_SAFE_INTEGER;
+      const ob = b.order ?? Number.MAX_SAFE_INTEGER;
+      return oa !== ob ? oa - ob : a.createdAt.localeCompare(b.createdAt);
+    });
     // Collect all unique member UIDs across all teams
     const allUids = Array.from(new Set(teams.flatMap((t) => t.memberIds)));
     const memberProfiles = await getUsersByIds(allUids);
@@ -773,6 +911,8 @@ const renderTeamGrid = (
 ): void => {
   grid.innerHTML = "";
 
+  const isPM = profile.role === "product_manager";
+
   for (const team of teams) {
     const card = document.createElement("button");
     card.className = "team-card";
@@ -792,11 +932,86 @@ const renderTeamGrid = (
     ` : `<div class="team-card-meta">${team.memberIds.length} member${team.memberIds.length !== 1 ? "s" : ""}</div>`;
 
     card.innerHTML = `
+      ${isPM ? '<div class="team-card-drag-handle" title="Drag to reorder">⠿</div>' : ""}
       <div class="team-card-name">${escapeHtml(team.name)}</div>
       ${avatarRowHtml}
     `;
     card.addEventListener("click", () => _onTeamSelected?.(team.id, team.name));
     grid.appendChild(card);
+
+    // Drag-to-reorder (PM only)
+    if (isPM) {
+      card.dataset.teamId = team.id;
+
+      card.addEventListener("pointerdown", (e) => {
+        if ((e.target as HTMLElement).closest(".team-manage-btn, .team-delete-btn")) return;
+        e.preventDefault();
+        card.setPointerCapture(e.pointerId);
+
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const rect = card.getBoundingClientRect();
+        const offsetX = e.clientX - rect.left;
+        const offsetY = e.clientY - rect.top;
+
+        let dragging = false;
+        let floatEl: HTMLElement | null = null;
+        let targetCard: HTMLElement | null = null;
+
+        const onMove = (ev: PointerEvent) => {
+          if (!dragging) {
+            if (Math.abs(ev.clientX - startX) < 4 && Math.abs(ev.clientY - startY) < 4) return;
+            dragging = true;
+            card.classList.add("team-card-dragging");
+            floatEl = document.createElement("div");
+            floatEl.className = "team-card team-card-floating";
+            floatEl.innerHTML = card.innerHTML;
+            floatEl.style.width = card.offsetWidth + "px";
+            floatEl.style.height = card.offsetHeight + "px";
+            document.body.appendChild(floatEl);
+          }
+          if (floatEl) {
+            floatEl.style.left = (ev.clientX - offsetX) + "px";
+            floatEl.style.top = (ev.clientY - offsetY) + "px";
+          }
+          // floatEl has pointer-events:none so elementFromPoint sees through it
+          const el = document.elementFromPoint(ev.clientX, ev.clientY);
+          const candidate = el?.closest<HTMLElement>(".team-card[data-team-id]");
+          grid.querySelectorAll(".team-card-drag-over").forEach((c) => c.classList.remove("team-card-drag-over"));
+          if (candidate && candidate !== card) {
+            candidate.classList.add("team-card-drag-over");
+            targetCard = candidate;
+          } else {
+            targetCard = null;
+          }
+        };
+
+        const onUp = async () => {
+          card.removeEventListener("pointermove", onMove);
+          floatEl?.remove();
+          card.classList.remove("team-card-dragging");
+          grid.querySelectorAll(".team-card-drag-over").forEach((c) => c.classList.remove("team-card-drag-over"));
+
+          if (!dragging) return;
+          card.addEventListener("click", (ev) => ev.stopPropagation(), { once: true, capture: true });
+
+          const toId = targetCard?.dataset.teamId;
+          if (!toId || toId === team.id) return;
+          const ordered = [...teams];
+          const fromIdx = ordered.findIndex((t) => t.id === team.id);
+          const toIdx = ordered.findIndex((t) => t.id === toId);
+          if (fromIdx === -1 || toIdx === -1) return;
+          const [moved] = ordered.splice(fromIdx, 1);
+          ordered.splice(toIdx, 0, moved);
+          await Promise.all(ordered.map((t, idx) => updateTeamOrder(t.id, idx)));
+          if (_currentUser && _currentProfile) loadAndRenderTeams(_currentUser, _currentProfile);
+        };
+
+        card.addEventListener("pointermove", onMove);
+        card.addEventListener("pointerup", onUp, { once: true });
+        card.addEventListener("pointercancel", onUp, { once: true });
+      });
+    }
 
     // Avatar click → popup profile
     card.querySelectorAll<HTMLImageElement>(".team-card-avatar").forEach((img) => {
@@ -1631,7 +1846,8 @@ const loadAdminRequests = async (): Promise<void> => {
                 ${r.status === "pending" ? `
                   <button class="btn small req-approve-btn" data-id="${r.id}">Approve</button>
                   <button class="btn ghost small danger req-reject-btn" data-id="${r.id}" style="margin-left:4px">Reject</button>
-                ` : "—"}
+                ` : ""}
+                <button class="btn ghost small danger req-delete-btn" data-id="${r.id}" style="margin-left:4px" title="Delete this request">✕</button>
               </td>
             </tr>
           `).join("")}
@@ -1648,10 +1864,16 @@ const loadAdminRequests = async (): Promise<void> => {
         btn.textContent = "Approving…";
         errEl.hidden = true;
         try {
+          const req = requests.find((r) => r.id === id)!;
           await updatePmRequest(id, {
             status: "approved",
             reviewedAt: new Date().toISOString(),
           });
+          // If the user already has an account, promote them immediately
+          const existingProfile = await getUserProfileByEmail(req.email);
+          if (existingProfile && existingProfile.role !== "product_manager" && existingProfile.role !== "super_manager") {
+            await setUserRole(existingProfile.uid, "product_manager");
+          }
           const sendApproval = httpsCallable(functions, "sendPmApprovalEmail");
           await sendApproval({ requestId: id });
           void loadAdminRequests();
@@ -1677,6 +1899,23 @@ const loadAdminRequests = async (): Promise<void> => {
           void loadAdminRequests();
         } catch (e: unknown) {
           errEl.textContent = e instanceof Error ? e.message : "Failed to reject.";
+          errEl.hidden = false;
+          btn.disabled = false;
+        }
+      });
+    });
+
+    tableEl.querySelectorAll<HTMLButtonElement>(".req-delete-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        if (!confirm("Delete this PM request? This cannot be undone.")) return;
+        const id = btn.dataset.id!;
+        btn.disabled = true;
+        errEl.hidden = true;
+        try {
+          await deletePmRequest(id);
+          void loadAdminRequests();
+        } catch (e: unknown) {
+          errEl.textContent = e instanceof Error ? e.message : "Failed to delete.";
           errEl.hidden = false;
           btn.disabled = false;
         }
@@ -1923,7 +2162,7 @@ export const showProfileEditModal = (
   // Change photo
   const fileInput = document.getElementById("profilePhotoFile") as HTMLInputElement;
   document.getElementById("profileChangePhotoBtn")!.addEventListener("click", () => fileInput.click());
-  fileInput.addEventListener("change", async () => {
+  fileInput.addEventListener("change", () => {
     const file = fileInput.files?.[0];
     if (!file) return;
     fileInput.value = "";
@@ -1934,16 +2173,18 @@ export const showProfileEditModal = (
       errEl.hidden = false;
       return;
     }
-    try {
-      [pendingFull, pendingThumb] = await Promise.all([
-        resizeImage(file, 640),
-        resizeImage(file, 80),
-      ]);
-      photoImg.src = pendingFull;
-    } catch {
-      errEl.textContent = "Failed to process image.";
-      errEl.hidden = false;
-    }
+    showCropModal(file, async (croppedDataUrl) => {
+      try {
+        [pendingFull, pendingThumb] = await Promise.all([
+          resizeDataUrl(croppedDataUrl, 640),
+          resizeDataUrl(croppedDataUrl, 80),
+        ]);
+        photoImg.src = pendingFull;
+      } catch {
+        errEl.textContent = "Failed to process image.";
+        errEl.hidden = false;
+      }
+    });
   });
 
   // Remove photo
@@ -2243,6 +2484,11 @@ const loadAndRenderGroupTeams = async (group: Group, profile: UserProfile): Prom
   if (errEl) errEl.hidden = true;
   try {
     const teams = await getTeamsByGroup(group.id, profile.uid);
+    teams.sort((a, b) => {
+      const oa = a.order ?? Number.MAX_SAFE_INTEGER;
+      const ob = b.order ?? Number.MAX_SAFE_INTEGER;
+      return oa !== ob ? oa - ob : a.createdAt.localeCompare(b.createdAt);
+    });
     const allUids = Array.from(new Set(teams.flatMap((t) => t.memberIds)));
     const memberProfiles = await getUsersByIds(allUids);
     const memberMap = new Map(memberProfiles.map((p) => [p.uid, p]));
@@ -2265,9 +2511,27 @@ const renderGroupTeamGrid = (
 ): void => {
   grid.innerHTML = "";
 
+  // FLIP animation: snapshot positions before a DOM change, animate to new positions after
+  const flipAnimate = (snapshots: Map<HTMLElement, DOMRect>) => {
+    snapshots.forEach((prev, el) => {
+      if (!el.isConnected) return;
+      const curr = el.getBoundingClientRect();
+      const dx = prev.left - curr.left;
+      const dy = prev.top - curr.top;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+      el.style.transition = "none";
+      el.style.transform = `translate(${dx}px, ${dy}px)`;
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        el.style.transition = "transform 0.18s ease";
+        el.style.transform = "";
+      }));
+    });
+  };
+
   for (const team of teams) {
     const card = document.createElement("button");
     card.className = "team-card";
+    card.dataset.teamId = team.id;
 
     const MAX_SHOWN = 5;
     const memberProfs = team.memberIds
@@ -2283,6 +2547,7 @@ const renderGroupTeamGrid = (
     ` : `<div class="team-card-meta">${team.memberIds.length} member${team.memberIds.length !== 1 ? "s" : ""}</div>`;
 
     card.innerHTML = `
+      <div class="team-card-drag-handle" title="Drag to reorder">⠿</div>
       <div class="team-card-name">${escapeHtml(team.name)}</div>
       ${avatarRowHtml}
     `;
@@ -2329,6 +2594,96 @@ const renderGroupTeamGrid = (
       });
       card.appendChild(deleteBtn);
     }
+
+    // Drag-to-reorder with real-time FLIP animation
+    card.addEventListener("mousedown", (e) => {
+      if (!(e.target as HTMLElement).closest(".team-card-drag-handle")) return;
+
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const rect = card.getBoundingClientRect();
+      const offsetX = e.clientX - rect.left;
+      const offsetY = e.clientY - rect.top;
+      const cardW = card.offsetWidth;
+      const cardH = card.offsetHeight;
+
+      let dragging = false;
+      let floatEl: HTMLElement | null = null;
+      let lastInsertKey: string | null = null;
+
+      const realCards = () =>
+        Array.from(grid.querySelectorAll<HTMLElement>(".team-card[data-team-id]"));
+
+      const onMove = (ev: MouseEvent) => {
+        if (!dragging) {
+          if (Math.abs(ev.clientX - startX) < 4 && Math.abs(ev.clientY - startY) < 4) return;
+          dragging = true;
+          floatEl = document.createElement("div");
+          floatEl.className = "team-card team-card-floating";
+          floatEl.innerHTML = card.innerHTML;
+          floatEl.style.width = cardW + "px";
+          floatEl.style.height = cardH + "px";
+          document.body.appendChild(floatEl);
+          card.classList.add("team-card-placeholder");
+        }
+
+        if (floatEl) {
+          floatEl.style.left = (ev.clientX - offsetX) + "px";
+          floatEl.style.top = (ev.clientY - offsetY) + "px";
+        }
+
+        // Find the closest other card to the float's center
+        const others = realCards().filter(c => c !== card);
+        if (others.length === 0) return;
+
+        const floatCX = ev.clientX - offsetX + cardW / 2;
+        const floatCY = ev.clientY - offsetY + cardH / 2;
+
+        let closest: HTMLElement | null = null;
+        let closestDist = Infinity;
+        for (const c of others) {
+          const r = c.getBoundingClientRect();
+          const dist = Math.hypot(floatCX - (r.left + r.width / 2), floatCY - (r.top + r.height / 2));
+          if (dist < closestDist) { closestDist = dist; closest = c; }
+        }
+        if (!closest) return;
+
+        const cr = closest.getBoundingClientRect();
+        const insertBefore = floatCY < cr.top + cr.height / 2;
+        const insertKey = `${closest.dataset.teamId}-${insertBefore}`;
+        if (insertKey === lastInsertKey) return;
+
+        const insertRef = insertBefore
+          ? closest
+          : ((closest.nextElementSibling as HTMLElement | null) ?? grid.querySelector<HTMLElement>(".team-card-new"));
+        if (insertRef === card) { lastInsertKey = insertKey; return; }
+
+        // FLIP: snapshot other cards, move placeholder, animate
+        const snap = new Map(others.map(c => [c, c.getBoundingClientRect()]));
+        grid.insertBefore(card, insertRef);
+        lastInsertKey = insertKey;
+        flipAnimate(snap);
+      };
+
+      const onUp = async () => {
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+        floatEl?.remove();
+        card.classList.remove("team-card-placeholder");
+        card.style.transform = "";
+        card.style.transition = "";
+
+        if (!dragging) return;
+        card.addEventListener("click", (ev) => ev.stopPropagation(), { once: true, capture: true });
+
+        const finalOrder = realCards().map(c => c.dataset.teamId!);
+        await Promise.all(finalOrder.map((id, idx) => updateTeamOrder(id, idx)));
+        void loadAndRenderGroupTeams(group, profile);
+      };
+
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+    });
 
     grid.appendChild(card);
   }
