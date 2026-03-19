@@ -27726,12 +27726,21 @@ They will also be removed from all teams within the group.`)) return;
             const group = await getGroupByOwner(profile.uid);
             if (!group) {
               const pmReq = await getApprovedPmRequestByEmail(profile.email).catch(() => null);
-              const defaultGroupName = pmReq?.groupName ?? `${profile.displayName}'s Group`;
-              showCreateGroupScreen(user, profile, defaultGroupName, (newGroup) => {
-                showGroupScreen(user, profile, newGroup, (teamId, teamName) => {
-                  startApp(teamId, profile, teamName);
+              if (pmReq) {
+                const groupId = await createGroup(pmReq.groupName, profile.uid);
+                await linkExistingTeamsToGroup(profile.uid, groupId);
+                const newGroup = { id: groupId, name: pmReq.groupName, ownerId: profile.uid, createdAt: (/* @__PURE__ */ new Date()).toISOString() };
+                _activeProfile = { ...profile, groupId };
+                showGroupScreen(user, _activeProfile, newGroup, (teamId, teamName) => {
+                  startApp(teamId, _activeProfile, teamName);
                 });
-              });
+              } else {
+                showCreateGroupScreen(user, profile, `${profile.displayName}'s Group`, (newGroup) => {
+                  showGroupScreen(user, profile, newGroup, (teamId, teamName) => {
+                    startApp(teamId, profile, teamName);
+                  });
+                });
+              }
             } else {
               showGroupScreen(user, profile, group, (teamId, teamName) => {
                 startApp(teamId, profile, teamName);
