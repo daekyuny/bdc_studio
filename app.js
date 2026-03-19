@@ -27664,10 +27664,10 @@ They will also be removed from all teams within the group.`)) return;
               console.warn("PM approval flow failed, falling through to normal login:", e);
             }
           }
-          const profile = await ensureUserProfile(user);
+          let profile = await ensureUserProfile(user);
           if (!profile) {
-            const prereg = await getPreregistrationByEmail(user.email ?? "");
-            if (prereg) {
+            const pmReqNew = await getApprovedPmRequestByEmail(user.email ?? "").catch(() => null);
+            if (pmReqNew) {
               const existingByEmail = await getUserProfileByEmail(user.email ?? "");
               if (existingByEmail) {
                 sessionStorage.setItem("loginError", "This email is already registered under a different sign-in method. Please sign in with your original account.");
@@ -27675,26 +27675,46 @@ They will also be removed from all teams within the group.`)) return;
                 return;
               }
               const newProfile = await createNewUserProfile(user);
-              _activeProfile = newProfile;
-              await new Promise((resolve) => {
-                showProfileEditModal(newProfile, true, async (updated) => {
+              await updateUserProfile(newProfile.uid, { role: "product_manager" });
+              profile = { ...newProfile, role: "product_manager" };
+            } else {
+              const prereg = await getPreregistrationByEmail(user.email ?? "");
+              if (prereg) {
+                const existingByEmail = await getUserProfileByEmail(user.email ?? "");
+                if (existingByEmail) {
+                  sessionStorage.setItem("loginError", "This email is already registered under a different sign-in method. Please sign in with your original account.");
+                  await signOut2();
+                  return;
+                }
+                const newProfile = await createNewUserProfile(user);
+                _activeProfile = newProfile;
+                await new Promise((resolve) => {
+                  showProfileEditModal(newProfile, true, async (updated) => {
+                    _activeProfile = updated;
+                    resolve();
+                  }, user);
+                });
+                const claimFn = httpsCallable(functions, "claimPreregistration");
+                await claimFn({ preregId: prereg.id });
+                _activeProfile = { ..._activeProfile, groupId: prereg.groupId };
+                showTeamScreen(user, _activeProfile, (teamId, teamName) => {
+                  startApp(teamId, _activeProfile, teamName);
+                }, (updated) => {
                   _activeProfile = updated;
-                  resolve();
-                }, user);
-              });
-              const claimFn = httpsCallable(functions, "claimPreregistration");
-              await claimFn({ preregId: prereg.id });
-              _activeProfile = { ..._activeProfile, groupId: prereg.groupId };
-              showTeamScreen(user, _activeProfile, (teamId, teamName) => {
-                startApp(teamId, _activeProfile, teamName);
-              }, (updated) => {
-                _activeProfile = updated;
-              });
+                });
+                return;
+              }
+              sessionStorage.setItem("loginError", "No account found. Please use your invitation link to register.");
+              await signOut2();
               return;
             }
-            sessionStorage.setItem("loginError", "No account found. Please use your invitation link to register.");
-            await signOut2();
-            return;
+          }
+          if (profile.role === "member") {
+            const pmReq = await getApprovedPmRequestByEmail(profile.email).catch(() => null);
+            if (pmReq) {
+              await updateUserProfile(profile.uid, { role: "product_manager" });
+              profile = { ...profile, role: "product_manager" };
+            }
           }
           _activeProfile = profile;
           if (profile.role === "super_manager") {

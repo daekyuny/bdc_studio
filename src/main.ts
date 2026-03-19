@@ -1073,11 +1073,11 @@ if (!isFirebaseConfigured) {
         }
 
         // --- Normal login flow ---
-        const profile = await ensureUserProfile(user);
+        let profile = await ensureUserProfile(user);
         if (!profile) {
-          // Check for a pending pre-registration before rejecting
-          const prereg = await getPreregistrationByEmail(user.email ?? "");
-          if (prereg) {
+          // Check for an approved PM request (new user whose request was approved)
+          const pmReqNew = await getApprovedPmRequestByEmail(user.email ?? "").catch(() => null);
+          if (pmReqNew) {
             const existingByEmail = await getUserProfileByEmail(user.email ?? "");
             if (existingByEmail) {
               sessionStorage.setItem("loginError", "This email is already registered under a different sign-in method. Please sign in with your original account.");
@@ -1085,26 +1085,48 @@ if (!isFirebaseConfigured) {
               return;
             }
             const newProfile = await createNewUserProfile(user);
-            _activeProfile = newProfile;
-            // Let the student set their display name before joining
-            await new Promise<void>((resolve) => {
-              showProfileEditModal(newProfile, true, async (updated) => {
-                _activeProfile = updated;
-                resolve();
-              }, user);
-            });
-            const claimFn = httpsCallable<{ preregId: string }, { teamId: string | null; teamName: string | null }>(functions, "claimPreregistration");
-            await claimFn({ preregId: prereg.id });
-            _activeProfile = { ..._activeProfile!, groupId: prereg.groupId };
-            showTeamScreen(user, _activeProfile!, (teamId, teamName) => {
-              startApp(teamId, _activeProfile!, teamName);
-            }, (updated) => { _activeProfile = updated; });
+            await updateUserProfile(newProfile.uid, { role: "product_manager" } as Parameters<typeof updateUserProfile>[1]);
+            profile = { ...newProfile, role: "product_manager" };
+          } else {
+            // Check for a pending pre-registration before rejecting
+            const prereg = await getPreregistrationByEmail(user.email ?? "");
+            if (prereg) {
+              const existingByEmail = await getUserProfileByEmail(user.email ?? "");
+              if (existingByEmail) {
+                sessionStorage.setItem("loginError", "This email is already registered under a different sign-in method. Please sign in with your original account.");
+                await signOut();
+                return;
+              }
+              const newProfile = await createNewUserProfile(user);
+              _activeProfile = newProfile;
+              // Let the student set their display name before joining
+              await new Promise<void>((resolve) => {
+                showProfileEditModal(newProfile, true, async (updated) => {
+                  _activeProfile = updated;
+                  resolve();
+                }, user);
+              });
+              const claimFn = httpsCallable<{ preregId: string }, { teamId: string | null; teamName: string | null }>(functions, "claimPreregistration");
+              await claimFn({ preregId: prereg.id });
+              _activeProfile = { ..._activeProfile!, groupId: prereg.groupId };
+              showTeamScreen(user, _activeProfile!, (teamId, teamName) => {
+                startApp(teamId, _activeProfile!, teamName);
+              }, (updated) => { _activeProfile = updated; });
+              return;
+            }
+            // No pre-registration found — truly unregistered
+            sessionStorage.setItem("loginError", "No account found. Please use your invitation link to register.");
+            await signOut();
             return;
           }
-          // No pre-registration found — truly unregistered
-          sessionStorage.setItem("loginError", "No account found. Please use your invitation link to register.");
-          await signOut();
-          return;
+        }
+        // Auto-promote existing member with an approved PM request
+        if (profile.role === "member") {
+          const pmReq = await getApprovedPmRequestByEmail(profile.email).catch(() => null);
+          if (pmReq) {
+            await updateUserProfile(profile.uid, { role: "product_manager" } as Parameters<typeof updateUserProfile>[1]);
+            profile = { ...profile, role: "product_manager" };
+          }
         }
         _activeProfile = profile;
         if (profile.role === "super_manager") {
