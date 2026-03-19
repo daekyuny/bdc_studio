@@ -267,6 +267,77 @@ export const claimPreregistration = onCall(
 );
 
 // ---------------------------------------------------------------------------
+// activatePmAccount — called by an approved PM on first login.
+// Uses Admin SDK to bypass Firestore rules:
+//   - sets role to "product_manager" on the user doc
+//   - creates a group with the name from their PM request
+//   - sets groupId on the user doc
+// Idempotent: if the user already has a group, returns existing group data.
+// ---------------------------------------------------------------------------
+
+export const activatePmAccount = onCall(
+  { region: REGION },
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
+
+    const uid = request.auth.uid;
+    const email = request.auth.token.email ?? "";
+
+    // Find approved PM request for this email
+    const pmSnap = await db
+      .collection("pm_requests")
+      .where("email", "==", email)
+      .where("status", "==", "approved")
+      .limit(1)
+      .get();
+
+    if (pmSnap.empty) {
+      throw new HttpsError("not-found", "No approved PM request found for this email.");
+    }
+
+    const pmReq = pmSnap.docs[0].data();
+    const groupName = pmReq.groupName as string;
+
+    // Idempotent: if the user already has a group, just return it
+    const userSnap = await db.collection("users").doc(uid).get();
+    if (userSnap.exists && userSnap.data()!.groupId) {
+      const groupId = userSnap.data()!.groupId as string;
+      const groupSnap = await db.collection("groups").doc(groupId).get();
+      return {
+        groupId,
+        groupName: groupSnap.exists ? (groupSnap.data()!.name as string) : groupName,
+        createdAt: groupSnap.exists ? (groupSnap.data()!.createdAt as string) : new Date().toISOString(),
+      };
+    }
+
+    // Create group + promote user atomically via Admin SDK
+    const groupRef = db.collection("groups").doc();
+    const groupId = groupRef.id;
+    const now = new Date().toISOString();
+
+    const batch = db.batch();
+    batch.set(groupRef, { name: groupName, ownerId: uid, createdAt: now });
+
+    if (userSnap.exists) {
+      batch.update(db.collection("users").doc(uid), { role: "product_manager", groupId });
+    } else {
+      // Brand new user — create the full profile
+      batch.set(db.collection("users").doc(uid), {
+        uid,
+        email,
+        displayName: (request.auth.token.name as string | undefined) ?? email,
+        role: "product_manager",
+        groupId,
+        createdAt: now,
+      });
+    }
+
+    await batch.commit();
+    return { groupId, groupName, createdAt: now };
+  },
+);
+
+// ---------------------------------------------------------------------------
 // sendPmApprovalEmail — called by SM after approving a PM request
 // ---------------------------------------------------------------------------
 

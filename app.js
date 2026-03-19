@@ -24803,10 +24803,7 @@ ${marker.label}`;
           status: "pending",
           createdAt: (/* @__PURE__ */ new Date()).toISOString()
         });
-        successEl.textContent = "Your request has been sent. We'll notify you by email when it's reviewed.";
-        successEl.hidden = false;
-        btn.hidden = true;
-        document.getElementById("pmReqCancel").textContent = "Close";
+        modal.remove();
       } catch (e) {
         errEl.textContent = e instanceof Error ? e.message : "Failed to submit request.";
         errEl.hidden = false;
@@ -27625,40 +27622,33 @@ They will also be removed from all teams within the group.`)) return;
             }
             sessionStorage.removeItem("pendingInvite");
           }
+          const setupPmAccount = async () => {
+            try {
+              const activateFn = httpsCallable(functions, "activatePmAccount");
+              const result = await activateFn({});
+              const { groupId, groupName, createdAt } = result.data;
+              const freshProfile = await ensureUserProfile(user);
+              _activeProfile = {
+                ...freshProfile ?? { uid: user.uid, email: user.email ?? "", displayName: user.displayName ?? user.email ?? "Unknown", createdAt: (/* @__PURE__ */ new Date()).toISOString() },
+                role: "product_manager",
+                groupId
+              };
+              const group = { id: groupId, name: groupName, ownerId: user.uid, createdAt };
+              showGroupScreen(user, _activeProfile, group, (teamId, teamName) => {
+                startApp(teamId, _activeProfile, teamName);
+              });
+              return true;
+            } catch {
+              return false;
+            }
+          };
           const pendingPmApproved = sessionStorage.getItem("pendingPmApproved");
           if (pendingPmApproved) {
             sessionStorage.removeItem("pendingPmApproved");
             try {
               const pmReq = await getPmRequest(pendingPmApproved);
               if (pmReq && pmReq.status === "approved" && pmReq.email === user.email) {
-                let profile2 = await ensureUserProfile(user);
-                if (!profile2) {
-                  const existingByEmail = await getUserProfileByEmail(user.email ?? "");
-                  if (existingByEmail) {
-                    sessionStorage.setItem("loginError", "This email is already registered under a different sign-in method. Please sign in with your original account (e.g. Google).");
-                    await signOut2();
-                    return;
-                  }
-                  const newProfile = await createNewUserProfile(user);
-                  _activeProfile = { ...newProfile, role: "product_manager" };
-                  await updateUserProfile(newProfile.uid, { role: "product_manager" });
-                  profile2 = _activeProfile;
-                } else if (profile2.role === "member") {
-                  await updateUserProfile(profile2.uid, { role: "product_manager" });
-                  profile2 = { ...profile2, role: "product_manager" };
-                  _activeProfile = profile2;
-                } else {
-                  _activeProfile = profile2;
-                }
-                if (profile2) {
-                  const groupId = await createGroup(pmReq.groupName, profile2.uid);
-                  await linkExistingTeamsToGroup(profile2.uid, groupId);
-                  const group = { id: groupId, name: pmReq.groupName, ownerId: profile2.uid, createdAt: (/* @__PURE__ */ new Date()).toISOString() };
-                  showGroupScreen(user, _activeProfile, group, (teamId, teamName) => {
-                    startApp(teamId, _activeProfile, teamName);
-                  });
-                }
-                return;
+                if (await setupPmAccount()) return;
               }
             } catch (e) {
               console.warn("PM approval flow failed, falling through to normal login:", e);
@@ -27674,9 +27664,7 @@ They will also be removed from all teams within the group.`)) return;
                 await signOut2();
                 return;
               }
-              const newProfile = await createNewUserProfile(user);
-              await updateUserProfile(newProfile.uid, { role: "product_manager" });
-              profile = { ...newProfile, role: "product_manager" };
+              if (await setupPmAccount()) return;
             } else {
               const prereg = await getPreregistrationByEmail(user.email ?? "");
               if (prereg) {
@@ -27712,8 +27700,7 @@ They will also be removed from all teams within the group.`)) return;
           if (profile.role === "member") {
             const pmReq = await getApprovedPmRequestByEmail(profile.email).catch(() => null);
             if (pmReq) {
-              await updateUserProfile(profile.uid, { role: "product_manager" });
-              profile = { ...profile, role: "product_manager" };
+              if (await setupPmAccount()) return;
             }
           }
           _activeProfile = profile;
@@ -27725,22 +27712,12 @@ They will also be removed from all teams within the group.`)) return;
           if (profile.role === "product_manager") {
             const group = await getGroupByOwner(profile.uid);
             if (!group) {
-              const pmReq = await getApprovedPmRequestByEmail(profile.email).catch(() => null);
-              if (pmReq) {
-                const groupId = await createGroup(pmReq.groupName, profile.uid);
-                await linkExistingTeamsToGroup(profile.uid, groupId);
-                const newGroup = { id: groupId, name: pmReq.groupName, ownerId: profile.uid, createdAt: (/* @__PURE__ */ new Date()).toISOString() };
-                _activeProfile = { ...profile, groupId };
-                showGroupScreen(user, _activeProfile, newGroup, (teamId, teamName) => {
-                  startApp(teamId, _activeProfile, teamName);
+              if (await setupPmAccount()) return;
+              showCreateGroupScreen(user, profile, `${profile.displayName}'s Group`, (newGroup) => {
+                showGroupScreen(user, profile, newGroup, (teamId, teamName) => {
+                  startApp(teamId, profile, teamName);
                 });
-              } else {
-                showCreateGroupScreen(user, profile, `${profile.displayName}'s Group`, (newGroup) => {
-                  showGroupScreen(user, profile, newGroup, (teamId, teamName) => {
-                    startApp(teamId, profile, teamName);
-                  });
-                });
-              }
+              });
             } else {
               showGroupScreen(user, profile, group, (teamId, teamName) => {
                 startApp(teamId, profile, teamName);

@@ -755,10 +755,7 @@ export const showPmRequestForm = (): void => {
         status: "pending",
         createdAt: new Date().toISOString(),
       });
-      successEl.textContent = "Your request has been sent. We'll notify you by email when it's reviewed.";
-      successEl.hidden = false;
-      btn.hidden = true;
-      (document.getElementById("pmReqCancel") as HTMLButtonElement).textContent = "Close";
+      modal.remove();
     } catch (e: unknown) {
       errEl.textContent = e instanceof Error ? e.message : "Failed to submit request.";
       errEl.hidden = false;

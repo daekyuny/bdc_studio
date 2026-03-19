@@ -1028,47 +1028,41 @@ if (!isFirebaseConfigured) {
           sessionStorage.removeItem("pendingInvite");
         }
 
-        // --- Handle PM approval registration ---
+        // Helper: calls activatePmAccount CF (Admin SDK), updates _activeProfile, navigates to group screen.
+        // Returns true if activation succeeded and navigation was triggered.
+        const setupPmAccount = async (): Promise<boolean> => {
+          try {
+            const activateFn = httpsCallable<Record<string, never>, { groupId: string; groupName: string; createdAt: string }>(functions, "activatePmAccount");
+            const result = await activateFn({});
+            const { groupId, groupName, createdAt } = result.data;
+            const freshProfile = await ensureUserProfile(user);
+            _activeProfile = {
+              ...(freshProfile ?? { uid: user.uid, email: user.email ?? "", displayName: user.displayName ?? user.email ?? "Unknown", createdAt: new Date().toISOString() }),
+              role: "product_manager",
+              groupId,
+            } as UserProfile;
+            const group = { id: groupId, name: groupName, ownerId: user.uid, createdAt };
+            showGroupScreen(user, _activeProfile, group, (teamId, teamName) => {
+              startApp(teamId, _activeProfile!, teamName);
+            });
+            return true;
+          } catch {
+            return false;
+          }
+        };
+
+        // --- Handle PM approval registration (email link flow) ---
         const pendingPmApproved = sessionStorage.getItem("pendingPmApproved");
         if (pendingPmApproved) {
           sessionStorage.removeItem("pendingPmApproved");
           try {
             const pmReq = await getPmRequest(pendingPmApproved);
             if (pmReq && pmReq.status === "approved" && pmReq.email === user.email) {
-              let profile = await ensureUserProfile(user);
-              if (!profile) {
-                // Guard: check if a profile already exists for this email under a different uid
-                const existingByEmail = await getUserProfileByEmail(user.email ?? "");
-                if (existingByEmail) {
-                  sessionStorage.setItem("loginError", "This email is already registered under a different sign-in method. Please sign in with your original account (e.g. Google).");
-                  await signOut();
-                  return;
-                }
-                const newProfile = await createNewUserProfile(user);
-                _activeProfile = { ...newProfile, role: "product_manager" };
-                await updateUserProfile(newProfile.uid, { role: "product_manager" } as Parameters<typeof updateUserProfile>[1]);
-                profile = _activeProfile;
-              } else if (profile.role === "member") {
-                await updateUserProfile(profile.uid, { role: "product_manager" } as Parameters<typeof updateUserProfile>[1]);
-                profile = { ...profile, role: "product_manager" };
-                _activeProfile = profile;
-              } else {
-                _activeProfile = profile;
-              }
-              if (profile) {
-                const groupId = await createGroup(pmReq.groupName, profile.uid);
-                await linkExistingTeamsToGroup(profile.uid, groupId);
-                const group = { id: groupId, name: pmReq.groupName, ownerId: profile.uid, createdAt: new Date().toISOString() };
-                showGroupScreen(user, _activeProfile!, group, (teamId, teamName) => {
-                  startApp(teamId, _activeProfile!, teamName);
-                });
-              }
-              return;
+              if (await setupPmAccount()) return;
             }
-            // email mismatch or not approved — fall through to normal login
+            // email mismatch, not approved, or CF failed — fall through to normal login
           } catch (e) {
             console.warn("PM approval flow failed, falling through to normal login:", e);
-            // fall through to normal login
           }
         }
 
@@ -1084,9 +1078,7 @@ if (!isFirebaseConfigured) {
               await signOut();
               return;
             }
-            const newProfile = await createNewUserProfile(user);
-            await updateUserProfile(newProfile.uid, { role: "product_manager" } as Parameters<typeof updateUserProfile>[1]);
-            profile = { ...newProfile, role: "product_manager" };
+            if (await setupPmAccount()) return;
           } else {
             // Check for a pending pre-registration before rejecting
             const prereg = await getPreregistrationByEmail(user.email ?? "");
@@ -1124,8 +1116,7 @@ if (!isFirebaseConfigured) {
         if (profile.role === "member") {
           const pmReq = await getApprovedPmRequestByEmail(profile.email).catch(() => null);
           if (pmReq) {
-            await updateUserProfile(profile.uid, { role: "product_manager" } as Parameters<typeof updateUserProfile>[1]);
-            profile = { ...profile, role: "product_manager" };
+            if (await setupPmAccount()) return;
           }
         }
         _activeProfile = profile;
@@ -1137,23 +1128,14 @@ if (!isFirebaseConfigured) {
         if (profile.role === "product_manager") {
           const group = await getGroupByOwner(profile.uid);
           if (!group) {
-            const pmReq = await getApprovedPmRequestByEmail(profile.email).catch(() => null);
-            if (pmReq) {
-              // Auto-create group from approved PM request — no prompt needed
-              const groupId = await createGroup(pmReq.groupName, profile.uid);
-              await linkExistingTeamsToGroup(profile.uid, groupId);
-              const newGroup = { id: groupId, name: pmReq.groupName, ownerId: profile.uid, createdAt: new Date().toISOString() };
-              _activeProfile = { ...profile, groupId };
-              showGroupScreen(user, _activeProfile, newGroup, (teamId, teamName) => {
-                startApp(teamId, _activeProfile!, teamName);
+            // Try CF activation first (handles approved PM request case)
+            if (await setupPmAccount()) return;
+            // Fallback: SM manually promoted this user — ask for group name
+            showCreateGroupScreen(user, profile, `${profile.displayName}'s Group`, (newGroup) => {
+              showGroupScreen(user, profile, newGroup, (teamId, teamName) => {
+                startApp(teamId, profile, teamName);
               });
-            } else {
-              showCreateGroupScreen(user, profile, `${profile.displayName}'s Group`, (newGroup) => {
-                showGroupScreen(user, profile, newGroup, (teamId, teamName) => {
-                  startApp(teamId, profile, teamName);
-                });
-              });
-            }
+            });
           } else {
             showGroupScreen(user, profile, group, (teamId, teamName) => {
               startApp(teamId, profile, teamName);
