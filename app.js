@@ -24107,6 +24107,7 @@ ${marker.label}`;
   };
   var signInWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: "select_account" });
     await signInWithPopup(auth, provider);
   };
   var signInWithEmail = async (email, password) => {
