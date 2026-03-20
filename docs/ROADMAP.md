@@ -1,7 +1,7 @@
 # Burndown Studio — Project Roadmap
 
-**Version:** 1.3
-**Last updated:** 2026-03-16
+**Version:** 1.4
+**Last updated:** 2026-03-20
 **Status:** Draft — open for review
 
 ---
@@ -228,7 +228,11 @@ MVP baseline       Data Safety        Daily Usability    Insights           Mult
 | F-610 | Avatar in member list (Preferences) | **Done** | 32px avatar left of each member name row; click popup avatar (48px) to view full-size photo |
 | F-611 | Responsive BDS header | **Done** | Wide viewport: flat row (title left, user info right); narrow (<900px): stacks vertically, centered |
 
-**Delivered:** 2026-03-16
+### Also Delivered (post-Phase 6 fixes)
+- **Burndown ideal line for received tasks**: when tasks are moved from Sprint N into a future sprint, the receiving sprint's ideal line now starts at `max(plannedPoints, initialScope)` instead of `plannedPoints` alone — correctly treating pre-sprint task arrivals as planned scope. Existing behavior (ideal line stays fixed when planned tasks are removed) is preserved.
+- **Border visibility**: bumped `--stroke`, `.card`, `.screen-card`, `.btn.ghost`, and `.team-card` border opacities for better visibility on bright monitors.
+
+**Delivered:** 2026-03-20 (Phase 6 core); post-fixes 2026-03-20
 
 ---
 
@@ -259,4 +263,5 @@ MVP baseline       Data Safety        Daily Usability    Insights           Mult
 | 2026-03-06 | 1.0 | Phase 4 shipped: F-401/F-402/F-403 marked Done. Phase 2 marked Done. Updated roadmap overview. Added "Also Delivered" section for Phase 4 extras (user profiles, memos, multi-assign, pickers, sign-in UX). |
 | 2026-03-07 | 1.1 | Extended "Also Delivered" for Phase 4: burndown N+1 border model, last-day Move/Split, login register prompt, projectToday holiday skip, admin enhancements, member removal guards. |
 | 2026-03-14 | 1.2 | Added Phase 5 (SaaS Hardening & Onboarding): invitation registration page, wrong-user guard, landing page error handling, "Add Group Members", PM removal warning dialog, PM display name edit, projectToday future-date cap, getMostRecentWorkingDay, sprint defaults by member count, team data isolation fix, resilient member loading, GitHub Actions CI/CD. Updated roadmap overview to include Phase 5. |
+| 2026-03-20 | 1.4 | Post-Phase 6 fixes: burndown ideal line fix for sprints receiving moved tasks (`idealStartingPoints = max(plannedPoints, initialScope)`); CSS border visibility improvements across cards, modals, and buttons. |
 | 2026-03-16 | 1.3 | Added Phase 6 (User Profiles & Avatars): profile photo upload, initial-letter avatar fallback, avatarSrc helper, full-size photo popup, change password modal, avatar in header/team cards/sidebar/member list, responsive BDS header. Updated roadmap overview. |

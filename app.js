@@ -22037,6 +22037,12 @@ This typically indicates that your device does not have a healthy Internet conne
       saveDebounceTimer = setTimeout(() => doSaveToFirestore(teamId), 500);
     }
   };
+  var unsubscribeTeamSnapshot = () => {
+    if (unsubscribeSnapshot) {
+      unsubscribeSnapshot();
+      unsubscribeSnapshot = null;
+    }
+  };
   var setCurrentTeam = async (teamId) => {
     if (saveDebounceTimer) {
       clearTimeout(saveDebounceTimer);
@@ -27742,6 +27748,7 @@ They will also be removed from all teams within the group.`)) return;
         }
       },
       () => {
+        unsubscribeTeamSnapshot();
         _activeUser = null;
         _activeProfile = null;
         _currentTeamIdForMemo = null;

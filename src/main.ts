@@ -23,6 +23,7 @@ import {
   replaceMembers,
   setMemberPairs,
   setCurrentTeam,
+  unsubscribeTeamSnapshot,
 } from "./state.ts";
 import { render, setActiveTab, startEditing, expandAll, collapseAll, toggleTaskSort, toggleBacklogSort, setHighlightBacklogTaskId, togglePlanTaskSort, togglePlanBacklogSort } from "./render.ts";
 import { H_CHART } from "./state.ts";
@@ -1155,6 +1156,7 @@ if (!isFirebaseConfigured) {
       }
     },
     () => {
+      unsubscribeTeamSnapshot();
       _activeUser = null;
       _activeProfile = null;
       _currentTeamIdForMemo = null;

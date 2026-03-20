@@ -176,6 +176,13 @@ const save = (): void => {
 };
 
 // Load state from Firestore for the given team and subscribe to real-time updates.
+export const unsubscribeTeamSnapshot = (): void => {
+  if (unsubscribeSnapshot) {
+    unsubscribeSnapshot();
+    unsubscribeSnapshot = null;
+  }
+};
+
 export const setCurrentTeam = async (teamId: string): Promise<void> => {
   // Cancel any pending debounced save for the previous team.
   // Without this, the timer would fire after state has been replaced with

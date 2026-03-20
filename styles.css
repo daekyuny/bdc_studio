@@ -9,7 +9,7 @@
   --accent-soft: #a5b4fc;
   --ideal: #3b82f6;
   --actual: #ef4444;
-  --stroke: rgba(44, 47, 58, 0.12);
+  --stroke: rgba(44, 47, 58, 0.18);
   --shadow: 0 12px 28px rgba(44, 47, 58, 0.10);
 }
 
@@ -234,7 +234,7 @@ p {
   border-radius: 16px;
   padding: 12px 16px;
   box-shadow: var(--shadow);
-  border: 1px solid rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(44, 47, 58, 0.13);
 }
 
 .card-tight {
@@ -341,7 +341,7 @@ select:focus {
 
 .btn.ghost {
   background: transparent;
-  border: 1px solid var(--stroke);
+  border: 1px solid rgba(44, 47, 58, 0.30);
   color: var(--accent);
   box-shadow: none;
 }
@@ -1130,7 +1130,7 @@ h3 {
   max-height: calc(100vh - 220px);
   background: var(--panel);
   border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(44, 47, 58, 0.13);
   box-shadow: var(--shadow);
 }
 
@@ -1801,7 +1801,7 @@ th.sortable.sort-desc::after {
 
 .screen-card {
   background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.22);
   border-radius: 16px;
   box-shadow: 0 8px 40px rgba(0, 0, 0, 0.12);
   padding: 40px;
@@ -1828,7 +1828,7 @@ th.sortable.sort-desc::after {
   width: 64px;
   height: 64px;
   flex-shrink: 0;
-  border: 1.5px solid rgba(0, 0, 0, 0.12);
+  border: 1.5px solid rgba(0, 0, 0, 0.18);
   border-radius: 14px;
   display: flex;
   align-items: center;
@@ -1851,7 +1851,7 @@ th.sortable.sort-desc::after {
 
 .landing-card {
   background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid rgba(0, 0, 0, 0.18);
   border-radius: 12px;
   padding: 20px;
   display: flex;
@@ -2017,7 +2017,7 @@ th.sortable.sort-desc::after {
 .team-card {
   position: relative;
   background: rgba(92, 103, 242, 0.04);
-  border: 1px solid rgba(92, 103, 242, 0.15);
+  border: 1px solid rgba(92, 103, 242, 0.28);
   border-radius: 12px;
   padding: 20px 16px 14px;
   cursor: pointer;
@@ -2179,7 +2179,7 @@ th.sortable.sort-desc::after {
   gap: 8px;
   margin-top: 8px;
   padding-top: 16px;
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  border-top: 1px solid rgba(0, 0, 0, 0.22);
 }
 
 /* Admin screen — sidebar layout */
@@ -2194,14 +2194,14 @@ th.sortable.sort-desc::after {
   border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 8px 40px rgba(0, 0, 0, 0.12);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.22);
 }
 
 .admin-sidebar {
   width: 200px;
   flex-shrink: 0;
   background: #f8f9fa;
-  border-right: 1px solid rgba(0, 0, 0, 0.08);
+  border-right: 1px solid rgba(0, 0, 0, 0.22);
   display: flex;
   flex-direction: column;
   padding: 24px 0;
@@ -2209,7 +2209,7 @@ th.sortable.sort-desc::after {
 
 .admin-sidebar-brand {
   padding: 0 20px 16px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.22);
   margin-bottom: 8px;
 }
 
@@ -2258,7 +2258,7 @@ th.sortable.sort-desc::after {
 
 .admin-sidebar-footer {
   padding: 12px 20px 0;
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  border-top: 1px solid rgba(0, 0, 0, 0.22);
   margin-top: 8px;
   display: flex;
   flex-direction: column;
@@ -2283,7 +2283,7 @@ th.sortable.sort-desc::after {
 
 .admin-main-header {
   padding: 20px 24px 14px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.22);
 }
 
 .admin-section-title {
@@ -2362,7 +2362,7 @@ th.sortable.sort-desc::after {
 
 .manage-section-divider {
   border: none;
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  border-top: 1px solid rgba(0, 0, 0, 0.22);
   margin: 12px 0 10px;
 }
 
@@ -2524,7 +2524,7 @@ th.sortable.sort-desc::after {
   width: 100%;
   box-sizing: border-box;
   padding: 10px 12px;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid rgba(0, 0, 0, 0.18);
   border-radius: 8px;
   font-size: 0.88rem;
   font-family: inherit;
@@ -2545,7 +2545,7 @@ th.sortable.sort-desc::after {
 .pref-memo-preview {
   min-height: 100px;
   padding: 10px 12px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.22);
   border-radius: 8px;
   font-size: 0.88rem;
   line-height: 1.6;
