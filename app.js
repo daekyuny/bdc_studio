@@ -22561,16 +22561,17 @@ This typically indicates that your device does not have a healthy Internet conne
     const manDays = developers * workingDays;
     const effectiveManDays = manDays * efficiency;
     const idealDailyBurn = workingDays > 0 ? effectiveManDays / workingDays : 0;
+    const scopeDropContribAt = (date) => (sprint.scopeDrops ?? []).filter((d) => d.addedDate <= date && d.removedDate > date).reduce((sum, d) => sum + d.estimate, 0);
+    const initialScope = sprint.tasks.filter((t) => !t.addedDate || t.addedDate <= sprint.startDate).reduce((sum, t) => sum + (t.estimate ?? 0), 0) + scopeDropContribAt(sprint.startDate);
+    const idealStartingPoints = Math.max(plannedPoints, initialScope);
     const N2 = workingDays;
-    const idealLineBurn = N2 > 0 ? plannedPoints / N2 : 0;
+    const idealLineBurn = N2 > 0 ? idealStartingPoints / N2 : 0;
     const ideal = Array.from(
       { length: N2 + 1 },
-      (_, i) => Math.round(Math.max(0, plannedPoints - idealLineBurn * i) * 100) / 100
+      (_, i) => Math.round(Math.max(0, idealStartingPoints - idealLineBurn * i) * 100) / 100
     );
     const todayIndex = dates.reduce((last, date, i) => date <= today ? i : last, -1);
     const taskActiveAt = (task, date) => !task.addedDate || task.addedDate <= date;
-    const scopeDropContribAt = (date) => (sprint.scopeDrops ?? []).filter((d) => d.addedDate <= date && d.removedDate > date).reduce((sum, d) => sum + d.estimate, 0);
-    const initialScope = sprint.tasks.filter((t) => !t.addedDate || t.addedDate <= sprint.startDate).reduce((sum, t) => sum + (t.estimate ?? 0), 0) + scopeDropContribAt(sprint.startDate);
     const actual = Array(N2 + 1).fill(null);
     if (todayIndex >= 0) {
       actual[0] = initialScope;

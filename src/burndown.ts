@@ -40,21 +40,6 @@ export const calculateBurndown = (
   const effectiveManDays = manDays * efficiency;
   const idealDailyBurn = workingDays > 0 ? effectiveManDays / workingDays : 0;
 
-  // N+1 plot borders: border 0 = sprint start (before any work), border N = sprint end.
-  // Each working day i occupies the band between border i and border i+1.
-  // ideal[i] is plotted at border i; ideal goes from plannedPoints → 0 exactly.
-  const N = workingDays;
-  const idealLineBurn = N > 0 ? plannedPoints / N : 0;
-  const ideal = Array.from({ length: N + 1 }, (_, i) =>
-    Math.round(Math.max(0, plannedPoints - idealLineBurn * i) * 100) / 100
-  );
-
-  // todayIndex: 0-based band index (dates[todayIndex] is the current working day)
-  const todayIndex = dates.reduce((last, date, i) => (date <= today ? i : last), -1);
-
-  const taskActiveAt = (task: SprintTask, date: string): boolean =>
-    !task.addedDate || task.addedDate <= date;
-
   const scopeDropContribAt = (date: string): number =>
     (sprint.scopeDrops ?? [])
       .filter(d => d.addedDate <= date && d.removedDate > date)
@@ -67,6 +52,27 @@ export const calculateBurndown = (
     .filter(t => !t.addedDate || t.addedDate <= sprint.startDate)
     .reduce((sum, t) => sum + (t.estimate ?? 0), 0)
     + scopeDropContribAt(sprint.startDate);
+
+  // Ideal line starting point: use plannedPoints as the locked baseline, but raise it to
+  // initialScope if tasks were moved in from other sprints after finalization (those tasks
+  // land with no addedDate, so initialScope captures them while plannedPoints does not).
+  // We never lower below plannedPoints — that would un-fix the ideal line on scope drops.
+  const idealStartingPoints = Math.max(plannedPoints, initialScope);
+
+  // N+1 plot borders: border 0 = sprint start (before any work), border N = sprint end.
+  // Each working day i occupies the band between border i and border i+1.
+  // ideal[i] is plotted at border i; ideal goes from idealStartingPoints → 0 exactly.
+  const N = workingDays;
+  const idealLineBurn = N > 0 ? idealStartingPoints / N : 0;
+  const ideal = Array.from({ length: N + 1 }, (_, i) =>
+    Math.round(Math.max(0, idealStartingPoints - idealLineBurn * i) * 100) / 100
+  );
+
+  // todayIndex: 0-based band index (dates[todayIndex] is the current working day)
+  const todayIndex = dates.reduce((last, date, i) => (date <= today ? i : last), -1);
+
+  const taskActiveAt = (task: SprintTask, date: string): boolean =>
+    !task.addedDate || task.addedDate <= date;
 
   // actual[0] = initialScope (border 0: before any work)
   // actual[i+1] = remaining recorded at end of dates[i], for i <= todayIndex
