@@ -24540,7 +24540,6 @@ ${marker.label}`;
     c.innerHTML = `<div class="screen-overlay"><div class="screen-card login-card"><p class="pref-hint">Loading\u2026</p></div></div>`;
     getPmRequest(requestId).then((pmReq) => {
       const email = pmReq?.email ?? "";
-      const isGmail = email.toLowerCase().endsWith("@gmail.com");
       c.innerHTML = `
       <div class="screen-overlay" id="landingScreen">
         <div class="landing-layout">
@@ -24566,11 +24565,9 @@ ${marker.label}`;
             </label>
             <button class="btn" id="regCreateBtn" style="width:100%;margin-top:4px">Continue</button>
             <div class="screen-error" id="regError" hidden></div>
-            ${isGmail ? `
-              <div class="login-divider"><span>or, if this is your primary Google account</span></div>
-              <button class="login-google-btn" id="regGoogleBtn">${googleSvg} Sign in with Google</button>
-              <p class="pref-hint" style="font-size:11px;margin-top:6px">Note: Google Sign-In only works if <strong>${escapeHtml(email)}</strong> is your primary Google account, not an alias.</p>
-            ` : ""}
+            <div class="login-divider"><span>or</span></div>
+            <button class="login-google-btn" id="regGoogleBtn">${googleSvg} Sign in with Google</button>
+            <p class="pref-hint" style="font-size:11px;margin-top:6px">Use Google Sign-In if <strong>${escapeHtml(email)}</strong> is a Google or Google Workspace account.</p>
           </div>
         </div>
       </div>
@@ -24623,17 +24620,15 @@ ${marker.label}`;
       document.getElementById("regPassword2").addEventListener("keydown", (e) => {
         if (e.key === "Enter") void doCreate();
       });
-      if (isGmail) {
-        document.getElementById("regGoogleBtn").addEventListener("click", async () => {
-          errEl.hidden = true;
-          try {
-            await signInWithGoogle();
-          } catch (e) {
-            errEl.textContent = e instanceof Error ? e.message : "Sign-in failed.";
-            errEl.hidden = false;
-          }
-        });
-      }
+      document.getElementById("regGoogleBtn").addEventListener("click", async () => {
+        errEl.hidden = true;
+        try {
+          await signInWithGoogle();
+        } catch (e) {
+          errEl.textContent = e instanceof Error ? e.message : "Sign-in failed.";
+          errEl.hidden = false;
+        }
+      });
       setTimeout(() => document.getElementById("regPassword")?.focus(), 50);
     }).catch(() => {
       c.innerHTML = `<div class="screen-overlay"><div class="screen-card login-card">
