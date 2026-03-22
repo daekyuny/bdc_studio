@@ -1762,7 +1762,7 @@ const loadAdminGroups = async (): Promise<void> => {
               <tr>
                 <td>${escapeHtml(g.name)}</td>
                 <td>${owner
-                  ? `${escapeHtml(owner.displayName)} <span class="member-email">${escapeHtml(owner.email)}</span>`
+                  ? `${owner.displayName !== owner.email ? `${escapeHtml(owner.displayName)} ` : ""}<span class="member-email">${escapeHtml(owner.email)}</span>`
                   : "<em>unknown</em>"
                 }</td>
                 <td>${memberCount}</td>

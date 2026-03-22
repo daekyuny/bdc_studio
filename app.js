@@ -25676,7 +25676,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
         return `
               <tr>
                 <td>${escapeHtml(g.name)}</td>
-                <td>${owner ? `${escapeHtml(owner.displayName)} <span class="member-email">${escapeHtml(owner.email)}</span>` : "<em>unknown</em>"}</td>
+                <td>${owner ? `${owner.displayName !== owner.email ? `${escapeHtml(owner.displayName)} ` : ""}<span class="member-email">${escapeHtml(owner.email)}</span>` : "<em>unknown</em>"}</td>
                 <td>${memberCount}</td>
                 <td>${teamCount}</td>
               </tr>
