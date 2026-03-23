@@ -25489,7 +25489,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
       }
       try {
         const all = await getPreregistrationsByGroup(groupId, profile.uid);
-        const pending = all.filter((p) => p.status === "pending");
+        const pending = all.filter((p) => p.status === "pending" && p.teamIds.includes(team.id));
         if (pending.length === 0) {
           listEl.innerHTML = "<em>No pending pre-registrations.</em>";
         } else {
@@ -25545,7 +25545,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
       btn.textContent = "Pre-registering\u2026";
       try {
         const existing = await getPreregistrationsByGroup(groupId, profile.uid);
-        const pendingEmails = new Set(existing.filter((p) => p.status === "pending").map((p) => p.email));
+        const pendingEmails = new Set(existing.filter((p) => p.status === "pending" && p.teamIds.includes(team.id)).map((p) => p.email));
         const toCreate = emails.filter((e) => !pendingEmails.has(e));
         const skipped = emails.length - toCreate.length;
         if (toCreate.length > 0) {
