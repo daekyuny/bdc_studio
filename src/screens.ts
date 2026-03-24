@@ -2871,7 +2871,7 @@ const loadAndRenderGroupMembers = async (group: Group, profile: UserProfile): Pr
   try {
     const [members, pendingPreregs] = await Promise.all([
       getGroupMemberProfiles(group.id),
-      getPendingPreregistrationsByGroup(group.id),
+      getPendingPreregistrationsByGroup(group.id, profile.uid),
     ]);
     renderGroupMemberList(listEl, members, group, profile, pendingPreregs);
   } catch (e: unknown) {

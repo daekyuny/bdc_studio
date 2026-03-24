@@ -422,9 +422,9 @@ export const updatePreregistration = async (id: string, updates: Partial<PreRegi
   await updateDoc(doc(db, "preregistrations", id), updates as Record<string, unknown>);
 };
 
-export const getPendingPreregistrationsByGroup = async (groupId: string): Promise<(PreRegistration & { id: string })[]> => {
+export const getPendingPreregistrationsByGroup = async (groupId: string, createdBy: string): Promise<(PreRegistration & { id: string })[]> => {
   const snap = await getDocs(
-    query(collection(db, "preregistrations"), where("groupId", "==", groupId), where("status", "==", "pending")),
+    query(collection(db, "preregistrations"), where("groupId", "==", groupId), where("createdBy", "==", createdBy), where("status", "==", "pending")),
   );
   return snap.docs.map((d) => ({ id: d.id, ...d.data() } as PreRegistration & { id: string }));
 };

@@ -21881,9 +21881,9 @@ This typically indicates that your device does not have a healthy Internet conne
   var updatePreregistration = async (id, updates) => {
     await updateDoc(doc(db, "preregistrations", id), updates);
   };
-  var getPendingPreregistrationsByGroup = async (groupId) => {
+  var getPendingPreregistrationsByGroup = async (groupId, createdBy) => {
     const snap = await getDocs(
-      query(collection(db, "preregistrations"), where("groupId", "==", groupId), where("status", "==", "pending"))
+      query(collection(db, "preregistrations"), where("groupId", "==", groupId), where("createdBy", "==", createdBy), where("status", "==", "pending"))
     );
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   };
@@ -26681,7 +26681,7 @@ All sprint data for this team will be permanently removed.`)) return;
     try {
       const [members, pendingPreregs] = await Promise.all([
         getGroupMemberProfiles(group.id),
-        getPendingPreregistrationsByGroup(group.id)
+        getPendingPreregistrationsByGroup(group.id, profile.uid)
       ]);
       renderGroupMemberList(listEl, members, group, profile, pendingPreregs);
     } catch (e) {
