@@ -1123,6 +1123,17 @@ if (!isFirebaseConfigured) {
             if (await setupPmAccount()) return;
           }
         }
+        // Recovery: profile exists but groupId was never set because claimPreregistration
+        // failed on the first sign-in attempt. Re-run the claim if a pending pre-reg exists.
+        if (profile.role === "member" && !profile.groupId) {
+          const prereg = await getPreregistrationByEmail(profile.email).catch(() => null);
+          if (prereg) {
+            const claimFn = httpsCallable<{ preregId: string }, { teamId: string | null; teamName: string | null }>(functions, "claimPreregistration");
+            await claimFn({ preregId: prereg.id });
+            profile = { ...profile, groupId: prereg.groupId };
+            _activeProfile = profile;
+          }
+        }
         _activeProfile = profile;
         if (profile.role === "super_manager") {
           showAdminScreen(profile);

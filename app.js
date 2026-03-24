@@ -27737,6 +27737,15 @@ They will also be removed from all teams within the group.`)) return;
               if (await setupPmAccount()) return;
             }
           }
+          if (profile.role === "member" && !profile.groupId) {
+            const prereg = await getPreregistrationByEmail(profile.email).catch(() => null);
+            if (prereg) {
+              const claimFn = httpsCallable(functions, "claimPreregistration");
+              await claimFn({ preregId: prereg.id });
+              profile = { ...profile, groupId: prereg.groupId };
+              _activeProfile = profile;
+            }
+          }
           _activeProfile = profile;
           if (profile.role === "super_manager") {
             showAdminScreen(profile);
