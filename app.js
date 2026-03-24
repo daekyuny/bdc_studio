@@ -25672,7 +25672,9 @@ All shared sprint data for this team will be permanently removed.`)) return;
         <tbody>
           ${groups.map((g) => {
         const owner = userMap.get(g.ownerId);
-        const memberCount = allUsers.filter((u) => u.groupId === g.id).length;
+        const membersWithGroupId = allUsers.filter((u) => u.groupId === g.id);
+        const ownerCounted = membersWithGroupId.some((u) => u.uid === g.ownerId);
+        const memberCount = membersWithGroupId.length + (ownerCounted || !userMap.has(g.ownerId) ? 0 : 1);
         const teamCount = allTeams.filter((t) => t.groupId === g.id).length;
         return `
               <tr>
