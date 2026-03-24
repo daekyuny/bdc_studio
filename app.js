@@ -21881,6 +21881,18 @@ This typically indicates that your device does not have a healthy Internet conne
   var updatePreregistration = async (id, updates) => {
     await updateDoc(doc(db, "preregistrations", id), updates);
   };
+  var getPendingPreregistrationsByGroup = async (groupId) => {
+    const snap = await getDocs(
+      query(collection(db, "preregistrations"), where("groupId", "==", groupId), where("status", "==", "pending"))
+    );
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  };
+  var getAllPendingPreregistrations = async () => {
+    const snap = await getDocs(
+      query(collection(db, "preregistrations"), where("status", "==", "pending"))
+    );
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  };
   var getAppSettings = async () => {
     const snap = await getDoc(doc(db, "settings", "app"));
     return snap.exists() ? snap.data() : {};
@@ -25269,6 +25281,9 @@ All shared sprint data for this team will be permanently removed.`)) return;
       let allUsers;
       try {
         allUsers = groupId ? await getGroupMemberProfiles(groupId) : await getAllUsers();
+        if (!allUsers.some((u) => u.uid === profile.uid)) {
+          allUsers = [profile, ...allUsers];
+        }
       } catch {
         currentEl.innerHTML = "<em>Failed to load users.</em>";
         return;
@@ -25646,10 +25661,11 @@ All shared sprint data for this team will be permanently removed.`)) return;
     const tableEl = document.getElementById("adminGroupTable");
     if (!tableEl) return;
     try {
-      const [groups, allUsers, allTeams] = await Promise.all([
+      const [groups, allUsers, allTeams, allPendingPreregs] = await Promise.all([
         getAllGroups(),
         getAllUsers(),
-        getAllTeams()
+        getAllTeams(),
+        getAllPendingPreregistrations()
       ]);
       const userMap = new Map(allUsers.map((u) => [u.uid, u]));
       if (groups.length === 0) {
@@ -25669,7 +25685,9 @@ All shared sprint data for this team will be permanently removed.`)) return;
         <tbody>
           ${groups.map((g) => {
         const owner = userMap.get(g.ownerId);
-        const memberCount = allUsers.filter((u) => u.groupId === g.id).length;
+        const signedInCount = allUsers.filter((u) => u.groupId === g.id).length;
+        const pendingCount = allPendingPreregs.filter((p) => p.groupId === g.id).length;
+        const memberCount = signedInCount + pendingCount;
         const teamCount = allTeams.filter((t) => t.groupId === g.id).length;
         return `
               <tr>
@@ -26661,8 +26679,11 @@ All sprint data for this team will be permanently removed.`)) return;
     if (!listEl) return;
     if (errEl) errEl.hidden = true;
     try {
-      const members = await getGroupMemberProfiles(group.id);
-      renderGroupMemberList(listEl, members, group, profile);
+      const [members, pendingPreregs] = await Promise.all([
+        getGroupMemberProfiles(group.id),
+        getPendingPreregistrationsByGroup(group.id)
+      ]);
+      renderGroupMemberList(listEl, members, group, profile, pendingPreregs);
     } catch (e) {
       if (errEl) {
         errEl.textContent = e instanceof Error ? e.message : "Failed to load members.";
@@ -26671,7 +26692,7 @@ All sprint data for this team will be permanently removed.`)) return;
       listEl.innerHTML = "<em>Failed to load members.</em>";
     }
   };
-  var renderGroupMemberList = (listEl, members, group, profile) => {
+  var renderGroupMemberList = (listEl, members, group, profile, pendingPreregs = []) => {
     listEl.innerHTML = "";
     const toolbar = document.createElement("div");
     toolbar.className = "group-member-toolbar";
@@ -26680,7 +26701,7 @@ All sprint data for this team will be permanently removed.`)) return;
     document.getElementById("groupInviteMemberBtn").addEventListener("click", () => {
       showInviteMemberModal(group, profile, () => void loadAndRenderGroupMembers(group, profile));
     });
-    if (members.length === 0) {
+    if (members.length === 0 && pendingPreregs.length === 0) {
       const empty = document.createElement("p");
       empty.className = "pref-hint";
       empty.textContent = "No members in this group yet.";
@@ -26717,6 +26738,20 @@ All sprint data for this team will be permanently removed.`)) return;
         else showPhotoPopup(makeInitialAvatar(member.displayName, 200));
       });
       img.style.cursor = "pointer";
+      listEl.appendChild(row);
+    }
+    for (const prereg of pendingPreregs) {
+      const row = document.createElement("div");
+      row.className = "manage-member-row";
+      row.innerHTML = `
+      <img class="member-avatar-sm" src="${escapeHtml(makeInitialAvatar("?", 32))}" />
+      <div class="manage-member-info">
+        <div class="manage-member-name-row">
+          <span class="member-name">${escapeHtml(prereg.email)}</span>
+          <span class="member-role-badge">pre-registered</span>
+        </div>
+      </div>
+    `;
       listEl.appendChild(row);
     }
     listEl.querySelectorAll(".group-member-remove-btn").forEach((btn) => {

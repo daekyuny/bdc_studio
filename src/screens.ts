@@ -38,11 +38,13 @@ import {
   getUsersByIds,
   updateTeamOrder,
   updateTeamName,
+  getPendingPreregistrationsByGroup,
+  getAllPendingPreregistrations,
 } from "./db.ts";
 import { httpsCallable } from "firebase/functions";
 import { functions } from "./firebase.ts";
 import type { User } from "firebase/auth";
-import type { UserProfile, Team, UserRole, Group, Invitation, PmRequest } from "./types.ts";
+import type { UserProfile, Team, UserRole, Group, Invitation, PmRequest, PreRegistration } from "./types.ts";
 
 // Module-level state for the back-navigation in admin screen
 let _currentUser: User | null = null;
@@ -1312,6 +1314,10 @@ const showManageMembers = (team: Team, profile: UserProfile, onDone?: () => void
     let allUsers;
     try {
       allUsers = groupId ? await getGroupMemberProfiles(groupId) : await getAllUsers();
+      // Ensure the current user (PM) is always present regardless of groupId propagation timing
+      if (!allUsers.some((u) => u.uid === profile.uid)) {
+        allUsers = [profile, ...allUsers];
+      }
     } catch {
       currentEl.innerHTML = "<em>Failed to load users.</em>";
       return;
@@ -1729,10 +1735,11 @@ const loadAdminGroups = async (): Promise<void> => {
   const tableEl = document.getElementById("adminGroupTable");
   if (!tableEl) return;
   try {
-    const [groups, allUsers, allTeams] = await Promise.all([
+    const [groups, allUsers, allTeams, allPendingPreregs]: [Group[], UserProfile[], Team[], (PreRegistration & { id: string })[]] = await Promise.all([
       getAllGroups(),
       getAllUsers(),
       getAllTeams(),
+      getAllPendingPreregistrations(),
     ]);
     const userMap = new Map(allUsers.map((u) => [u.uid, u]));
     if (groups.length === 0) {
@@ -1752,7 +1759,9 @@ const loadAdminGroups = async (): Promise<void> => {
         <tbody>
           ${groups.map((g) => {
             const owner = userMap.get(g.ownerId);
-            const memberCount = allUsers.filter((u) => u.groupId === g.id).length;
+            const signedInCount = allUsers.filter((u) => u.groupId === g.id).length;
+            const pendingCount = allPendingPreregs.filter((p) => p.groupId === g.id).length;
+            const memberCount = signedInCount + pendingCount;
             const teamCount = allTeams.filter((t) => t.groupId === g.id).length;
             return `
               <tr>
@@ -2860,8 +2869,11 @@ const loadAndRenderGroupMembers = async (group: Group, profile: UserProfile): Pr
   if (!listEl) return;
   if (errEl) errEl.hidden = true;
   try {
-    const members = await getGroupMemberProfiles(group.id);
-    renderGroupMemberList(listEl, members, group, profile);
+    const [members, pendingPreregs] = await Promise.all([
+      getGroupMemberProfiles(group.id),
+      getPendingPreregistrationsByGroup(group.id),
+    ]);
+    renderGroupMemberList(listEl, members, group, profile, pendingPreregs);
   } catch (e: unknown) {
     if (errEl) {
       errEl.textContent = e instanceof Error ? e.message : "Failed to load members.";
@@ -2876,6 +2888,7 @@ const renderGroupMemberList = (
   members: UserProfile[],
   group: Group,
   profile: UserProfile,
+  pendingPreregs: { id: string; email: string }[] = [],
 ): void => {
   listEl.innerHTML = "";
 
@@ -2887,7 +2900,7 @@ const renderGroupMemberList = (
     showInviteMemberModal(group, profile, () => void loadAndRenderGroupMembers(group, profile));
   });
 
-  if (members.length === 0) {
+  if (members.length === 0 && pendingPreregs.length === 0) {
     const empty = document.createElement("p");
     empty.className = "pref-hint";
     empty.textContent = "No members in this group yet.";
@@ -2926,6 +2939,22 @@ const renderGroupMemberList = (
       else showPhotoPopup(makeInitialAvatar(member.displayName, 200));
     });
     img.style.cursor = "pointer";
+    listEl.appendChild(row);
+  }
+
+  // Show pending pre-registrations (haven't signed in yet)
+  for (const prereg of pendingPreregs) {
+    const row = document.createElement("div");
+    row.className = "manage-member-row";
+    row.innerHTML = `
+      <img class="member-avatar-sm" src="${escapeHtml(makeInitialAvatar("?", 32))}" />
+      <div class="manage-member-info">
+        <div class="manage-member-name-row">
+          <span class="member-name">${escapeHtml(prereg.email)}</span>
+          <span class="member-role-badge">pre-registered</span>
+        </div>
+      </div>
+    `;
     listEl.appendChild(row);
   }
 
