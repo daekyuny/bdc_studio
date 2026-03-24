@@ -21695,6 +21695,9 @@ This typically indicates that your device does not have a healthy Internet conne
   var updateTeamOrder = async (teamId, order) => {
     await updateDoc(doc(db, "teams", teamId), { order });
   };
+  var updateTeamName = async (teamId, name5) => {
+    await updateDoc(doc(db, "teams", teamId), { name: name5 });
+  };
   var loadTeamState = async (teamId) => {
     const snap = await getDoc(doc(db, "appdata", teamId));
     return snap.exists() ? snap.data() : null;
@@ -26393,6 +26396,27 @@ All shared sprint data for this team will be permanently removed.`)) return;
       });
       card.appendChild(manageBtn);
       if (team.ownerId === profile.uid) {
+        const btnRow = document.createElement("div");
+        btnRow.style.cssText = "display:flex;gap:4px;margin-top:4px";
+        const renameBtn = document.createElement("button");
+        renameBtn.className = "btn ghost small";
+        renameBtn.textContent = "Rename";
+        renameBtn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          const newName = prompt("New team name:", team.name)?.trim();
+          if (!newName || newName === team.name) return;
+          const errEl = document.getElementById("groupError");
+          if (errEl) errEl.hidden = true;
+          try {
+            await updateTeamName(team.id, newName);
+            void loadAndRenderGroupTeams(group, profile);
+          } catch (err) {
+            if (errEl) {
+              errEl.textContent = err instanceof Error ? err.message : "Failed to rename team.";
+              errEl.hidden = false;
+            }
+          }
+        });
         const deleteBtn = document.createElement("button");
         deleteBtn.className = "btn ghost small danger team-delete-btn";
         deleteBtn.textContent = "Delete";
@@ -26413,7 +26437,9 @@ All sprint data for this team will be permanently removed.`)) return;
             }
           }
         });
-        card.appendChild(deleteBtn);
+        btnRow.appendChild(renameBtn);
+        btnRow.appendChild(deleteBtn);
+        card.appendChild(btnRow);
       }
       card.addEventListener("mousedown", (e) => {
         if (!e.target.closest(".team-card-drag-handle")) return;

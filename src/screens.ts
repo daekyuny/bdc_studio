@@ -37,6 +37,7 @@ import {
   setAppSetting,
   getUsersByIds,
   updateTeamOrder,
+  updateTeamName,
 } from "./db.ts";
 import { httpsCallable } from "firebase/functions";
 import { functions } from "./firebase.ts";
@@ -2568,6 +2569,29 @@ const renderGroupTeamGrid = (
     card.appendChild(manageBtn);
 
     if (team.ownerId === profile.uid) {
+      const btnRow = document.createElement("div");
+      btnRow.style.cssText = "display:flex;gap:4px;margin-top:4px";
+
+      const renameBtn = document.createElement("button");
+      renameBtn.className = "btn ghost small";
+      renameBtn.textContent = "Rename";
+      renameBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const newName = prompt("New team name:", team.name)?.trim();
+        if (!newName || newName === team.name) return;
+        const errEl = document.getElementById("groupError");
+        if (errEl) errEl.hidden = true;
+        try {
+          await updateTeamName(team.id, newName);
+          void loadAndRenderGroupTeams(group, profile);
+        } catch (err: unknown) {
+          if (errEl) {
+            errEl.textContent = err instanceof Error ? err.message : "Failed to rename team.";
+            errEl.hidden = false;
+          }
+        }
+      });
+
       const deleteBtn = document.createElement("button");
       deleteBtn.className = "btn ghost small danger team-delete-btn";
       deleteBtn.textContent = "Delete";
@@ -2586,7 +2610,10 @@ const renderGroupTeamGrid = (
           }
         }
       });
-      card.appendChild(deleteBtn);
+
+      btnRow.appendChild(renameBtn);
+      btnRow.appendChild(deleteBtn);
+      card.appendChild(btnRow);
     }
 
     // Drag-to-reorder with real-time FLIP animation

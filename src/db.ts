@@ -174,6 +174,10 @@ export const updateTeamOrder = async (teamId: string, order: number): Promise<vo
   await updateDoc(doc(db, "teams", teamId), { order });
 };
 
+export const updateTeamName = async (teamId: string, name: string): Promise<void> => {
+  await updateDoc(doc(db, "teams", teamId), { name });
+};
+
 // --- AppState ---
 
 export const loadTeamState = async (teamId: string): Promise<AppState | null> => {
