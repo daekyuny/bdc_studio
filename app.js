@@ -47,8 +47,13 @@
     // Tabs
     tabSprint: $("tabSprint"),
     tabBacklog: $("tabBacklog"),
+    tabDashboard: $("tabDashboard"),
     sprintView: $("sprintView"),
     backlogView: $("backlogView"),
+    dashboardView: $("dashboardView"),
+    velocityChart: $("velocityChart"),
+    workloadChart: $("workloadChart"),
+    memberActivityTable: $("memberActivityTable"),
     // Sprint task card — add-by-ID
     addByIdInput: $("addByIdInput"),
     addByIdBtn: $("addByIdBtn"),
@@ -21897,7 +21902,8 @@ This typically indicates that your device does not have a healthy Internet conne
   var H_STATS = 16;
   var H_CHART = 32;
   var H_BACKLOG = 64;
-  var H_ALL = 127;
+  var H_DASHBOARD = 128;
+  var H_ALL = 255;
   var H_SPRINT_TASKS = H_TASKS | H_PANEL | H_STATS | H_CHART;
   var H_BACKLOG_DATA = H_BACKLOG | H_PANEL;
   var STORAGE_KEY = "burndown-studio";
@@ -22540,6 +22546,47 @@ This typically indicates that your device does not have a healthy Internet conne
     }
   };
 
+  // src/dashboard.ts
+  function getAssignedEmails(assignedTo) {
+    if (!assignedTo || !assignedTo.trim()) return [];
+    return assignedTo.split(",").map((s) => s.trim()).filter(Boolean);
+  }
+  function buildMemberActivityData(sprints, projectToday) {
+    if (!sprints.length) return { rows: [], allEmails: [] };
+    const sorted = [...sprints].sort((a, b) => a.startDate.localeCompare(b.startDate));
+    const emailSet = /* @__PURE__ */ new Set();
+    const rows = sorted.map((sprint, idx) => {
+      const isCurrentSprint = projectToday >= sprint.startDate && projectToday <= sprint.endDate;
+      const sprintLabel = `Sprint ${idx + 1}`;
+      const memberStats = {};
+      const totals = { assigned: 0, worked: 0, remain: 0 };
+      for (const task of sprint.tasks) {
+        const emails = getAssignedEmails(task.assignedTo);
+        totals.assigned += task.estimate;
+        totals.worked += task.worked;
+        totals.remain += task.remain;
+        for (const email of emails) {
+          emailSet.add(email);
+          if (!memberStats[email]) memberStats[email] = { assigned: 0, worked: 0, remain: 0 };
+          memberStats[email].assigned += task.estimate;
+          memberStats[email].worked += task.worked;
+          memberStats[email].remain += task.remain;
+        }
+      }
+      return { sprintId: sprint.id, sprintLabel, isCurrentSprint, memberStats, totals };
+    });
+    const allEmails = [...emailSet].sort();
+    return { rows, allEmails };
+  }
+  function buildVelocityData(sprints) {
+    if (!sprints.length) return [];
+    return [...sprints].sort((a, b) => a.startDate.localeCompare(b.startDate)).map((sprint, idx) => {
+      const completed = sprint.tasks.filter((t) => t.status === "Done").reduce((sum, t) => sum + t.estimate, 0);
+      const planned = sprint.plannedPoints ?? sprint.tasks.reduce((sum, t) => sum + t.estimate, 0);
+      return { sprintLabel: `Sprint ${idx + 1}`, completed, planned };
+    });
+  }
+
   // src/burndown.ts
   var getWorkedAtDate = (task, date) => {
     const log = task.workedLog;
@@ -23070,17 +23117,24 @@ ${marker.label}`;
             closeActiveUpdate = closeThisUpdate;
             const currentAssigned2 = task.assignedTo ? task.assignedTo.split(",").map((e) => e.trim()).filter(Boolean) : [];
             if (currentAssigned2.length === 0) {
-              openAssignedPicker([], getMemberPairs(), (selected) => {
-                if (selected.length > 0) {
-                  updateTask(task.id, { assignedTo: selected.join(", ") });
-                  workedView.hidden = true;
-                  workedInput.hidden = false;
-                  remainView.hidden = true;
-                  remainInput.hidden = false;
-                  remainChangeBtn.textContent = "Save";
-                  workedInput.focus();
-                }
-              }, "No one is assigned to this task. Please assign a member before logging work.");
+              openAssignedPicker(
+                [],
+                getMemberPairs(),
+                (selected) => {
+                  if (selected.length > 0) {
+                    updateTask(task.id, { assignedTo: selected.join(", ") });
+                    workedView.hidden = true;
+                    workedInput.hidden = false;
+                    remainView.hidden = true;
+                    remainInput.hidden = false;
+                    remainChangeBtn.textContent = "Save";
+                    workedInput.focus();
+                  }
+                },
+                "No one is assigned to this task. Please assign a member before logging work.",
+                task.estimate,
+                computeBaseTotals(task.backlogTaskId ?? null)
+              );
             } else {
               workedView.hidden = true;
               workedInput.hidden = false;
@@ -23345,13 +23399,28 @@ ${marker.label}`;
     });
   };
   var STORY_SORT_KEYS = /* @__PURE__ */ new Set(["storyId", "description", "priority"]);
-  var openAssignedPicker = (current, members, onDone, warningMsg) => {
+  var computeBaseTotals = (excludeTaskId) => {
+    const totals = {};
+    const backlog = getBacklog();
+    for (const story of backlog.stories) {
+      for (const task of story.tasks) {
+        if (task.id === excludeTaskId) continue;
+        if (task.assignedTo.length === 0) continue;
+        const share = task.estimate / task.assignedTo.length;
+        for (const email of task.assignedTo) {
+          totals[email] = (totals[email] ?? 0) + share;
+        }
+      }
+    }
+    return totals;
+  };
+  var openAssignedPicker = (current, members, onDone, warningMsg, currentTaskEstimate = 0, baseTotals = {}) => {
     const overlay = document.createElement("div");
     overlay.className = "team-modal-overlay";
     overlay.style.zIndex = "1100";
     const modal = document.createElement("div");
     modal.className = "team-modal";
-    modal.style.cssText = "max-width:300px;padding:20px;max-height:80vh;overflow-y:auto;";
+    modal.style.cssText = "max-width:360px;padding:20px;max-height:80vh;overflow-y:auto;";
     const title = document.createElement("h3");
     title.textContent = "Assign Members";
     title.style.cssText = "margin:0 0 14px;font-size:1rem;";
@@ -23363,37 +23432,54 @@ ${marker.label}`;
       modal.appendChild(warn);
     }
     const currentSet = new Set(current);
+    const table = document.createElement("table");
+    table.style.cssText = "width:100%;border-collapse:collapse;";
+    const thead = document.createElement("thead");
+    const headerRow = document.createElement("tr");
+    const thCb = document.createElement("th");
+    thCb.style.cssText = "width:28px;";
+    const thName = document.createElement("th");
+    thName.style.cssText = "text-align:left;padding:4px 8px 6px 0;font-size:0.8rem;color:#666;font-weight:500;";
+    thName.textContent = "Member";
+    const thTotal = document.createElement("th");
+    thTotal.style.cssText = "text-align:right;padding:4px 0 6px;font-size:0.8rem;color:#666;font-weight:500;white-space:nowrap;";
+    thTotal.textContent = "Total Assigned";
+    headerRow.append(thCb, thName, thTotal);
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+    const tbody = document.createElement("tbody");
+    table.appendChild(tbody);
+    modal.appendChild(table);
     const checkboxes = [];
-    const makeRow = (value, label, checked) => {
-      const wrap2 = document.createElement("label");
-      wrap2.className = "assigned-cb-label";
+    const updateTotals = () => {
+      const checkedEmails = checkboxes.filter(({ cb }) => cb.checked).map(({ value }) => value);
+      const share = checkedEmails.length > 0 ? currentTaskEstimate / checkedEmails.length : 0;
+      for (const { value, totalCell } of checkboxes) {
+        const base = baseTotals[value] ?? 0;
+        const contribution = checkedEmails.includes(value) ? share : 0;
+        totalCell.textContent = (base + contribution).toFixed(1);
+      }
+    };
+    for (const m of members) {
+      const tr = document.createElement("tr");
+      const tdCb = document.createElement("td");
+      tdCb.style.cssText = "width:28px;vertical-align:middle;";
       const cb = document.createElement("input");
       cb.type = "checkbox";
-      cb.value = value;
-      cb.checked = checked;
-      wrap2.appendChild(cb);
-      wrap2.append(" " + label);
-      return wrap2;
-    };
-    const noneRow = makeRow("", "None", current.length === 0);
-    const noneCb = noneRow.querySelector("input");
-    modal.appendChild(noneRow);
-    for (const m of members) {
-      const row = makeRow(m.email, m.name, currentSet.has(m.email));
-      const cb = row.querySelector("input");
-      checkboxes.push({ cb, value: m.email });
-      modal.appendChild(row);
+      cb.value = m.email;
+      cb.checked = currentSet.has(m.email);
+      tdCb.appendChild(cb);
+      const tdName = document.createElement("td");
+      tdName.style.cssText = "padding:5px 8px 5px 0;font-size:0.9rem;vertical-align:middle;";
+      tdName.textContent = m.name;
+      const tdTotal = document.createElement("td");
+      tdTotal.style.cssText = "text-align:right;font-size:0.9rem;vertical-align:middle;font-variant-numeric:tabular-nums;";
+      tr.append(tdCb, tdName, tdTotal);
+      tbody.appendChild(tr);
+      checkboxes.push({ cb, value: m.email, totalCell: tdTotal });
+      cb.addEventListener("change", updateTotals);
     }
-    noneCb.addEventListener("change", () => {
-      if (noneCb.checked) checkboxes.forEach(({ cb }) => {
-        cb.checked = false;
-      });
-    });
-    checkboxes.forEach(({ cb }) => {
-      cb.addEventListener("change", () => {
-        noneCb.checked = !checkboxes.some(({ cb: c }) => c.checked);
-      });
-    });
+    updateTotals();
     const footer = document.createElement("div");
     footer.style.cssText = "display:flex;justify-content:flex-end;margin-top:16px;";
     const doneBtn = document.createElement("button");
@@ -23577,7 +23663,7 @@ ${marker.label}`;
               openAssignedPicker(_assignedSelection, getMemberPairs(), (selected) => {
                 _assignedSelection = selected;
                 saveTask();
-              });
+              }, void 0, task.estimate, computeBaseTotals(task.id));
             });
             taskEditBtn.hidden = true;
             taskSaveBtn.hidden = false;
@@ -23818,9 +23904,11 @@ ${marker.label}`;
     const has = (h) => (hints & h) !== 0;
     dom.tabSprint.classList.toggle("active", activeTab === "sprint");
     dom.tabBacklog.classList.toggle("active", activeTab === "backlog");
+    dom.tabDashboard.classList.toggle("active", activeTab === "dashboard");
     dom.sprintView.hidden = activeTab !== "sprint";
     dom.backlogView.hidden = activeTab !== "backlog";
-    dom.sprintSubHeader.hidden = activeTab === "backlog";
+    dom.dashboardView.hidden = activeTab !== "dashboard";
+    dom.sprintSubHeader.hidden = activeTab !== "sprint";
     if (has(H_SIDEBAR)) renderSprintList();
     const prefs = getPreferences();
     const holidaySet = new Set(prefs.holidays.map((h) => h.date));
@@ -23846,6 +23934,10 @@ ${marker.label}`;
     fpProjectToday.setDate(getProjectToday(), false);
     if (activeTab === "backlog") {
       if (has(H_BACKLOG)) renderBacklog();
+      return;
+    }
+    if (activeTab === "dashboard") {
+      if (has(H_DASHBOARD) || has(H_ALL)) renderDashboard();
       return;
     }
     const sprint = getActiveSprint();
@@ -23888,6 +23980,251 @@ ${marker.label}`;
     }
     if (has(H_TASKS | H_PANEL | H_STATS)) renderPlanningModal(sprint, holidaySet, workWeekendSet);
   };
+  function svgEl(tag) {
+    return document.createElementNS("http://www.w3.org/2000/svg", tag);
+  }
+  var FONT = "'Source Sans 3', sans-serif";
+  var CLR_MUTED = "#6b7080";
+  var CLR_ACCENT_LIGHT = "rgba(92,103,242,0.22)";
+  var CLR_ACCENT = "rgba(92,103,242,0.72)";
+  var CLR_GRID = "rgba(44,47,58,0.07)";
+  function drawBarChartGrid(svg, W2, H2, PX, PY, plotH, maxVal) {
+    for (let i = 0; i <= 4; i++) {
+      const y = PY + plotH * (i / 4);
+      const line = svgEl("line");
+      line.setAttribute("x1", String(PX));
+      line.setAttribute("x2", String(W2 - 12));
+      line.setAttribute("y1", String(y));
+      line.setAttribute("y2", String(y));
+      line.setAttribute("stroke", CLR_GRID);
+      svg.appendChild(line);
+      const label = svgEl("text");
+      label.setAttribute("x", String(PX - 6));
+      label.setAttribute("y", String(y + 3));
+      label.setAttribute("text-anchor", "end");
+      label.setAttribute("fill", CLR_MUTED);
+      label.setAttribute("font-size", "9");
+      label.setAttribute("font-family", FONT);
+      label.textContent = String(Math.round(maxVal * (1 - i / 4)));
+      svg.appendChild(label);
+    }
+  }
+  function drawLegend(svg, items, W2) {
+    let x2 = W2 - 12;
+    for (let i = items.length - 1; i >= 0; i--) {
+      const { color, label } = items[i];
+      const t = svgEl("text");
+      t.setAttribute("x", String(x2));
+      t.setAttribute("y", "10");
+      t.setAttribute("text-anchor", "end");
+      t.setAttribute("fill", CLR_MUTED);
+      t.setAttribute("font-size", "9");
+      t.setAttribute("font-family", FONT);
+      t.textContent = label;
+      svg.appendChild(t);
+      x2 -= label.length * 5.5 + 6;
+      const rect = svgEl("rect");
+      rect.setAttribute("x", String(x2));
+      rect.setAttribute("y", "2");
+      rect.setAttribute("width", "8");
+      rect.setAttribute("height", "8");
+      rect.setAttribute("rx", "1.5");
+      rect.setAttribute("fill", color);
+      svg.appendChild(rect);
+      x2 -= 14;
+    }
+  }
+  function drawVelocityChart(svg, bars) {
+    const W2 = 600, H2 = 140, PX = 36, PY = 20, PB = 22;
+    svg.setAttribute("viewBox", `0 0 ${W2} ${H2}`);
+    svg.innerHTML = "";
+    if (!bars.length) {
+      const t = svgEl("text");
+      t.setAttribute("x", String(W2 / 2));
+      t.setAttribute("y", String(H2 / 2));
+      t.setAttribute("text-anchor", "middle");
+      t.setAttribute("fill", CLR_MUTED);
+      t.setAttribute("font-size", "12");
+      t.setAttribute("font-family", FONT);
+      t.textContent = "No sprint data yet.";
+      svg.appendChild(t);
+      return;
+    }
+    const maxVal = Math.max(...bars.flatMap((b) => [b.planned, b.completed]), 1);
+    const plotW = W2 - PX - 12;
+    const plotH = H2 - PY - PB;
+    const groupW = plotW / bars.length;
+    const barW = Math.min(groupW * 0.28, 24);
+    const gap = barW * 0.35;
+    drawBarChartGrid(svg, W2, H2, PX, PY, plotH, maxVal);
+    drawLegend(svg, [
+      { color: CLR_ACCENT_LIGHT, label: "Planned" },
+      { color: CLR_ACCENT, label: "Completed" }
+    ], W2);
+    bars.forEach((bar, i) => {
+      const cx = PX + groupW * i + groupW / 2;
+      const drawBar = (value, color, offsetX) => {
+        const bh = value / maxVal * plotH;
+        const rect = svgEl("rect");
+        rect.setAttribute("x", String(cx + offsetX));
+        rect.setAttribute("y", String(PY + plotH - bh));
+        rect.setAttribute("width", String(barW));
+        rect.setAttribute("height", String(Math.max(bh, 0)));
+        rect.setAttribute("fill", color);
+        rect.setAttribute("rx", "2");
+        svg.appendChild(rect);
+      };
+      drawBar(bar.planned, CLR_ACCENT_LIGHT, -(barW + gap / 2));
+      drawBar(bar.completed, CLR_ACCENT, gap / 2);
+      const label = svgEl("text");
+      label.setAttribute("x", String(cx));
+      label.setAttribute("y", String(H2 - 5));
+      label.setAttribute("text-anchor", "middle");
+      label.setAttribute("fill", CLR_MUTED);
+      label.setAttribute("font-size", "9");
+      label.setAttribute("font-family", FONT);
+      label.textContent = bar.sprintLabel;
+      svg.appendChild(label);
+    });
+  }
+  function drawWorkloadChart(svg, rows, allEmails, memberNames) {
+    const W2 = 600, H2 = 160, PX = 36, PY = 20, PB = 42;
+    svg.setAttribute("viewBox", `0 0 ${W2} ${H2}`);
+    svg.innerHTML = "";
+    if (!rows.length || !allEmails.length) {
+      const t = svgEl("text");
+      t.setAttribute("x", String(W2 / 2));
+      t.setAttribute("y", String(H2 / 2));
+      t.setAttribute("text-anchor", "middle");
+      t.setAttribute("fill", CLR_MUTED);
+      t.setAttribute("font-size", "12");
+      t.setAttribute("font-family", FONT);
+      t.textContent = "No member assignment data yet.";
+      svg.appendChild(t);
+      return;
+    }
+    const maxVal = Math.max(
+      ...rows.flatMap(
+        (row) => allEmails.map((e) => Math.max(row.memberStats[e]?.assigned ?? 0, row.memberStats[e]?.worked ?? 0))
+      ),
+      1
+    );
+    const plotW = W2 - PX - 12;
+    const plotH = H2 - PY - PB;
+    const nSprints = rows.length;
+    const nMembers = allEmails.length;
+    const groupW = plotW / nSprints;
+    const memberSlot = groupW / (nMembers + 0.5);
+    const barW = Math.min(memberSlot * 0.33, 16);
+    const barGap = barW * 0.3;
+    const barBottom = PY + plotH;
+    drawBarChartGrid(svg, W2, H2, PX, PY, plotH, maxVal);
+    drawLegend(svg, [
+      { color: CLR_ACCENT_LIGHT, label: "Assigned" },
+      { color: CLR_ACCENT, label: "Worked" }
+    ], W2);
+    for (let si = 1; si < nSprints; si++) {
+      const x2 = PX + groupW * si;
+      const sep = svgEl("line");
+      sep.setAttribute("x1", String(x2));
+      sep.setAttribute("x2", String(x2));
+      sep.setAttribute("y1", String(PY));
+      sep.setAttribute("y2", String(barBottom));
+      sep.setAttribute("stroke", CLR_GRID);
+      svg.appendChild(sep);
+    }
+    rows.forEach((row, si) => {
+      const gx = PX + groupW * si;
+      allEmails.forEach((email, mi) => {
+        const stat = row.memberStats[email] ?? { assigned: 0, worked: 0, remain: 0 };
+        const cx = gx + memberSlot * (mi + 0.5);
+        const drawBar = (value, color, offsetX) => {
+          const bh = value / maxVal * plotH;
+          const rect = svgEl("rect");
+          rect.setAttribute("x", String(cx + offsetX));
+          rect.setAttribute("y", String(barBottom - bh));
+          rect.setAttribute("width", String(barW));
+          rect.setAttribute("height", String(Math.max(bh, 0)));
+          rect.setAttribute("fill", color);
+          rect.setAttribute("rx", "2");
+          svg.appendChild(rect);
+        };
+        drawBar(stat.assigned, CLR_ACCENT_LIGHT, -(barW + barGap / 2));
+        drawBar(stat.worked, CLR_ACCENT, barGap / 2);
+        const firstName = (memberNames[mi] ?? email).split(" ")[0].slice(0, 8);
+        const nameLabel = svgEl("text");
+        nameLabel.setAttribute("x", String(cx));
+        nameLabel.setAttribute("y", String(barBottom + 11));
+        nameLabel.setAttribute("text-anchor", "middle");
+        nameLabel.setAttribute("fill", CLR_MUTED);
+        nameLabel.setAttribute("font-size", "8");
+        nameLabel.setAttribute("font-family", FONT);
+        nameLabel.textContent = firstName;
+        svg.appendChild(nameLabel);
+      });
+      const sprintLabel = svgEl("text");
+      sprintLabel.setAttribute("x", String(gx + groupW / 2));
+      sprintLabel.setAttribute("y", String(H2 - 5));
+      sprintLabel.setAttribute("text-anchor", "middle");
+      sprintLabel.setAttribute("fill", CLR_MUTED);
+      sprintLabel.setAttribute("font-size", "9");
+      sprintLabel.setAttribute("font-family", FONT);
+      sprintLabel.textContent = row.sprintLabel;
+      svg.appendChild(sprintLabel);
+    });
+  }
+  function renderDashboard() {
+    const { sprints } = getState();
+    const projectToday = getProjectToday();
+    const pairs = getMemberPairs();
+    const resolveEmail = (email) => pairs.find((p) => p.email === email)?.name ?? email;
+    const { rows, allEmails } = buildMemberActivityData(sprints, projectToday);
+    const memberNames = allEmails.map(resolveEmail);
+    const velocityBars = buildVelocityData(sprints);
+    drawVelocityChart(dom.velocityChart, velocityBars);
+    drawWorkloadChart(dom.workloadChart, rows, allEmails, memberNames);
+    if (!rows.length) {
+      dom.memberActivityTable.innerHTML = '<p class="dash-empty">No sprint data yet.</p>';
+      return;
+    }
+    const cols = [...memberNames, "Total"];
+    let html = '<table class="dash-table"><thead>';
+    html += '<tr><th rowspan="2">Sprint</th>';
+    cols.forEach((name5) => {
+      html += `<th colspan="3" class="dash-member-header">${name5}</th>`;
+    });
+    html += "</tr>";
+    html += '<tr class="dash-sub-header">';
+    cols.forEach(() => {
+      html += "<th>Asgn</th><th>Wrkd</th><th>Rem</th>";
+    });
+    html += "</tr></thead><tbody>";
+    rows.forEach((row) => {
+      const cls = row.isCurrentSprint ? ' class="dash-current-sprint"' : "";
+      html += `<tr${cls}><td class="dash-sprint-label">${row.sprintLabel}</td>`;
+      allEmails.forEach((email) => {
+        const s = row.memberStats[email] ?? { assigned: 0, worked: 0, remain: 0 };
+        html += `<td class="dash-num">${s.assigned}</td><td class="dash-num">${s.worked}</td><td class="dash-num">${s.remain}</td>`;
+      });
+      html += `<td class="dash-num dash-total">${row.totals.assigned}</td><td class="dash-num dash-total">${row.totals.worked}</td><td class="dash-num dash-total">${row.totals.remain}</td>`;
+      html += "</tr>";
+    });
+    const grandAssigned = rows.reduce((sum, r) => sum + r.totals.assigned, 0);
+    const grandWorked = rows.reduce((sum, r) => sum + r.totals.worked, 0);
+    const grandRemain = rows.reduce((sum, r) => sum + r.totals.remain, 0);
+    const memberTotals = allEmails.map((email) => ({
+      assigned: rows.reduce((sum, r) => sum + (r.memberStats[email]?.assigned ?? 0), 0),
+      worked: rows.reduce((sum, r) => sum + (r.memberStats[email]?.worked ?? 0), 0),
+      remain: rows.reduce((sum, r) => sum + (r.memberStats[email]?.remain ?? 0), 0)
+    }));
+    html += '<tr class="dash-grand-total"><td>Total</td>';
+    memberTotals.forEach((t) => {
+      html += `<td class="dash-num">${t.assigned}</td><td class="dash-num">${t.worked}</td><td class="dash-num">${t.remain}</td>`;
+    });
+    html += `<td class="dash-num dash-total">${grandAssigned}</td><td class="dash-num dash-total">${grandWorked}</td><td class="dash-num dash-total">${grandRemain}</td>`;
+    html += "</tr></tbody></table>";
+    dom.memberActivityTable.innerHTML = html;
+  }
 
   // src/io.ts
   var showImportConfirm = ({ title, message, subtext = "", okLabel = "Proceed" }) => new Promise((resolve) => {
@@ -27004,6 +27341,7 @@ They will also be removed from all teams within the group.`)) return;
   dom.showDayNumbers.addEventListener("change", () => render(H_CHART));
   dom.tabSprint.addEventListener("click", () => setActiveTab("sprint"));
   dom.tabBacklog.addEventListener("click", () => setActiveTab("backlog"));
+  dom.tabDashboard.addEventListener("click", () => setActiveTab("dashboard"));
   var commitAddById = () => {
     const input = dom.addByIdInput.value.trim();
     if (!input) return;

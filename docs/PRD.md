@@ -151,9 +151,10 @@ Key pain points:
 
 | ID | Feature | Priority | Status | Description |
 |---|---|---|---|---|
-| F-301 | Sprint velocity chart | P1 | Open | After 2+ completed sprints, show a bar chart of points completed per sprint over time. |
+| F-301 | Sprint velocity chart | P1 | **Done** | Paired bar chart (planned vs completed) per sprint on the Dashboard tab. |
 | F-302 | Sprint archive / completion | P2 | Open | Mark a sprint as "completed." Completed sprints are visually distinct and read-only. |
 | F-303 | Burndown chart tooltips | P2 | Open | Hover over a data point on the chart to see the date, ideal value, and actual value. |
+| F-304 | Dashboard tab | P1 | **Done** | Cross-sprint analytics: Velocity chart, Member Workload chart (assigned vs worked per member), Member Activity table (per-sprint per-member assigned/worked/remain). Uses project TODAY from state; no separate date picker needed. |
 
 ### 5.4 Phase 4 — Multi-user & Integrations
 

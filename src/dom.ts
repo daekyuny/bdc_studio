@@ -46,8 +46,13 @@ export const dom = {
   // Tabs
   tabSprint: $<HTMLButtonElement>("tabSprint"),
   tabBacklog: $<HTMLButtonElement>("tabBacklog"),
+  tabDashboard: $<HTMLButtonElement>("tabDashboard"),
   sprintView: $<HTMLElement>("sprintView"),
   backlogView: $<HTMLElement>("backlogView"),
+  dashboardView: $<HTMLElement>("dashboardView"),
+  velocityChart: $<SVGSVGElement>("velocityChart"),
+  workloadChart: $<SVGSVGElement>("workloadChart"),
+  memberActivityTable: $<HTMLElement>("memberActivityTable"),
   // Sprint task card — add-by-ID
   addByIdInput: $<HTMLInputElement>("addByIdInput"),
   addByIdBtn: $<HTMLButtonElement>("addByIdBtn"),

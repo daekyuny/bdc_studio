@@ -313,6 +313,7 @@ dom.showDayNumbers.addEventListener("change", () => render(H_CHART));
 // --- Tabs ---
 dom.tabSprint.addEventListener("click", () => setActiveTab("sprint"));
 dom.tabBacklog.addEventListener("click", () => setActiveTab("backlog"));
+dom.tabDashboard.addEventListener("click", () => setActiveTab("dashboard"));
 
 // --- Add-by-ID ---
 const commitAddById = (): void => {

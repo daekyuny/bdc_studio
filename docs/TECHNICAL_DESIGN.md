@@ -32,7 +32,8 @@ Development
       ├── screens.ts    → login, team selection, admin screen overlays
       ├── burndown.ts   → pure calculation functions
       ├── chart.ts      → SVG chart rendering
-      ├── render.ts     → DOM rendering (sidebar, tasks, backlog, stats, chart)
+      ├── render.ts     → DOM rendering (sidebar, tasks, backlog, stats, chart, dashboard)
+      ├── dashboard.ts  → pure dashboard calculations (member activity, velocity)
       ├── io.ts         → JSON/Excel export and import
       ├── utils.ts      → shared helpers (dates, IDs, formatting)
       └── globals.d.ts  → ambient declarations for CDN globals (flatpickr, XLSX)
@@ -391,13 +392,29 @@ The app uses **selective re-render** with bitmask render hints:
 | `H_STATS` | 16 | Stats card |
 | `H_CHART` | 32 | SVG burndown chart |
 | `H_BACKLOG` | 64 | Backlog tab table |
-| `H_ALL` | 127 | All regions |
+| `H_DASHBOARD` | 128 | Dashboard tab (velocity chart, workload chart, member activity table) |
+| `H_ALL` | 255 | All regions |
 
 Convenience groups: `H_SPRINT_TASKS = H_TASKS | H_PANEL | H_STATS | H_CHART` and `H_BACKLOG_DATA = H_BACKLOG | H_PANEL`.
 
 ### Tab State
 
-`activeTab` (`"sprint"` | `"backlog"`) is a module-level variable in `render.ts`. `setActiveTab(tab)` updates it and calls `render()`. `render()` toggles visibility of `#sprintView` / `#backlogView`.
+`activeTab` (`"sprint"` | `"backlog"` | `"dashboard"`) is a module-level variable in `render.ts`. `setActiveTab(tab)` updates it and calls `render()`. `render()` toggles visibility of `#sprintView` / `#backlogView` / `#dashboardView` and hides `#sprintSubHeader` when the dashboard tab is active.
+
+### Dashboard Tab
+
+The dashboard renders three sections stacked vertically:
+
+1. **Velocity chart** (`drawVelocityChart`) — SVG bar chart, `viewBox 600×140`. Paired bars per sprint: planned (light accent) vs completed (full accent). Data from `buildVelocityData(sprints)` in `dashboard.ts`.
+2. **Member Workload chart** (`drawWorkloadChart`) — SVG bar chart, `viewBox 600×160`. Per-sprint groups, paired bars per member: assigned (light) vs worked (full). Member first names shown as horizontal labels below bars; sprint label centred below each group. Data from `buildMemberActivityData(sprints, projectToday)`.
+3. **Member Activity table** — HTML table built in `renderDashboard()`. Columns: Sprint | Member…(assigned/worked/remain) | Total (assigned/worked/remain). Current sprint row highlighted. Grand total row at bottom. Member emails resolved to display names via `getMemberPairs()`.
+
+Dashboard uses `projectToday` from state (the same global recording date as the sprint tab). No separate TODAY picker on the dashboard — in normal use it equals the real system date.
+
+**`dashboard.ts` pure functions** (no DOM, fully unit-tested):
+- `getAssignedEmails(assignedTo)` — splits CSV `assignedTo` string into trimmed email array
+- `buildMemberActivityData(sprints, projectToday)` — returns `{ rows, allEmails }` where each row has per-member stats and totals; sprints sorted by `startDate`; full credit given to every assigned member for shared tasks
+- `buildVelocityData(sprints)` — returns `VelocityBar[]`; uses `sprint.plannedPoints ?? sum(estimates)` for planned; only `Done` tasks count toward completed
 
 ### Backlog UI State
 

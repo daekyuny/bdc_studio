@@ -10,8 +10,9 @@ export const H_TASKS   = 4;
 export const H_PANEL   = 8;
 export const H_STATS   = 16;
 export const H_CHART   = 32;
-export const H_BACKLOG = 64;
-export const H_ALL     = 0x7F;
+export const H_BACKLOG    = 64;
+export const H_DASHBOARD  = 128;
+export const H_ALL        = 0xFF;
 
 // Convenience groups
 export const H_SPRINT_TASKS = H_TASKS | H_PANEL | H_STATS | H_CHART;

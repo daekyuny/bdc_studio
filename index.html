@@ -32,6 +32,7 @@
       <div class="tab-bar">
         <button class="tab-btn active" id="tabSprint">Sprint</button>
         <button class="tab-btn" id="tabBacklog">Backlog</button>
+        <button class="tab-btn" id="tabDashboard">Dashboard</button>
         <button class="tab-bar-settings" id="settingsBtn">Preferences</button>
       </div>
 
@@ -198,6 +199,28 @@
                 </thead>
                 <tbody id="backlogTableBody"></tbody>
               </table>
+            </div>
+          </div>
+          <div id="dashboardView" hidden>
+            <div class="dashboard-container">
+              <div class="dashboard-section">
+                <h3 class="dashboard-section-title">Velocity</h3>
+                <div class="card dashboard-chart-card">
+                  <svg id="velocityChart" class="dashboard-chart"></svg>
+                </div>
+              </div>
+              <div class="dashboard-section">
+                <h3 class="dashboard-section-title">Member Workload</h3>
+                <div class="card dashboard-chart-card">
+                  <svg id="workloadChart" class="dashboard-chart"></svg>
+                </div>
+              </div>
+              <div class="dashboard-section">
+                <h3 class="dashboard-section-title">Member Activity</h3>
+                <div class="card dashboard-table-card">
+                  <div class="dashboard-table-wrap" id="memberActivityTable"></div>
+                </div>
+              </div>
             </div>
           </div>
         </section>

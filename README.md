@@ -206,6 +206,18 @@ Resets all progress (Worked, Remain, status, doneDate, workedLog, remainLog) bac
 - **Work weekends**: specific weekend dates that count as working days; already-added dates are greyed out in the picker
 - **Team members**: read-only list auto-synced from Firebase; used to populate the assignee selector in the backlog and as the default developer count for the first sprint
 
+### Dashboard
+
+A **Dashboard** tab provides cross-sprint analytics for the team:
+
+- **Velocity chart** — planned vs completed points per sprint as a paired bar chart
+- **Member Workload chart** — assigned vs worked points per member per sprint; member first names shown below bars; sprint groups separated by vertical dividers
+- **Member Activity table** — per-sprint, per-member breakdown of assigned / worked / remain; current sprint row highlighted; grand total row at the bottom
+
+The dashboard reads project TODAY from state (same global date as the sprint tab) — in normal use this is the real system date. No separate date picker is needed; use the sprint tab's TODAY field to simulate historical states for demo/testing.
+
+> **Note on Excel-imported data:** If `assignedTo` was imported from Excel with display names instead of email addresses, the dashboard will display those name strings directly (they appear correct). The Assign To picker in the sprint tab requires Firebase profile email addresses and will not work for those tasks.
+
 ### Data & Export
 
 - JSON export/import (full state backup/restore with confirmation dialog)
@@ -236,12 +248,14 @@ bdc/
 │   ├── screens.ts      # Login, team selection, admin screen overlays
 │   ├── burndown.ts     # Pure burndown calculation functions
 │   ├── chart.ts        # SVG chart rendering
-│   ├── render.ts       # DOM rendering (sprint list, tasks, backlog, stats, chart)
+│   ├── render.ts       # DOM rendering (sprint list, tasks, backlog, stats, chart, dashboard)
+│   ├── dashboard.ts    # Pure dashboard calculation functions (member activity, velocity)
 │   ├── io.ts           # JSON/Excel export and import
 │   ├── utils.ts        # Shared helpers (dates, IDs, formatting)
 │   └── globals.d.ts    # Ambient declarations for CDN globals (flatpickr, XLSX)
 ├── test/
-│   └── calculations.test.ts  # Unit tests (Node built-in test runner via tsx)
+│   ├── calculations.test.ts  # Unit tests for utils and burndown (Node built-in test runner via tsx)
+│   └── dashboard.test.ts     # Unit tests for dashboard calculation functions
 ├── docs/
 │   ├── PRD.md                # Product requirements
 │   ├── TECHNICAL_DESIGN.md   # Architecture, data model, algorithms
@@ -369,3 +383,4 @@ See `docs/` for detailed project documents:
 | 2026-03-14 | SaaS update2 — Invitation flow: dedicated registration page with password + Google Sign-In (all domains); wrong-user-signed-in guard (sign out, re-show invite page); landing page no longer prompts unknown sign-ins with "create account" (shows error via sessionStorage instead). PM enhancements: "Add Group Members" in Manage Members (add already-accepted group members to a team); member removal shows warning dialog with task list before confirming; PM Edit modal now includes PM display name field. Project TODAY: capped at today (no future dates); resets to most recent working day on page load (not always real today). Sprint defaults: developer count = team members with role `member` (PM excluded). Firestore rules: users collection readable by any authenticated user; invitations readable without auth. `setCurrentTeam` cancels pending debounce save on team switch (fixes cross-team data contamination). `Promise.allSettled` for resilient member profile loading. GitHub Actions: CI workflow (typecheck + test) + deploy workflow (build + Firebase Hosting deploy on push to main). |
 | 2026-03-14 | UX polish — Sprint task Update: assignee gate blocks Worked/Remain editing until a member is assigned (picker with warning); only one task row open for update at a time (exclusive mode). Chart: actual and scope lines now extend as projections to sprint end; actual line is solid red for the full sprint. Backlog: tasks linked to future (not-yet-started) sprints remain editable. Add/Remove Tasks modal: hover over task ID shows `[StoryID] Story description`; hover over description shows assigned members. Gap detection: `findGaps` now respects custom holidays and working weekends from preferences. Sprint task `assignedTo` changes are synced to the linked backlog task. |
 | 2026-03-16 | User photos & avatars — profile photo upload (client-side resize to 640px full + 80px thumb, stored as base64 in Firestore); canvas-generated initial-letter avatar fallback; `avatarSrc()` helper; change password sub-modal (email accounts only, reauthenticate + updatePassword); avatar shown in app header, team card member strip (max 5 + overflow), PM sidebar footer, member profile popup; click any avatar/thumbnail to view full-size photo; group name label moved to left side of member team selection screen; BDS header responsive layout (flat row at wide viewport, stacked centered at narrow). |
+| 2026-04-02 | Dashboard tab — cross-sprint analytics: Velocity chart (planned vs completed per sprint), Member Workload chart (assigned vs worked per member per sprint), Member Activity table (per-sprint per-member assigned/worked/remain with grand totals). New module `src/dashboard.ts` with pure calculation functions; 24 unit tests added (`test/dashboard.test.ts`). Render hint `H_DASHBOARD = 128` added; `H_ALL` updated to `0xFF`. |

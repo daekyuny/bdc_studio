@@ -2988,3 +2988,125 @@ th.sortable.sort-desc::after {
   display: flex;
   gap: 10px;
 }
+
+/* ============================================================
+   Dashboard tab
+   ============================================================ */
+
+.dashboard-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 20px 12px 16px;
+  max-width: 960px;
+}
+
+.dashboard-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dashboard-section-title {
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted, #6b7080);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0;
+}
+
+.dashboard-chart-card {
+  padding: 16px 16px 8px;
+}
+
+.dashboard-table-card {
+  padding: 8px;
+}
+
+.dashboard-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.dashboard-table-wrap {
+  overflow-x: auto;
+}
+
+.dash-empty {
+  color: var(--muted, #6b7080);
+  font-size: 13px;
+  padding: 16px;
+}
+
+/* ---- Member Activity table ---- */
+
+.dash-table {
+  border-collapse: collapse;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 13px;
+  font-weight: 400;
+  width: 100%;
+}
+
+.dash-table th,
+.dash-table td {
+  padding: 4px 7px;
+  border: 1px solid var(--stroke, rgba(44, 47, 58, 0.18));
+  white-space: nowrap;
+  font-weight: 400;
+}
+
+.dash-table thead th {
+  background: rgba(44, 47, 58, 0.04);
+  font-weight: 400;
+  text-align: center;
+  color: var(--ink, #2c2f3a);
+}
+
+.dash-member-header {
+  border-bottom: 1px solid var(--stroke, rgba(44, 47, 58, 0.18));
+}
+
+.dash-sub-header th {
+  font-size: 11px;
+  color: var(--muted, #6b7080);
+  font-weight: 400;
+  padding: 5px 14px 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.dash-sprint-label {
+  text-align: center;
+  color: var(--ink, #2c2f3a);
+}
+
+.dash-num {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink, #2c2f3a);
+}
+
+.dash-total {
+  background: rgba(44, 47, 58, 0.03);
+}
+
+.dash-current-sprint td {
+  background: rgba(92, 103, 242, 0.05);
+}
+
+.dash-current-sprint .dash-sprint-label::after {
+  content: " ●";
+  color: var(--accent, #5c67f2);
+  font-size: 8px;
+  vertical-align: middle;
+}
+
+.dash-grand-total td {
+  text-align: center;
+  background: rgba(44, 47, 58, 0.04);
+  border-top: 2px solid var(--stroke, rgba(44, 47, 58, 0.18));
+}
