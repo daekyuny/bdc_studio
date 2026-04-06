@@ -220,13 +220,26 @@ export const setCurrentTeam = async (teamId: string): Promise<void> => {
     // Suppress echoes of our own writes (5s suppression window)
     if (Date.now() - lastFirestoreWriteAt < 5000) return;
     if (!remoteState || !Array.isArray(remoteState.sprints)) return;
-    // projectToday and members are per-session — preserve the current runtime values.
-    // Members are always derived from Firebase Auth profiles, never from Firestore appdata.
+    // Preserve per-session state so remote changes from other users don't disrupt
+    // this user's navigation. Each user independently chooses which sprint they view
+    // and their browse date — these are not shared across sessions.
     const preservedToday = state.projectToday;
     const preservedMembers = [...state.preferences.members];
+    const preservedActiveSprintId = state.activeSprintId;
+    const preservedSprintTodays = new Map(state.sprints.map((s) => [s.id, s.today]));
     state = fixLoadedState(migrateState(remoteState as any));
     state.projectToday = preservedToday;
     if (preservedMembers.length > 0) state.preferences.members = preservedMembers;
+    // Restore active sprint selection if the sprint still exists in the remote state
+    const remoteSprintIds = new Set(state.sprints.map((s) => s.id));
+    if (preservedActiveSprintId && remoteSprintIds.has(preservedActiveSprintId)) {
+      state.activeSprintId = preservedActiveSprintId;
+    }
+    // Restore each sprint's browse date (sprint.today) — per-session, not shared
+    for (const sprint of state.sprints) {
+      const preserved = preservedSprintTodays.get(sprint.id);
+      if (preserved !== undefined) sprint.today = preserved;
+    }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     onChange(H_ALL);
   });

@@ -22081,9 +22081,19 @@ This typically indicates that your device does not have a healthy Internet conne
       if (!remoteState || !Array.isArray(remoteState.sprints)) return;
       const preservedToday = state.projectToday;
       const preservedMembers = [...state.preferences.members];
+      const preservedActiveSprintId = state.activeSprintId;
+      const preservedSprintTodays = new Map(state.sprints.map((s) => [s.id, s.today]));
       state = fixLoadedState(migrateState(remoteState));
       state.projectToday = preservedToday;
       if (preservedMembers.length > 0) state.preferences.members = preservedMembers;
+      const remoteSprintIds = new Set(state.sprints.map((s) => s.id));
+      if (preservedActiveSprintId && remoteSprintIds.has(preservedActiveSprintId)) {
+        state.activeSprintId = preservedActiveSprintId;
+      }
+      for (const sprint of state.sprints) {
+        const preserved = preservedSprintTodays.get(sprint.id);
+        if (preserved !== void 0) sprint.today = preserved;
+      }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       onChange(H_ALL);
     });
