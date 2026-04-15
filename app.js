@@ -22415,10 +22415,35 @@ This typically indicates that your device does not have a healthy Internet conne
     save();
     onChange(H_BACKLOG_DATA | H_TASKS);
   };
+  var findSprintsReferencingBacklogTask = (backlogTaskId) => {
+    const refs = [];
+    state.sprints.forEach((sprint, i) => {
+      if (sprint.tasks.some((t) => t.backlogTaskId === backlogTaskId)) {
+        refs.push({ sprintIndex: i + 1, sprintDescription: sprint.description });
+      }
+    });
+    return refs;
+  };
+  var findSprintsReferencingStory = (storyId) => {
+    const story = state.backlog.stories.find((s) => s.id === storyId);
+    if (!story) return [];
+    const childIds = new Set(story.tasks.map((t) => t.id));
+    if (childIds.size === 0) return [];
+    const refs = [];
+    state.sprints.forEach((sprint, i) => {
+      if (sprint.tasks.some((t) => t.backlogTaskId && childIds.has(t.backlogTaskId))) {
+        refs.push({ sprintIndex: i + 1, sprintDescription: sprint.description });
+      }
+    });
+    return refs;
+  };
   var deleteStory = (id) => {
+    const refs = findSprintsReferencingStory(id);
+    if (refs.length > 0) return refs;
     state.backlog.stories = state.backlog.stories.filter((s) => s.id !== id);
     save();
     onChange(H_BACKLOG_DATA);
+    return [];
   };
   var addBacklogTask = (storyId) => {
     const story = state.backlog.stories.find((s) => s.id === storyId);
@@ -22447,48 +22472,35 @@ This typically indicates that your device does not have a healthy Internet conne
   };
   var deleteBacklogTask = (storyId, taskId) => {
     const story = state.backlog.stories.find((s) => s.id === storyId);
-    if (!story) return;
+    if (!story) return [];
+    const refs = findSprintsReferencingBacklogTask(taskId);
+    if (refs.length > 0) return refs;
     story.tasks = story.tasks.filter((t) => t.id !== taskId);
     save();
     onChange(H_BACKLOG_DATA);
+    return [];
+  };
+  var applyBacklogMerge = (plan) => {
+    for (const newStory of plan.addStories) {
+      state.backlog.stories.push(newStory);
+    }
+    for (const { storyId, task } of plan.addTasks) {
+      const story = state.backlog.stories.find((s) => s.id === storyId);
+      if (story) story.tasks.push(task);
+    }
+    for (const { storyId, taskId, patch } of plan.updateTasks) {
+      const story = state.backlog.stories.find((s) => s.id === storyId);
+      if (!story) continue;
+      const task = story.tasks.find((t) => t.id === taskId);
+      if (task) Object.assign(task, patch);
+    }
+    save();
+    onChange(H_ALL);
   };
   var replaceBacklog = (newBacklog) => {
     state.backlog = newBacklog;
     save();
     onChange(H_ALL);
-  };
-  var findOrphanedSprintTasks = (newStories) => {
-    const incomingIds = /* @__PURE__ */ new Set();
-    for (const story of newStories)
-      for (const task of story.tasks)
-        if (task.taskId) incomingIds.add(task.taskId);
-    const orphans = [];
-    for (const sprint of state.sprints) {
-      const idx = state.sprints.indexOf(sprint) + 1;
-      for (const task of sprint.tasks) {
-        if (task.taskId && !incomingIds.has(task.taskId))
-          orphans.push({ sprintIndex: idx, taskId: task.taskId, name: task.name });
-      }
-    }
-    return orphans;
-  };
-  var relinkSprintTasks = () => {
-    const taskIdMap = /* @__PURE__ */ new Map();
-    for (const story of state.backlog.stories)
-      for (const task of story.tasks)
-        if (task.taskId) taskIdMap.set(task.taskId, task);
-    for (const sprint of state.sprints) {
-      sprint.tasks = sprint.tasks.filter((t) => {
-        const bt2 = taskIdMap.get(t.taskId);
-        if (!bt2) return false;
-        t.backlogTaskId = bt2.id;
-        t.name = bt2.description;
-        t.estimate = Number(bt2.estimate) || 0;
-        t.assignedTo = bt2.assignedTo.join(", ");
-        return true;
-      });
-    }
-    save();
   };
   var getPreferences = () => state.preferences;
   var addHoliday = (date, name5) => {
@@ -22555,6 +22567,39 @@ This typically indicates that your device does not have a healthy Internet conne
       onChange(H_ALL);
     }
   };
+
+  // src/modals.ts
+  var showImportConfirm = ({
+    title,
+    message,
+    subtext = "",
+    okLabel = "Proceed",
+    hideCancel = false
+  }) => new Promise((resolve) => {
+    dom.importConfirmTitle.textContent = title;
+    dom.importConfirmMessage.innerHTML = message;
+    dom.importConfirmSubtext.textContent = subtext;
+    dom.importConfirmSubtext.hidden = !subtext;
+    dom.importConfirmOk.textContent = okLabel;
+    dom.importConfirmCancel.hidden = hideCancel;
+    dom.importConfirmModal.hidden = false;
+    const cleanup = () => {
+      dom.importConfirmModal.hidden = true;
+      dom.importConfirmCancel.hidden = false;
+      dom.importConfirmOk.removeEventListener("click", onOk);
+      dom.importConfirmCancel.removeEventListener("click", onCancel);
+    };
+    const onOk = () => {
+      cleanup();
+      resolve(true);
+    };
+    const onCancel = () => {
+      cleanup();
+      resolve(false);
+    };
+    dom.importConfirmOk.addEventListener("click", onOk);
+    dom.importConfirmCancel.addEventListener("click", onCancel);
+  });
 
   // src/dashboard.ts
   function getAssignedEmails(assignedTo) {
@@ -22890,6 +22935,16 @@ ${marker.label}`;
   };
 
   // src/render.ts
+  var escapeHtml = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  var showBacklogDeleteBlockedModal = async (label, refs) => {
+    const lines = refs.map((r) => `<strong>Sprint ${r.sprintIndex}</strong> (${escapeHtml(r.sprintDescription || "")})`).join("<br>");
+    await showImportConfirm({
+      title: "\u26A0 Cannot Delete",
+      message: `Cannot delete ${escapeHtml(label)} \u2014 used in:<br><br>${lines}<br><br>Remove from those sprint(s) first.`,
+      okLabel: "OK",
+      hideCancel: true
+    });
+  };
   var fpProjectToday = null;
   var activeTab = "sprint";
   var setActiveTab = (tab) => {
@@ -23604,11 +23659,12 @@ ${marker.label}`;
         editingIds.delete(story.id);
         render(H_BACKLOG);
       });
-      deleteBtn.addEventListener("click", () => {
-        if (window.confirm(`Delete story "${story.description || story.storyId}"? This cannot be undone.`)) {
-          editingIds.delete(story.id);
-          deleteStory(story.id);
-        }
+      deleteBtn.addEventListener("click", async () => {
+        const label = story.description || story.storyId;
+        if (!window.confirm(`Delete story "${label}"? This cannot be undone.`)) return;
+        editingIds.delete(story.id);
+        const refs = deleteStory(story.id);
+        if (refs.length > 0) await showBacklogDeleteBlockedModal(`story "${label}"`, refs);
       });
       addTaskBtn.addEventListener("click", () => {
         expandedStoryIds.add(story.id);
@@ -23698,11 +23754,12 @@ ${marker.label}`;
             editingIds.delete(task.id);
             render(H_BACKLOG);
           });
-          taskDeleteBtn.addEventListener("click", () => {
-            if (window.confirm(`Delete task "${task.description || task.taskId}"?`)) {
-              editingIds.delete(task.id);
-              deleteBacklogTask(story.id, task.id);
-            }
+          taskDeleteBtn.addEventListener("click", async () => {
+            const label = task.description || task.taskId;
+            if (!window.confirm(`Delete task "${label}"?`)) return;
+            editingIds.delete(task.id);
+            const refs = deleteBacklogTask(story.id, task.id);
+            if (refs.length > 0) await showBacklogDeleteBlockedModal(`task "${label}"`, refs);
           });
           dom.backlogTableBody.appendChild(taskRow);
         }
@@ -24236,30 +24293,114 @@ ${marker.label}`;
     dom.memberActivityTable.innerHTML = html;
   }
 
+  // src/backlogMerge.ts
+  var planBacklogMerge = (rows, currentBacklog, sprints, teamEmails) => {
+    const teamEmailSet = new Set(teamEmails.map((e) => e.toLowerCase()));
+    const tasksByDisplayId = /* @__PURE__ */ new Map();
+    const storiesByDisplayId = /* @__PURE__ */ new Map();
+    for (const story of currentBacklog.stories) {
+      if (story.storyId) storiesByDisplayId.set(story.storyId, story);
+      for (const task of story.tasks) {
+        if (task.taskId) tasksByDisplayId.set(task.taskId, { story, task });
+      }
+    }
+    const inSprintBacklogTaskIds = /* @__PURE__ */ new Set();
+    for (const sprint of sprints) {
+      for (const t of sprint.tasks) {
+        if (t.backlogTaskId) inSprintBacklogTaskIds.add(t.backlogTaskId);
+      }
+    }
+    const addStories = [];
+    const addTasks = [];
+    const updateTasks = [];
+    let skipInSprint = 0;
+    let skipNoParent = 0;
+    const droppedSet = /* @__PURE__ */ new Set();
+    const acceptedSet = /* @__PURE__ */ new Set();
+    const addedStoriesByDisplayId = /* @__PURE__ */ new Map();
+    const filterEmails = (list) => {
+      const kept = [];
+      for (const raw of list) {
+        const e = raw.trim();
+        if (!e) continue;
+        if (teamEmailSet.has(e.toLowerCase())) {
+          kept.push(e);
+          acceptedSet.add(e);
+        } else {
+          droppedSet.add(e);
+        }
+      }
+      return kept;
+    };
+    let currentStoryDisplayId = "";
+    for (const row of rows) {
+      if (row.storyId) {
+        currentStoryDisplayId = row.storyId;
+        if (!storiesByDisplayId.has(row.storyId) && !addedStoriesByDisplayId.has(row.storyId)) {
+          const newStory = {
+            id: createId(),
+            storyId: row.storyId,
+            description: row.storyDesc,
+            priority: row.priority,
+            tasks: []
+          };
+          addStories.push(newStory);
+          addedStoriesByDisplayId.set(row.storyId, newStory);
+        }
+      }
+      const effectiveStoryDisplayId = row.storyId || currentStoryDisplayId;
+      if (!row.taskId) continue;
+      const existing = tasksByDisplayId.get(row.taskId);
+      if (existing) {
+        if (inSprintBacklogTaskIds.has(existing.task.id)) {
+          skipInSprint++;
+          continue;
+        }
+        const patch = {
+          description: row.taskDesc,
+          estimate: row.estimate
+        };
+        if (row.assignedTo.length > 0) {
+          patch.assignedTo = filterEmails(row.assignedTo);
+        }
+        updateTasks.push({
+          storyId: existing.story.id,
+          taskId: existing.task.id,
+          patch
+        });
+        continue;
+      }
+      const existingParent = storiesByDisplayId.get(effectiveStoryDisplayId);
+      const addedParent = addedStoriesByDisplayId.get(effectiveStoryDisplayId);
+      if (!existingParent && !addedParent) {
+        skipNoParent++;
+        continue;
+      }
+      const newTask = {
+        id: createId(),
+        taskId: row.taskId,
+        description: row.taskDesc,
+        estimate: row.estimate,
+        assignedTo: filterEmails(row.assignedTo)
+      };
+      if (addedParent) {
+        addedParent.tasks.push(newTask);
+      } else if (existingParent) {
+        addTasks.push({ storyId: existingParent.id, task: newTask });
+      }
+    }
+    return {
+      addStories,
+      addTasks,
+      updateTasks,
+      skipInSprint,
+      skipNoParent,
+      droppedEmails: [...droppedSet],
+      acceptedEmails: [...acceptedSet]
+    };
+  };
+
   // src/io.ts
-  var showImportConfirm = ({ title, message, subtext = "", okLabel = "Proceed" }) => new Promise((resolve) => {
-    dom.importConfirmTitle.textContent = title;
-    dom.importConfirmMessage.innerHTML = message;
-    dom.importConfirmSubtext.textContent = subtext;
-    dom.importConfirmSubtext.hidden = !subtext;
-    dom.importConfirmOk.textContent = okLabel;
-    dom.importConfirmModal.hidden = false;
-    const cleanup = () => {
-      dom.importConfirmModal.hidden = true;
-      dom.importConfirmOk.removeEventListener("click", onOk);
-      dom.importConfirmCancel.removeEventListener("click", onCancel);
-    };
-    const onOk = () => {
-      cleanup();
-      resolve(true);
-    };
-    const onCancel = () => {
-      cleanup();
-      resolve(false);
-    };
-    dom.importConfirmOk.addEventListener("click", onOk);
-    dom.importConfirmCancel.addEventListener("click", onCancel);
-  });
   var exportData = () => {
     const state2 = getState();
     const blob = new Blob([JSON.stringify(state2, null, 2)], { type: "application/json" });
@@ -24385,8 +24526,7 @@ ${marker.label}`;
         alert("File is empty or has no data rows.");
         return;
       }
-      const stories = [];
-      let currentStory = null;
+      const parsedRows = [];
       for (let i = 1; i < rows.length; i++) {
         const cols = rows[i];
         if (cols.every((c) => String(c ?? "").trim() === "")) continue;
@@ -24400,45 +24540,47 @@ ${marker.label}`;
         const estimate = isNaN(estimateRaw) ? 0 : estimateRaw;
         const assignedToRaw = String(cols[6] ?? "").trim();
         const assignedTo = assignedToRaw ? assignedToRaw.split(",").map((s) => s.trim()).filter(Boolean) : [];
-        if (storyId) {
-          currentStory = { id: createId(), storyId, description: storyDesc, priority, tasks: [] };
-          stories.push(currentStory);
-        }
-        if (taskId && currentStory) {
-          currentStory.tasks.push({ id: createId(), taskId, description: taskDesc, estimate, assignedTo });
-        }
+        parsedRows.push({ storyId, storyDesc, priority, taskId, taskDesc, estimate, assignedTo });
       }
-      if (stories.length === 0) {
-        alert("No stories found. Check that the file format matches:\nStory ID | User Stories | Priority | Task ID | Task Description | Time Estimate (days) | Assigned To");
+      if (parsedRows.length === 0) {
+        alert("No data rows found. Check that the file format matches:\nStory ID | User Stories | Priority | Task ID | Task Description | Time Estimate (days) | Assigned To");
         return;
       }
-      const existing = getBacklog();
-      const hasExisting = existing?.stories?.length > 0;
-      const message = hasExisting ? `Import <strong>${stories.length}</strong> story/stories into backlog? This will replace all <strong>${existing.stories.length}</strong> existing story/stories.` : `Import <strong>${stories.length}</strong> story/stories into the backlog?`;
+      const teamEmails = getMemberPairs().map((p) => p.email);
+      const plan = planBacklogMerge(parsedRows, getBacklog(), getState().sprints, teamEmails);
+      const totalNewTasks = plan.addStories.reduce((n, s) => n + s.tasks.length, 0) + plan.addTasks.length;
+      const lines = [];
+      if (plan.addStories.length > 0 || totalNewTasks > 0) {
+        lines.push(
+          `Will add <strong>${plan.addStories.length}</strong> story/stories and <strong>${totalNewTasks}</strong> task(s).`
+        );
+      }
+      if (plan.updateTasks.length > 0) {
+        lines.push(`Will update <strong>${plan.updateTasks.length}</strong> existing task(s).`);
+      }
+      if (plan.skipInSprint > 0) {
+        lines.push(`Skipping <strong>${plan.skipInSprint}</strong> task(s) already used in a sprint.`);
+      }
+      if (plan.skipNoParent > 0) {
+        lines.push(`Skipping <strong>${plan.skipNoParent}</strong> task(s) with no matching parent story.`);
+      }
+      if (plan.droppedEmails.length > 0) {
+        lines.push(
+          `Ignoring <strong>${plan.droppedEmails.length}</strong> unknown email(s): ${plan.droppedEmails.join(", ")}`
+        );
+      }
+      if (lines.length === 0) {
+        alert("Nothing to import \u2014 all rows match the existing backlog with no changes.");
+        return;
+      }
       const ok = await showImportConfirm({
-        title: "\u26A0 Import Backlog",
-        message,
-        subtext: hasExisting ? "This action cannot be undone." : "",
+        title: "\u26A0 Import Backlog (Merge)",
+        message: lines.join("<br>"),
         okLabel: "Import"
       });
       if (!ok) return;
-      const orphans = findOrphanedSprintTasks(stories);
-      if (orphans.length > 0) {
-        const lines = orphans.map(
-          (o) => `<strong>Sprint ${o.sprintIndex}:</strong> [${o.taskId}] ${o.name}`
-        ).join("<br>");
-        const ok2 = await showImportConfirm({
-          title: "\u26A0 Sprint Tasks Will Be Removed",
-          message: `${orphans.length} task(s) will be removed from sprints because their Task ID is not in the imported backlog:<br><br>${lines}`,
-          okLabel: "Proceed"
-        });
-        if (!ok2) return;
-      }
-      replaceBacklog({ stories });
-      relinkSprintTasks();
-      const uniqueNames = [...new Set(
-        stories.flatMap((s) => s.tasks.flatMap((t) => t.assignedTo)).filter(Boolean)
-      )].map(emailToName);
+      applyBacklogMerge(plan);
+      const uniqueNames = [...new Set(plan.acceptedEmails)].map(emailToName);
       if (uniqueNames.length > 0) addMembersFromImport(uniqueNames);
     };
     reader.readAsArrayBuffer(file);
@@ -24510,7 +24652,7 @@ ${marker.label}`;
     if (el) el.innerHTML = "";
   };
   var hideAllScreens = () => clearContainer();
-  var escapeHtml = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  var escapeHtml2 = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   var AVATAR_COLORS = [
     "#6c7ee1",
     "#e06c75",
@@ -24692,7 +24834,7 @@ ${marker.label}`;
     popup.id = "photoPopupOverlay";
     popup.className = "team-modal-overlay";
     popup.style.cssText = "cursor:pointer";
-    popup.innerHTML = `<img src="${escapeHtml(src)}" style="max-width:90vw;max-height:90vh;border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,0.4)" />`;
+    popup.innerHTML = `<img src="${escapeHtml2(src)}" style="max-width:90vw;max-height:90vh;border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,0.4)" />`;
     document.body.appendChild(popup);
     const close = () => popup.remove();
     popup.addEventListener("click", close);
@@ -24830,7 +24972,7 @@ ${marker.label}`;
           </div>
           <div class="login-divider"><span>or</span></div>
           <button class="login-google-btn" id="loginGoogleBtn">${googleSvg} Sign in with Google</button>
-          <div class="screen-error" id="loginError"${loginError ? "" : " hidden"}>${loginError ? escapeHtml(loginError) : ""}</div>
+          <div class="screen-error" id="loginError"${loginError ? "" : " hidden"}>${loginError ? escapeHtml2(loginError) : ""}</div>
         </div>
 
         <div class="landing-card landing-pm-card">
@@ -24899,10 +25041,10 @@ ${marker.label}`;
           </div>
           <div class="landing-card">
             <p class="landing-card-label">Complete your registration</p>
-            <p class="pref-hint" style="margin:0 0 12px">Your PM account has been approved. Create a password for <strong>${escapeHtml(email)}</strong>.</p>
+            <p class="pref-hint" style="margin:0 0 12px">Your PM account has been approved. Create a password for <strong>${escapeHtml2(email)}</strong>.</p>
             <label class="screen-label">
               Email
-              <input type="email" id="regEmail" class="screen-input" value="${escapeHtml(email)}" readonly
+              <input type="email" id="regEmail" class="screen-input" value="${escapeHtml2(email)}" readonly
                 style="background:var(--bg-secondary,#f1f5f9);cursor:default;color:var(--text-muted,#64748b)" />
             </label>
             <label class="screen-label">
@@ -24917,7 +25059,7 @@ ${marker.label}`;
             <div class="screen-error" id="regError" hidden></div>
             <div class="login-divider"><span>or</span></div>
             <button class="login-google-btn" id="regGoogleBtn">${googleSvg} Sign in with Google</button>
-            <p class="pref-hint" style="font-size:11px;margin-top:6px">Use Google Sign-In if <strong>${escapeHtml(email)}</strong> is a Google or Google Workspace account.</p>
+            <p class="pref-hint" style="font-size:11px;margin-top:6px">Use Google Sign-In if <strong>${escapeHtml2(email)}</strong> is a Google or Google Workspace account.</p>
           </div>
         </div>
       </div>
@@ -25007,7 +25149,7 @@ ${marker.label}`;
           </div>
           <div class="landing-card">
             <p class="landing-card-label">You've been invited to join a team</p>
-            <p class="pref-hint" style="margin:0 0 12px">Accept the invitation for <strong>${escapeHtml(email)}</strong>.</p>
+            <p class="pref-hint" style="margin:0 0 12px">Accept the invitation for <strong>${escapeHtml2(email)}</strong>.</p>
             <div class="screen-error" id="invError" hidden></div>
             <label class="screen-label">
               Password
@@ -25184,7 +25326,7 @@ ${marker.label}`;
           <div class="team-screen-user">
             <img id="teamUserAvatar" class="team-user-avatar" />
             <div class="team-user-info">
-              <span class="team-user-name" id="teamUserName">${escapeHtml(profile.displayName)}</span>
+              <span class="team-user-name" id="teamUserName">${escapeHtml2(profile.displayName)}</span>
             </div>
             <button class="btn ghost small" id="teamEditProfileBtn" title="Edit profile" style="padding:4px 8px">\u270E</button>
             <button class="btn ghost small" id="teamSignOutBtn">Sign Out</button>
@@ -25256,13 +25398,13 @@ ${marker.label}`;
       const overflow = memberProfs.length - shown.length;
       const avatarRowHtml = shown.length > 0 ? `
       <div class="team-card-avatars">
-        ${shown.map((p) => `<img class="team-card-avatar" src="${escapeHtml(avatarSrc(p, 28))}" title="${escapeHtml(p.displayName)}" data-uid="${p.uid}" />`).join("")}
+        ${shown.map((p) => `<img class="team-card-avatar" src="${escapeHtml2(avatarSrc(p, 28))}" title="${escapeHtml2(p.displayName)}" data-uid="${p.uid}" />`).join("")}
         ${overflow > 0 ? `<div class="team-card-avatar-more">+${overflow}</div>` : ""}
       </div>
     ` : `<div class="team-card-meta">${team.memberIds.length} member${team.memberIds.length !== 1 ? "s" : ""}</div>`;
       card.innerHTML = `
       ${isPM ? '<div class="team-card-drag-handle" title="Drag to reorder">\u283F</div>' : ""}
-      <div class="team-card-name">${escapeHtml(team.name)}</div>
+      <div class="team-card-name">${escapeHtml2(team.name)}</div>
       ${avatarRowHtml}
     `;
       card.addEventListener("click", () => _onTeamSelected?.(team.id, team.name));
@@ -25482,12 +25624,12 @@ All shared sprint data for this team will be permanently removed.`)) return;
     const modal = document.createElement("div");
     modal.id = "smRemoveBlockedDialog";
     modal.className = "team-modal-overlay";
-    const listItems = assignedTasks.slice(0, 5).map((t) => `<li>${escapeHtml(t)}</li>`).join("");
+    const listItems = assignedTasks.slice(0, 5).map((t) => `<li>${escapeHtml2(t)}</li>`).join("");
     const more = assignedTasks.length > 5 ? `<li style="color:var(--text-muted,#888)">\u2026 and ${assignedTasks.length - 5} more</li>` : "";
     modal.innerHTML = `
     <div class="team-modal">
       <h3 style="color:#ef4444">&#9888; Cannot Remove Member</h3>
-      <p><strong>${escapeHtml(displayName)}</strong> is still assigned to the following tasks:</p>
+      <p><strong>${escapeHtml2(displayName)}</strong> is still assigned to the following tasks:</p>
       <ul style="margin:10px 0;padding-left:20px;font-size:0.88em;line-height:1.6">${listItems}${more}</ul>
       <p class="pref-hint">All task assignments must be cleared before this member can be removed from any team.</p>
       <div class="team-modal-footer">
@@ -25506,11 +25648,11 @@ All shared sprint data for this team will be permanently removed.`)) return;
     const modal = document.createElement("div");
     modal.id = "smRemoveBlockedDialog";
     modal.className = "team-modal-overlay";
-    const listItems = teamNames.map((n) => `<li>${escapeHtml(n)}</li>`).join("");
+    const listItems = teamNames.map((n) => `<li>${escapeHtml2(n)}</li>`).join("");
     modal.innerHTML = `
     <div class="team-modal">
       <h3 style="color:#ef4444">&#9888; Cannot Remove Member</h3>
-      <p><strong>${escapeHtml(displayName)}</strong> is the owner of the following team(s):</p>
+      <p><strong>${escapeHtml2(displayName)}</strong> is the owner of the following team(s):</p>
       <ul style="margin:10px 0;padding-left:20px;font-size:0.88em;line-height:1.6">${listItems}</ul>
       <p class="pref-hint">Transfer or delete all managed teams before removing this member.</p>
       <div class="team-modal-footer">
@@ -25563,7 +25705,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
     modal.className = "team-modal-overlay";
     modal.innerHTML = `
     <div class="team-modal team-modal-wide">
-      <h3>Manage Members \u2014 ${escapeHtml(team.name)}</h3>
+      <h3>Manage Members \u2014 ${escapeHtml2(team.name)}</h3>
       <div class="screen-error" id="manageMemberError" hidden></div>
       <div class="manage-members-body">
         <div class="manage-members-col">
@@ -25632,8 +25774,8 @@ All shared sprint data for this team will be permanently removed.`)) return;
         availableEl.innerHTML = available.map((u) => `
         <div class="manage-member-row">
           <div class="manage-member-info">
-            <span class="member-name">${escapeHtml(u.displayName)}</span>
-            <span class="member-email">${escapeHtml(u.email)}</span>
+            <span class="member-name">${escapeHtml2(u.displayName)}</span>
+            <span class="member-email">${escapeHtml2(u.email)}</span>
           </div>
           <button class="btn ghost small member-add-btn" data-uid="${u.uid}">Add</button>
         </div>
@@ -25658,16 +25800,16 @@ All shared sprint data for this team will be permanently removed.`)) return;
         });
       }
       const memberRow = (u) => {
-        const phone = u.phoneNumber ? `<span class="member-phone">${escapeHtml(u.phoneNumber)}</span>` : "";
+        const phone = u.phoneNumber ? `<span class="member-phone">${escapeHtml2(u.phoneNumber)}</span>` : "";
         return `
-        <div class="manage-member-row" data-uid="${u.uid}" data-name="${escapeHtml(u.displayName)}">
+        <div class="manage-member-row" data-uid="${u.uid}" data-name="${escapeHtml2(u.displayName)}">
           <div class="manage-member-info">
-            <span class="member-name">${escapeHtml(u.displayName)}</span>
-            <span class="member-email">${escapeHtml(u.email)}</span>
+            <span class="member-name">${escapeHtml2(u.displayName)}</span>
+            <span class="member-email">${escapeHtml2(u.email)}</span>
             ${phone}
           </div>
           <button class="btn ghost small danger member-remove-btn"
-            data-uid="${u.uid}" data-name="${escapeHtml(u.displayName)}" data-email="${escapeHtml(u.email)}"
+            data-uid="${u.uid}" data-name="${escapeHtml2(u.displayName)}" data-email="${escapeHtml2(u.email)}"
             ${u.uid === profile.uid ? "disabled title='Cannot remove yourself'" : ""}>Remove</button>
         </div>
       `;
@@ -25709,12 +25851,12 @@ All shared sprint data for this team will be permanently removed.`)) return;
               const dlg = document.createElement("div");
               dlg.id = "pmRemoveConfirmDialog";
               dlg.className = "team-modal-overlay";
-              const listItems = assigned.slice(0, 5).map((t) => `<li>${escapeHtml(t)}</li>`).join("");
+              const listItems = assigned.slice(0, 5).map((t) => `<li>${escapeHtml2(t)}</li>`).join("");
               const more = assigned.length > 5 ? `<li style="color:var(--text-muted,#888)">\u2026 and ${assigned.length - 5} more</li>` : "";
               dlg.innerHTML = `
               <div class="team-modal">
                 <h3>Remove Member?</h3>
-                <p><strong>${escapeHtml(displayName)}</strong> is still assigned to ${assigned.length} task(s):</p>
+                <p><strong>${escapeHtml2(displayName)}</strong> is still assigned to ${assigned.length} task(s):</p>
                 <ul style="margin:10px 0;padding-left:20px;font-size:0.88em;line-height:1.6">${listItems}${more}</ul>
                 <p class="pref-hint">Removing them will not unassign these tasks. Continue?</p>
                 <div class="team-modal-footer">
@@ -25751,7 +25893,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
           pendingEl.innerHTML = pending.map((inv) => `
           <div class="manage-member-row">
             <div class="manage-member-info">
-              <span class="member-email">${escapeHtml(inv.email)}</span>
+              <span class="member-email">${escapeHtml2(inv.email)}</span>
               <span class="member-role-badge" style="margin-left:8px">pending</span>
             </div>
             <button class="btn ghost" data-cancel-invite="${inv.id}" style="font-size:0.8em;padding:2px 8px">Cancel</button>
@@ -25849,7 +25991,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
           listEl.innerHTML = pending.map((p) => `
           <div class="manage-member-row">
             <div class="manage-member-info">
-              <span class="member-email">${escapeHtml(p.email)}</span>
+              <span class="member-email">${escapeHtml2(p.email)}</span>
               <span class="member-role-badge" style="margin-left:8px">pending</span>
             </div>
             <button class="btn ghost" data-cancel-prereg="${p.id}" style="font-size:0.8em;padding:2px 8px">Cancel</button>
@@ -25948,7 +26090,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
             <button class="admin-nav-item" data-section="requests">Requests</button>
           </nav>
           <div class="admin-sidebar-footer">
-            <span class="admin-footer-name">${escapeHtml(profile.displayName)}</span>
+            <span class="admin-footer-name">${escapeHtml2(profile.displayName)}</span>
             <button class="btn ghost small" id="adminSignOutBtn">Sign Out</button>
           </div>
         </aside>
@@ -26025,8 +26167,8 @@ All shared sprint data for this team will be permanently removed.`)) return;
         const teamCount = allTeams.filter((t) => t.groupId === g.id).length;
         return `
               <tr>
-                <td>${escapeHtml(g.name)}</td>
-                <td>${owner ? `${owner.displayName !== owner.email ? `${escapeHtml(owner.displayName)} ` : ""}<span class="member-email">${escapeHtml(owner.email)}</span>` : "<em>unknown</em>"}</td>
+                <td>${escapeHtml2(g.name)}</td>
+                <td>${owner ? `${owner.displayName !== owner.email ? `${escapeHtml2(owner.displayName)} ` : ""}<span class="member-email">${escapeHtml2(owner.email)}</span>` : "<em>unknown</em>"}</td>
                 <td>${memberCount}</td>
                 <td>${teamCount}</td>
               </tr>
@@ -26036,7 +26178,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
       </table>
     `;
     } catch (e) {
-      tableEl.innerHTML = `<em>Failed to load groups: ${e instanceof Error ? escapeHtml(e.message) : "Unknown error"}</em>`;
+      tableEl.innerHTML = `<em>Failed to load groups: ${e instanceof Error ? escapeHtml2(e.message) : "Unknown error"}</em>`;
     }
   };
   var loadAdminRequests = async () => {
@@ -26093,11 +26235,11 @@ All shared sprint data for this team will be permanently removed.`)) return;
         <tbody>
           ${requests.map((r) => `
             <tr data-req-id="${r.id}">
-              <td>${escapeHtml(r.email)}</td>
-              <td>${escapeHtml(r.displayName)}</td>
-              <td>${escapeHtml(r.groupName)}</td>
-              <td>${escapeHtml(r.organization)}</td>
-              <td style="max-width:200px;white-space:normal;font-size:0.85em">${escapeHtml(r.description || "")}</td>
+              <td>${escapeHtml2(r.email)}</td>
+              <td>${escapeHtml2(r.displayName)}</td>
+              <td>${escapeHtml2(r.groupName)}</td>
+              <td>${escapeHtml2(r.organization)}</td>
+              <td style="max-width:200px;white-space:normal;font-size:0.85em">${escapeHtml2(r.description || "")}</td>
               <td><span class="req-status req-status-${r.status}">${r.status}</span></td>
               <td>
                 ${r.status === "pending" ? `
@@ -26174,7 +26316,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
         });
       });
     } catch (e) {
-      tableEl.innerHTML = `<em>Failed to load requests: ${e instanceof Error ? escapeHtml(e.message) : "Unknown error"}</em>`;
+      tableEl.innerHTML = `<em>Failed to load requests: ${e instanceof Error ? escapeHtml2(e.message) : "Unknown error"}</em>`;
     }
   };
   var _adminUsers = [];
@@ -26201,8 +26343,8 @@ All shared sprint data for this team will be permanently removed.`)) return;
       <tbody>
         ${sorted.map((u) => `
           <tr data-uid="${u.uid}">
-            <td>${escapeHtml(u.email)}</td>
-            <td>${escapeHtml(u.displayName)}</td>
+            <td>${escapeHtml2(u.email)}</td>
+            <td>${escapeHtml2(u.displayName)}</td>
             <td>
               <select class="role-select" data-uid="${u.uid}">
                 <option value="member" ${u.role === "member" ? "selected" : ""}>Member</option>
@@ -26215,13 +26357,13 @@ All shared sprint data for this team will be permanently removed.`)) return;
                 <option value="">\u2014 none \u2014</option>
                 ${_adminGroups.map((g) => {
       const pmName = _adminUsers.find((x2) => x2.uid === g.ownerId)?.displayName ?? g.ownerId;
-      return `<option value="${g.id}" ${u.groupId === g.id ? "selected" : ""}>${escapeHtml(g.name)} (${escapeHtml(pmName)})</option>`;
+      return `<option value="${g.id}" ${u.groupId === g.id ? "selected" : ""}>${escapeHtml2(g.name)} (${escapeHtml2(pmName)})</option>`;
     }).join("")}
               </select>
             </td>
             <td>
               <button class="btn ghost small danger delete-user-btn"
-                data-uid="${u.uid}" data-email="${escapeHtml(u.email)}"
+                data-uid="${u.uid}" data-email="${escapeHtml2(u.email)}"
                 ${u.role === "super_manager" ? "disabled title='Cannot delete Super Manager'" : ""}>
                 Delete
               </button>
@@ -26305,7 +26447,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
         }
         showSmRemoveConfirmDialog(
           displayName,
-          `Deleting <strong>${escapeHtml(displayName)}</strong> (${escapeHtml(email)}) will remove them from all teams and revoke their access. Their Auth account remains \u2014 if they sign in again they will be re-created as a plain Member.`,
+          `Deleting <strong>${escapeHtml2(displayName)}</strong> (${escapeHtml2(email)}) will remove them from all teams and revoke their access. Their Auth account remains \u2014 if they sign in again they will be re-created as a plain Member.`,
           async () => {
             try {
               await deleteUserProfile(uid);
@@ -26333,7 +26475,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
       }
       renderAdminTable();
     } catch (e) {
-      tableEl.innerHTML = `<em>Failed to load users: ${e instanceof Error ? escapeHtml(e.message) : "Unknown error"}</em>`;
+      tableEl.innerHTML = `<em>Failed to load users: ${e instanceof Error ? escapeHtml2(e.message) : "Unknown error"}</em>`;
     }
   };
   var showProfileEditModal = (profile, isNew, onSaved, user) => {
@@ -26350,21 +26492,21 @@ All shared sprint data for this team will be permanently removed.`)) return;
       <h3>${isNew ? "Complete Your Profile" : "Edit Profile"}</h3>
       ${isNew ? '<p class="pref-hint">Welcome! Please confirm your name and optionally add your phone number.</p>' : ""}
       <div class="profile-photo-section">
-        <img id="profilePhotoImg" class="profile-photo-img" src="${escapeHtml(currentAvatarSrc)}" title="Click to view" />
+        <img id="profilePhotoImg" class="profile-photo-img" src="${escapeHtml2(currentAvatarSrc)}" title="Click to view" />
         <div class="profile-photo-actions">
           <button type="button" class="btn ghost small" id="profileChangePhotoBtn">Change Photo</button>
           ${profile.photoThumb ? '<button type="button" class="btn ghost small danger" id="profileRemovePhotoBtn">Remove</button>' : ""}
         </div>
         <input type="file" id="profilePhotoFile" accept="image/*" style="display:none" />
       </div>
-      <div class="profile-email-row">${escapeHtml(profile.email)}</div>
+      <div class="profile-email-row">${escapeHtml2(profile.email)}</div>
       <label class="screen-label">
         Name
-        <input type="text" id="profileNameInput" class="screen-input" value="${isNew ? "" : escapeHtml(profile.displayName)}" placeholder="Your name" />
+        <input type="text" id="profileNameInput" class="screen-input" value="${isNew ? "" : escapeHtml2(profile.displayName)}" placeholder="Your name" />
       </label>
       <label class="screen-label">
         Phone Number <span class="label-optional">(optional)</span>
-        <input type="tel" id="profilePhoneInput" class="screen-input" value="${escapeHtml(profile.phoneNumber ?? "")}" placeholder="e.g. 010-1234-5678" />
+        <input type="tel" id="profilePhoneInput" class="screen-input" value="${escapeHtml2(profile.phoneNumber ?? "")}" placeholder="e.g. 010-1234-5678" />
       </label>
       <div class="screen-error" id="profileEditError" hidden></div>
       <div class="team-modal-footer">
@@ -26482,7 +26624,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
         <p class="screen-subtitle" style="text-align:left">Your Group is your workspace. Teams and members are organised within it.</p>
         <label class="screen-label">
           Group Name
-          <input type="text" id="groupNameInput" class="screen-input" value="${escapeHtml(defaultName)}" />
+          <input type="text" id="groupNameInput" class="screen-input" value="${escapeHtml2(defaultName)}" />
         </label>
         <div class="screen-error" id="createGroupError" hidden></div>
         <div style="margin-top:20px;display:flex;justify-content:flex-end">
@@ -26532,7 +26674,7 @@ All shared sprint data for this team will be permanently removed.`)) return;
         <aside class="admin-sidebar">
           <div class="admin-sidebar-brand">
             <p class="eyebrow">Group</p>
-            <p class="admin-sidebar-group-name" id="groupNameDisplay">${escapeHtml(group.name)}</p>
+            <p class="admin-sidebar-group-name" id="groupNameDisplay">${escapeHtml2(group.name)}</p>
             <button class="btn ghost small" id="editGroupNameBtn" style="margin-top:6px">Edit</button>
           </div>
           <nav class="admin-nav">
@@ -26541,8 +26683,8 @@ All shared sprint data for this team will be permanently removed.`)) return;
           </nav>
           <div class="admin-sidebar-footer">
             <div class="admin-footer-user">
-              <img id="groupFooterAvatar" class="member-avatar-sm" src="${escapeHtml(avatarSrc(profile, 32))}" />
-              <span class="admin-footer-name" id="groupFooterName">${escapeHtml(profile.displayName)}</span>
+              <img id="groupFooterAvatar" class="member-avatar-sm" src="${escapeHtml2(avatarSrc(profile, 32))}" />
+              <span class="admin-footer-name" id="groupFooterName">${escapeHtml2(profile.displayName)}</span>
               <button class="btn ghost small" id="groupEditProfileBtn" title="Edit profile" style="padding:3px 7px;flex-shrink:0">\u270E</button>
             </div>
             <button class="btn ghost small" id="groupSignOutBtn">Sign Out</button>
@@ -26605,11 +26747,11 @@ All shared sprint data for this team will be permanently removed.`)) return;
       <h3>Edit</h3>
       <label class="screen-label">
         Your Name
-        <input type="text" id="editPmNameInput" class="screen-input" value="${escapeHtml(profile.displayName)}" />
+        <input type="text" id="editPmNameInput" class="screen-input" value="${escapeHtml2(profile.displayName)}" />
       </label>
       <label class="screen-label">
         Group Name
-        <input type="text" id="editGroupNameInput" class="screen-input" value="${escapeHtml(group.name)}" />
+        <input type="text" id="editGroupNameInput" class="screen-input" value="${escapeHtml2(group.name)}" />
       </label>
       <div class="screen-error" id="editGroupError" hidden></div>
       <div class="team-modal-footer">
@@ -26719,13 +26861,13 @@ All shared sprint data for this team will be permanently removed.`)) return;
       const overflow = memberProfs.length - shown.length;
       const avatarRowHtml = shown.length > 0 ? `
       <div class="team-card-avatars">
-        ${shown.map((p) => `<img class="team-card-avatar" src="${escapeHtml(avatarSrc(p, 28))}" title="${escapeHtml(p.displayName)}" data-uid="${p.uid}" />`).join("")}
+        ${shown.map((p) => `<img class="team-card-avatar" src="${escapeHtml2(avatarSrc(p, 28))}" title="${escapeHtml2(p.displayName)}" data-uid="${p.uid}" />`).join("")}
         ${overflow > 0 ? `<div class="team-card-avatar-more">+${overflow}</div>` : ""}
       </div>
     ` : `<div class="team-card-meta">${team.memberIds.length} member${team.memberIds.length !== 1 ? "s" : ""}</div>`;
       card.innerHTML = `
       <div class="team-card-drag-handle" title="Drag to reorder">\u283F</div>
-      <div class="team-card-name">${escapeHtml(team.name)}</div>
+      <div class="team-card-name">${escapeHtml2(team.name)}</div>
       ${avatarRowHtml}
     `;
       card.addEventListener("click", () => _onTeamSelected?.(team.id, team.name));
@@ -26939,7 +27081,7 @@ All sprint data for this team will be permanently removed.`)) return;
     modal.innerHTML = `
     <div class="team-modal">
       <h3>Invite Member to Group</h3>
-      <p class="pref-hint">Enter the email address of the person you want to invite to <strong>${escapeHtml(group.name)}</strong>.</p>
+      <p class="pref-hint">Enter the email address of the person you want to invite to <strong>${escapeHtml2(group.name)}</strong>.</p>
       <input type="email" id="groupInviteEmail" class="screen-input" placeholder="invitee@example.com" />
       <div class="screen-error" id="groupInviteError" hidden></div>
       <div class="screen-success" id="groupInviteSuccess" hidden></div>
@@ -27047,20 +27189,20 @@ All sprint data for this team will be permanently removed.`)) return;
       const row = document.createElement("div");
       row.className = "manage-member-row";
       row.innerHTML = `
-      <img class="member-avatar-sm" src="${escapeHtml(avatarSrc(member, 32))}" title="${escapeHtml(member.displayName)}" />
+      <img class="member-avatar-sm" src="${escapeHtml2(avatarSrc(member, 32))}" title="${escapeHtml2(member.displayName)}" />
       <div class="manage-member-info">
         <div class="manage-member-name-row">
-          <span class="member-name">${escapeHtml(member.displayName)}</span>
+          <span class="member-name">${escapeHtml2(member.displayName)}</span>
           ${isOwner ? '<span class="member-role-badge">Owner</span>' : ""}
         </div>
-        <span class="member-email">${escapeHtml(member.email)}</span>
-        ${member.phoneNumber ? `<span class="member-phone">${escapeHtml(member.phoneNumber)}</span>` : ""}
+        <span class="member-email">${escapeHtml2(member.email)}</span>
+        ${member.phoneNumber ? `<span class="member-phone">${escapeHtml2(member.phoneNumber)}</span>` : ""}
       </div>
       ${!isOwner ? `
         <button class="btn ghost small danger group-member-remove-btn"
           data-uid="${member.uid}"
-          data-name="${escapeHtml(member.displayName)}"
-          data-email="${escapeHtml(member.email)}">
+          data-name="${escapeHtml2(member.displayName)}"
+          data-email="${escapeHtml2(member.email)}">
           Remove
         </button>
       ` : ""}

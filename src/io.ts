@@ -1,34 +1,9 @@
-import { getState, getActiveSprint, replaceState, getBacklog, replaceBacklog, addMembersFromImport, findOrphanedSprintTasks, relinkSprintTasks, emailToName } from "./state.ts";
-import { todayIso, createId } from "./utils.ts";
-import { dom } from "./dom.ts";
-import type { AppState, BacklogStory, BacklogTask } from "./types.ts";
-
-interface ImportConfirmOptions {
-  title: string;
-  message: string;
-  subtext?: string;
-  okLabel?: string;
-}
-
-const showImportConfirm = ({ title, message, subtext = "", okLabel = "Proceed" }: ImportConfirmOptions): Promise<boolean> =>
-  new Promise((resolve) => {
-    dom.importConfirmTitle.textContent = title;
-    dom.importConfirmMessage.innerHTML = message;
-    dom.importConfirmSubtext.textContent = subtext;
-    dom.importConfirmSubtext.hidden = !subtext;
-    dom.importConfirmOk.textContent = okLabel;
-    dom.importConfirmModal.hidden = false;
-
-    const cleanup = (): void => {
-      dom.importConfirmModal.hidden = true;
-      dom.importConfirmOk.removeEventListener("click", onOk);
-      dom.importConfirmCancel.removeEventListener("click", onCancel);
-    };
-    const onOk = (): void => { cleanup(); resolve(true); };
-    const onCancel = (): void => { cleanup(); resolve(false); };
-    dom.importConfirmOk.addEventListener("click", onOk);
-    dom.importConfirmCancel.addEventListener("click", onCancel);
-  });
+import { getState, getActiveSprint, replaceState, getBacklog, addMembersFromImport, applyBacklogMerge, getMemberPairs, emailToName } from "./state.ts";
+import { todayIso } from "./utils.ts";
+import { showImportConfirm } from "./modals.ts";
+import { planBacklogMerge } from "./backlogMerge.ts";
+import type { ParsedBacklogRow } from "./backlogMerge.ts";
+import type { AppState } from "./types.ts";
 
 export const exportData = (): void => {
   const state = getState();
@@ -158,70 +133,71 @@ export const importBacklogExcel = (file: File): void => {
 
     if (rows.length < 2) { alert("File is empty or has no data rows."); return; }
 
-    const stories: BacklogStory[] = [];
-    let currentStory: BacklogStory | null = null;
-
+    const parsedRows: ParsedBacklogRow[] = [];
     for (let i = 1; i < rows.length; i++) {
       const cols = rows[i] as string[];
-      if (cols.every(c => String(c ?? "").trim() === "")) continue;
+      if (cols.every((c) => String(c ?? "").trim() === "")) continue;
 
-      const storyId    = String(cols[0] ?? "").trim();
-      const storyDesc  = String(cols[1] ?? "").trim();
+      const storyId = String(cols[0] ?? "").trim();
+      const storyDesc = String(cols[1] ?? "").trim();
       const priorityRaw = parseInt(String(cols[2] ?? "").trim(), 10);
-      const priority   = isNaN(priorityRaw) ? 100 : Math.max(0, priorityRaw);
-      const taskId     = String(cols[3] ?? "").trim();
-      const taskDesc   = String(cols[4] ?? "").trim();
+      const priority = isNaN(priorityRaw) ? 100 : Math.max(0, priorityRaw);
+      const taskId = String(cols[3] ?? "").trim();
+      const taskDesc = String(cols[4] ?? "").trim();
       const estimateRaw = parseFloat(String(cols[5] ?? ""));
-      const estimate   = isNaN(estimateRaw) ? 0 : estimateRaw;
+      const estimate = isNaN(estimateRaw) ? 0 : estimateRaw;
       const assignedToRaw = String(cols[6] ?? "").trim();
       const assignedTo = assignedToRaw ? assignedToRaw.split(",").map((s) => s.trim()).filter(Boolean) : [];
 
-      if (storyId) {
-        currentStory = { id: createId(), storyId, description: storyDesc, priority, tasks: [] };
-        stories.push(currentStory);
-      }
-      if (taskId && currentStory) {
-        currentStory.tasks.push({ id: createId(), taskId, description: taskDesc, estimate, assignedTo });
-      }
+      parsedRows.push({ storyId, storyDesc, priority, taskId, taskDesc, estimate, assignedTo });
     }
 
-    if (stories.length === 0) {
-      alert("No stories found. Check that the file format matches:\nStory ID | User Stories | Priority | Task ID | Task Description | Time Estimate (days) | Assigned To");
+    if (parsedRows.length === 0) {
+      alert("No data rows found. Check that the file format matches:\nStory ID | User Stories | Priority | Task ID | Task Description | Time Estimate (days) | Assigned To");
       return;
     }
 
-    const existing = getBacklog();
-    const hasExisting = existing?.stories?.length > 0;
-    const message = hasExisting
-      ? `Import <strong>${stories.length}</strong> story/stories into backlog? This will replace all <strong>${existing.stories.length}</strong> existing story/stories.`
-      : `Import <strong>${stories.length}</strong> story/stories into the backlog?`;
+    const teamEmails = getMemberPairs().map((p) => p.email);
+    const plan = planBacklogMerge(parsedRows, getBacklog(), getState().sprints, teamEmails);
+
+    const totalNewTasks =
+      plan.addStories.reduce((n, s) => n + s.tasks.length, 0) + plan.addTasks.length;
+
+    const lines: string[] = [];
+    if (plan.addStories.length > 0 || totalNewTasks > 0) {
+      lines.push(
+        `Will add <strong>${plan.addStories.length}</strong> story/stories and <strong>${totalNewTasks}</strong> task(s).`,
+      );
+    }
+    if (plan.updateTasks.length > 0) {
+      lines.push(`Will update <strong>${plan.updateTasks.length}</strong> existing task(s).`);
+    }
+    if (plan.skipInSprint > 0) {
+      lines.push(`Skipping <strong>${plan.skipInSprint}</strong> task(s) already used in a sprint.`);
+    }
+    if (plan.skipNoParent > 0) {
+      lines.push(`Skipping <strong>${plan.skipNoParent}</strong> task(s) with no matching parent story.`);
+    }
+    if (plan.droppedEmails.length > 0) {
+      lines.push(
+        `Ignoring <strong>${plan.droppedEmails.length}</strong> unknown email(s): ${plan.droppedEmails.join(", ")}`,
+      );
+    }
+    if (lines.length === 0) {
+      alert("Nothing to import — all rows match the existing backlog with no changes.");
+      return;
+    }
+
     const ok = await showImportConfirm({
-      title: "\u26A0 Import Backlog",
-      message,
-      subtext: hasExisting ? "This action cannot be undone." : "",
+      title: "\u26A0 Import Backlog (Merge)",
+      message: lines.join("<br>"),
       okLabel: "Import",
     });
     if (!ok) return;
 
-    const orphans = findOrphanedSprintTasks(stories);
-    if (orphans.length > 0) {
-      const lines = orphans.map(o =>
-        `<strong>Sprint ${o.sprintIndex}:</strong> [${o.taskId}] ${o.name}`
-      ).join("<br>");
-      const ok2 = await showImportConfirm({
-        title: "\u26A0 Sprint Tasks Will Be Removed",
-        message: `${orphans.length} task(s) will be removed from sprints because their Task ID is not in the imported backlog:<br><br>${lines}`,
-        okLabel: "Proceed",
-      });
-      if (!ok2) return;
-    }
+    applyBacklogMerge(plan);
 
-    replaceBacklog({ stories });
-    relinkSprintTasks();
-
-    const uniqueNames = [...new Set(
-      stories.flatMap(s => s.tasks.flatMap(t => t.assignedTo)).filter(Boolean)
-    )].map(emailToName); // resolve emails → display names
+    const uniqueNames = [...new Set(plan.acceptedEmails)].map(emailToName);
     if (uniqueNames.length > 0) addMembersFromImport(uniqueNames);
   };
   reader.readAsArrayBuffer(file);

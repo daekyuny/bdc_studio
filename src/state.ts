@@ -1,5 +1,6 @@
 import { todayIso, addDays, addWorkingDays, createId, getNextWorkingDay, getMostRecentWorkingDay } from "./utils.ts";
 import type { AppState, Sprint, SprintTask, Backlog, BacklogStory, BacklogTask, Preferences, ScopeDrop } from "./types.ts";
+import type { BacklogMergePlan } from "./backlogMerge.ts";
 import { isFirebaseConfigured } from "./firebase.ts";
 import { loadTeamState, saveTeamState, subscribeToTeamState } from "./db.ts";
 
@@ -604,9 +605,41 @@ export const updateStory = (id: string, updates: Partial<BacklogStory>): void =>
   save(); onChange(H_BACKLOG_DATA | H_TASKS);
 };
 
-export const deleteStory = (id: string): void => {
+export interface BacklogReference {
+  sprintIndex: number;       // 1-based, matches existing UI numbering
+  sprintDescription: string;
+}
+
+export const findSprintsReferencingBacklogTask = (backlogTaskId: string): BacklogReference[] => {
+  const refs: BacklogReference[] = [];
+  state.sprints.forEach((sprint, i) => {
+    if (sprint.tasks.some((t) => t.backlogTaskId === backlogTaskId)) {
+      refs.push({ sprintIndex: i + 1, sprintDescription: sprint.description });
+    }
+  });
+  return refs;
+};
+
+export const findSprintsReferencingStory = (storyId: string): BacklogReference[] => {
+  const story = state.backlog.stories.find((s) => s.id === storyId);
+  if (!story) return [];
+  const childIds = new Set(story.tasks.map((t) => t.id));
+  if (childIds.size === 0) return [];
+  const refs: BacklogReference[] = [];
+  state.sprints.forEach((sprint, i) => {
+    if (sprint.tasks.some((t) => t.backlogTaskId && childIds.has(t.backlogTaskId))) {
+      refs.push({ sprintIndex: i + 1, sprintDescription: sprint.description });
+    }
+  });
+  return refs;
+};
+
+export const deleteStory = (id: string): BacklogReference[] => {
+  const refs = findSprintsReferencingStory(id);
+  if (refs.length > 0) return refs;
   state.backlog.stories = state.backlog.stories.filter((s) => s.id !== id);
   save(); onChange(H_BACKLOG_DATA);
+  return [];
 };
 
 export const addBacklogTask = (storyId: string): string | null => {
@@ -634,59 +667,37 @@ export const updateBacklogTask = (storyId: string, taskId: string, updates: Part
   save(); onChange(H_BACKLOG_DATA);
 };
 
-export const deleteBacklogTask = (storyId: string, taskId: string): void => {
+export const deleteBacklogTask = (storyId: string, taskId: string): BacklogReference[] => {
   const story = state.backlog.stories.find((s) => s.id === storyId);
-  if (!story) return;
+  if (!story) return [];
+  const refs = findSprintsReferencingBacklogTask(taskId);
+  if (refs.length > 0) return refs;
   story.tasks = story.tasks.filter((t) => t.id !== taskId);
   save(); onChange(H_BACKLOG_DATA);
+  return [];
+};
+
+export const applyBacklogMerge = (plan: BacklogMergePlan): void => {
+  for (const newStory of plan.addStories) {
+    state.backlog.stories.push(newStory);
+  }
+  for (const { storyId, task } of plan.addTasks) {
+    const story = state.backlog.stories.find((s) => s.id === storyId);
+    if (story) story.tasks.push(task);
+  }
+  for (const { storyId, taskId, patch } of plan.updateTasks) {
+    const story = state.backlog.stories.find((s) => s.id === storyId);
+    if (!story) continue;
+    const task = story.tasks.find((t) => t.id === taskId);
+    if (task) Object.assign(task, patch);
+  }
+  save();
+  onChange(H_ALL);
 };
 
 export const replaceBacklog = (newBacklog: Backlog): void => {
   state.backlog = newBacklog;
   save(); onChange(H_ALL);
-};
-
-export interface OrphanedTask {
-  sprintIndex: number;
-  taskId: string;
-  name: string;
-}
-
-export const findOrphanedSprintTasks = (newStories: BacklogStory[]): OrphanedTask[] => {
-  const incomingIds = new Set<string>();
-  for (const story of newStories)
-    for (const task of story.tasks)
-      if (task.taskId) incomingIds.add(task.taskId);
-
-  const orphans: OrphanedTask[] = [];
-  for (const sprint of state.sprints) {
-    const idx = state.sprints.indexOf(sprint) + 1;
-    for (const task of sprint.tasks) {
-      if (task.taskId && !incomingIds.has(task.taskId))
-        orphans.push({ sprintIndex: idx, taskId: task.taskId, name: task.name });
-    }
-  }
-  return orphans;
-};
-
-export const relinkSprintTasks = (): void => {
-  const taskIdMap = new Map<string, BacklogTask>();
-  for (const story of state.backlog.stories)
-    for (const task of story.tasks)
-      if (task.taskId) taskIdMap.set(task.taskId, task);
-
-  for (const sprint of state.sprints) {
-    sprint.tasks = sprint.tasks.filter((t) => {
-      const bt = taskIdMap.get(t.taskId!);
-      if (!bt) return false;
-      t.backlogTaskId = bt.id;
-      t.name = bt.description;
-      t.estimate = Number(bt.estimate) || 0;
-      t.assignedTo = bt.assignedTo.join(", ");
-      return true;
-    });
-  }
-  save();
 };
 
 // --- Preferences CRUD ---

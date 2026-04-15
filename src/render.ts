@@ -26,11 +26,28 @@ import {
   setProjectToday,
   H_SIDEBAR, H_HEADER, H_TASKS, H_PANEL, H_STATS, H_CHART, H_BACKLOG, H_DASHBOARD, H_ALL,
 } from "./state.ts";
+import { showImportConfirm } from "./modals.ts";
+import type { BacklogReference } from "./state.ts";
 import { buildMemberActivityData, buildVelocityData } from "./dashboard.ts";
 import type { SprintDashboardRow, VelocityBar } from "./dashboard.ts";
 import { calculateBurndown } from "./burndown.ts";
 import { drawChart } from "./chart.ts";
 import type { Sprint, SprintTask, BacklogTask, BacklogStory, BurndownData, SortState, RemainEntry, WorkedEntry } from "./types.ts";
+
+const escapeHtml = (s: string): string =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+const showBacklogDeleteBlockedModal = async (label: string, refs: BacklogReference[]): Promise<void> => {
+  const lines = refs
+    .map((r) => `<strong>Sprint ${r.sprintIndex}</strong> (${escapeHtml(r.sprintDescription || "")})`)
+    .join("<br>");
+  await showImportConfirm({
+    title: "\u26A0 Cannot Delete",
+    message: `Cannot delete ${escapeHtml(label)} — used in:<br><br>${lines}<br><br>Remove from those sprint(s) first.`,
+    okLabel: "OK",
+    hideCancel: true,
+  });
+};
 
 let fpProjectToday: FlatpickrInstance | null = null;
 
@@ -836,11 +853,12 @@ const renderBacklog = (): void => {
       render(H_BACKLOG);
     });
 
-    deleteBtn.addEventListener("click", () => {
-      if (window.confirm(`Delete story "${story.description || story.storyId}"? This cannot be undone.`)) {
-        editingIds.delete(story.id);
-        deleteStory(story.id);
-      }
+    deleteBtn.addEventListener("click", async () => {
+      const label = story.description || story.storyId;
+      if (!window.confirm(`Delete story "${label}"? This cannot be undone.`)) return;
+      editingIds.delete(story.id);
+      const refs = deleteStory(story.id);
+      if (refs.length > 0) await showBacklogDeleteBlockedModal(`story "${label}"`, refs);
     });
 
     addTaskBtn.addEventListener("click", () => {
@@ -950,11 +968,12 @@ const renderBacklog = (): void => {
           render(H_BACKLOG);
         });
 
-        taskDeleteBtn.addEventListener("click", () => {
-          if (window.confirm(`Delete task "${task.description || task.taskId}"?`)) {
-            editingIds.delete(task.id);
-            deleteBacklogTask(story.id, task.id);
-          }
+        taskDeleteBtn.addEventListener("click", async () => {
+          const label = task.description || task.taskId;
+          if (!window.confirm(`Delete task "${label}"?`)) return;
+          editingIds.delete(task.id);
+          const refs = deleteBacklogTask(story.id, task.id);
+          if (refs.length > 0) await showBacklogDeleteBlockedModal(`task "${label}"`, refs);
         });
 
         dom.backlogTableBody.appendChild(taskRow);
