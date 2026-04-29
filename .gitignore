@@ -1,11 +1,33 @@
-.claude/
-test_data/
-todo_dk/
+# Claude Code
+.claude/*
+!.claude/settings.json
+!.claude/commands/
+!.claude/commands/**
+!.claude/agents/
+!.claude/agents/**
+
+# VS Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/*.code-snippets
+
+# JetBrains (전체 제외)
+.idea/
+
+# Dependencies & build
 node_modules/
 dist/
+
+# OS
 .DS_Store
+
+# Logs
 *.log
+
+# Secrets
 .env
 src/firebase-config.ts
-.vscode/
-.idea/
+

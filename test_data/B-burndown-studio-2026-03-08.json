@@ -1,0 +1,879 @@
+{
+  "activeSprintId": "a99e905e-0662-4eab-a8c8-c1204fbe79b0",
+  "preferences": {
+    "members": [
+      "dev4@b.com",
+      "dev5@b.com",
+      "dev6@b.com",
+      "dev7@ab.com",
+      "pm@a.com"
+    ],
+    "holidays": [],
+    "assignedToFormat": "email",
+    "workWeekends": []
+  },
+  "backlog": {
+    "stories": [
+      {
+        "description": "User story 1.1",
+        "storyId": "1.1",
+        "tasks": [
+          {
+            "id": "e7eb436b-bb59-4d71-b6f6-af6bf010c15c",
+            "description": "Add Concurrency Management",
+            "assignedTo": [
+              "dev6@b.com",
+              "dev5@b.com"
+            ],
+            "estimate": 3,
+            "taskId": "1.1.1"
+          },
+          {
+            "id": "b2534098-6e5b-4945-9105-0e58554633ea",
+            "description": "Create NHibernate dao classes for entities and main database.",
+            "assignedTo": [
+              "dev5@b.com"
+            ],
+            "taskId": "1.1.2",
+            "estimate": 4
+          },
+          {
+            "description": "Insert logging",
+            "assignedTo": [
+              "dev4@b.com"
+            ],
+            "taskId": "1.1.3",
+            "estimate": 1,
+            "id": "5a05807a-9fd0-493d-9862-d12d31ace17c"
+          },
+          {
+            "estimate": 1.5,
+            "taskId": "1.1.4",
+            "description": "Main layout",
+            "assignedTo": [
+              "dev5@b.com"
+            ],
+            "id": "307fcc51-ff44-47ea-9206-f8f437b254f4"
+          }
+        ],
+        "priority": 20,
+        "id": "b9820b5a-9b32-486d-a279-c0a3b5369941"
+      },
+      {
+        "description": "User story 1.2",
+        "priority": 30,
+        "storyId": "1.2",
+        "tasks": [
+          {
+            "taskId": "1.2.1",
+            "estimate": 1,
+            "assignedTo": [
+              "dev6@b.com"
+            ],
+            "description": "Create login",
+            "id": "7f9a9d0e-554c-44c2-b11f-a59c6452f6f7"
+          },
+          {
+            "estimate": 2,
+            "taskId": "1.2.2",
+            "description": "Validation checking when saving",
+            "assignedTo": [
+              "dev5@b.com"
+            ],
+            "id": "7310c08c-d747-47aa-a729-8b556a3a0b0d"
+          },
+          {
+            "id": "4d0cee87-3dae-46f8-86ac-54fb3a8083d6",
+            "estimate": 2,
+            "taskId": "1.2.3",
+            "assignedTo": [
+              "dev4@b.com"
+            ],
+            "description": "Display validation errors to users"
+          },
+          {
+            "id": "d8735c8b-604c-4783-8cb0-924e33bc4453",
+            "assignedTo": [
+              "dev7@ab.com"
+            ],
+            "description": "Report navigation and selection",
+            "estimate": 2,
+            "taskId": "1.2.4"
+          },
+          {
+            "taskId": "1.2.5",
+            "estimate": 2,
+            "assignedTo": [
+              "dev4@b.com"
+            ],
+            "description": "Create report for tracking xyx",
+            "id": "72975ccb-f8a0-459f-9492-4866acbe939b"
+          }
+        ],
+        "id": "9012486e-b28b-43ca-8721-30847f2f998a"
+      },
+      {
+        "id": "09d714f8-7eef-41fa-b21d-1ac2dbea97ee",
+        "storyId": "2.1",
+        "priority": 50,
+        "tasks": [
+          {
+            "id": "1d0cad58-7de6-4a09-a0aa-a1e7d3ffb3bb",
+            "description": "Add error wrapper",
+            "assignedTo": [
+              "dev4@b.com"
+            ],
+            "taskId": "2.1.1",
+            "estimate": 2
+          },
+          {
+            "id": "75211254-3da8-42d4-a3f3-4651cc19ad0c",
+            "estimate": 0.5,
+            "taskId": "2.1.2",
+            "assignedTo": [
+              "dev6@b.com"
+            ],
+            "description": "Process error report"
+          },
+          {
+            "description": "Implement error dashboard",
+            "assignedTo": [
+              "dev5@b.com"
+            ],
+            "taskId": "2.1.3",
+            "estimate": 2,
+            "id": "932cd9a1-37e7-4b50-a726-a447c2e69c57"
+          }
+        ],
+        "description": "User story 2.1"
+      },
+      {
+        "description": "User story 2.2",
+        "priority": 60,
+        "storyId": "2.2",
+        "tasks": [
+          {
+            "id": "1683eb09-a034-49b8-b969-5ea484f76006",
+            "taskId": "2.2.1",
+            "estimate": 2.5,
+            "description": "task 2-2-1",
+            "assignedTo": [
+              "dev6@b.com"
+            ]
+          },
+          {
+            "estimate": 3,
+            "taskId": "2.2.2",
+            "assignedTo": [
+              "dev5@b.com"
+            ],
+            "description": "task 2-2-2",
+            "id": "60966159-2923-42f1-8756-f549692a9387"
+          },
+          {
+            "estimate": 1.5,
+            "taskId": "2.2.3",
+            "description": "task 2-2-3",
+            "assignedTo": [
+              "dev7@ab.com"
+            ],
+            "id": "19fff5b1-c4a5-496d-abad-f3d7e0e62cb0"
+          }
+        ],
+        "id": "88b45541-7fc5-435f-bba5-8feee237a6f6"
+      },
+      {
+        "id": "2e69d3ec-78e5-4801-8b5c-dd39a54192a8",
+        "storyId": "2.3",
+        "priority": 70,
+        "tasks": [
+          {
+            "id": "30e2fa50-4f17-4b64-b2b7-bb2b153338ca",
+            "assignedTo": [
+              "dev6@b.com"
+            ],
+            "description": "task 2-3-1",
+            "taskId": "2.3.1",
+            "estimate": 1.5
+          },
+          {
+            "assignedTo": [
+              "dev5@b.com"
+            ],
+            "description": "task 2-3-2",
+            "estimate": 2,
+            "taskId": "2.3.2",
+            "id": "246063a2-1a69-4b2e-b1ea-d3570726110a"
+          },
+          {
+            "id": "811d99dc-b380-4592-8b2a-1d018bced4a6",
+            "description": "task 2-3-3",
+            "assignedTo": [
+              "dev4@b.com"
+            ],
+            "estimate": 1.5,
+            "taskId": "2.3.3"
+          }
+        ],
+        "description": "User story 2.3"
+      },
+      {
+        "id": "e1bfbef5-a582-455f-9cf8-77b91e9ffb53",
+        "description": "User story 3.1",
+        "priority": 80,
+        "storyId": "3.1",
+        "tasks": [
+          {
+            "estimate": 2,
+            "taskId": "3.1.1",
+            "description": "task 3-1-1",
+            "assignedTo": [
+              "dev6@b.com"
+            ],
+            "id": "780d5733-3c59-446e-97c5-f557b2a4ab84"
+          },
+          {
+            "taskId": "3.1.2",
+            "estimate": 0.5,
+            "assignedTo": [
+              "dev5@b.com"
+            ],
+            "description": "task 3-1-2",
+            "id": "4e645e4a-d569-4386-b600-937d2de8c2ab"
+          },
+          {
+            "id": "0cc70d2f-72a1-4e36-95c8-bdd23811c9f1",
+            "description": "task 3-1-3",
+            "assignedTo": [
+              "dev7@ab.com"
+            ],
+            "taskId": "3.1.3",
+            "estimate": 1
+          },
+          {
+            "assignedTo": [
+              "dev6@b.com"
+            ],
+            "description": "task 4-1-4",
+            "estimate": 2.5,
+            "taskId": "3.1.4",
+            "id": "85ea8798-678e-4b9c-bd79-0e0eb149c33c"
+          }
+        ]
+      },
+      {
+        "id": "759a7e1a-7c57-40ce-86bb-81867ffa30de",
+        "storyId": "3.2",
+        "tasks": [
+          {
+            "id": "d2cc8d94-cfbf-4653-a4a7-4908ca08358e",
+            "estimate": 2,
+            "taskId": "3.2.1",
+            "assignedTo": [
+              "dev7@ab.com",
+              "dev4@b.com"
+            ],
+            "description": "task 3-2-1"
+          },
+          {
+            "id": "5aaab419-e606-417b-b231-5b5f40d31dec",
+            "description": "task 3-2-2",
+            "assignedTo": [
+              "dev7@ab.com",
+              "dev4@b.com"
+            ],
+            "estimate": 1.5,
+            "taskId": "3.2.2"
+          },
+          {
+            "id": "cb136c19-7727-486b-8bf0-2db3f7e3dd53",
+            "taskId": "3.2.3",
+            "estimate": 1.5,
+            "description": "task 3-2-3",
+            "assignedTo": [
+              "dev6@b.com",
+              "dev5@b.com"
+            ]
+          },
+          {
+            "id": "029253d5-67d1-4687-820b-b630036a926e",
+            "assignedTo": [
+              "dev4@b.com"
+            ],
+            "description": "task 3-2-4",
+            "estimate": 3,
+            "taskId": "3.2.4"
+          }
+        ],
+        "priority": 120,
+        "description": "User story 3.2"
+      },
+      {
+        "description": "User story 3.2",
+        "priority": 120,
+        "tasks": [
+          {
+            "taskId": "3.3.1",
+            "estimate": 2,
+            "description": "task 3-3-1",
+            "assignedTo": [
+              "dev6@b.com"
+            ],
+            "id": "7905f4f7-328b-42b4-b131-68091de24947"
+          },
+          {
+            "id": "a46e71cd-1939-45d7-85ec-62f5d04cafc3",
+            "description": "task 3-3-2",
+            "assignedTo": [
+              "dev7@ab.com"
+            ],
+            "taskId": "3.3.2",
+            "estimate": 1.5
+          },
+          {
+            "id": "5d193be0-c7d6-4751-8c6c-38b621596bae",
+            "estimate": 1.5,
+            "taskId": "3.3.3",
+            "description": "task 3-3-3",
+            "assignedTo": [
+              "dev5@b.com"
+            ]
+          },
+          {
+            "id": "3abbb3d8-b281-4253-be9c-237e77ed8c62",
+            "taskId": "3.3.4",
+            "estimate": 3,
+            "assignedTo": [
+              "dev4@b.com"
+            ],
+            "description": "task 3-3-4"
+          }
+        ],
+        "storyId": "3.3",
+        "id": "7a5a1e4f-103b-4cc7-b873-5460f2a3f7c9"
+      }
+    ]
+  },
+  "projectToday": "2026-03-09",
+  "sprints": [
+    {
+      "efficiency": 0.5,
+      "createdAt": "2026-03-05T16:48:41.810Z",
+      "developers": 4,
+      "plannedPoints": 21,
+      "endDate": "2026-02-27",
+      "id": "a99e905e-0662-4eab-a8c8-c1204fbe79b0",
+      "startDate": "2026-02-16",
+      "description": "",
+      "today": "2026-03-02",
+      "tasks": [
+        {
+          "estimate": 3,
+          "workedLog": [
+            {
+              "date": "2026-02-17",
+              "worked": 1
+            }
+          ],
+          "name": "Add Concurrency Management",
+          "remainLog": [
+            {
+              "remain": 2.5,
+              "date": "2026-02-17"
+            }
+          ],
+          "taskId": "1.1.1",
+          "status": "In Progress",
+          "backlogTaskId": "e7eb436b-bb59-4d71-b6f6-af6bf010c15c",
+          "worked": 1,
+          "doneDate": "",
+          "assignedTo": "dev6@b.com, dev5@b.com",
+          "addedDate": "2026-02-16",
+          "id": "c5a946b0-0426-46f3-a9ee-7cad43e9fe3f",
+          "remain": 2.5
+        },
+        {
+          "workedLog": [
+            {
+              "date": "2026-02-17",
+              "worked": 1
+            }
+          ],
+          "estimate": 4,
+          "remainLog": [
+            {
+              "remain": 3,
+              "date": "2026-02-17"
+            }
+          ],
+          "name": "Create NHibernate dao classes for entities and main database.",
+          "taskId": "1.1.2",
+          "status": "In Progress",
+          "backlogTaskId": "b2534098-6e5b-4945-9105-0e58554633ea",
+          "worked": 1,
+          "assignedTo": "dev5@b.com",
+          "doneDate": "",
+          "remain": 3,
+          "id": "b7c7b71f-12b9-4b3f-9dcd-9531b9548d62",
+          "addedDate": "2026-02-16"
+        },
+        {
+          "remain": 1,
+          "id": "ec3ad5a0-3b51-4a4b-b524-c09251ed0e41",
+          "addedDate": "2026-02-16",
+          "doneDate": "",
+          "assignedTo": "dev4@b.com",
+          "worked": 0,
+          "backlogTaskId": "5a05807a-9fd0-493d-9862-d12d31ace17c",
+          "status": "Todo",
+          "taskId": "1.1.3",
+          "name": "Insert logging",
+          "remainLog": [],
+          "estimate": 1,
+          "workedLog": []
+        },
+        {
+          "name": "Main layout",
+          "remainLog": [],
+          "estimate": 1.5,
+          "workedLog": [],
+          "status": "Todo",
+          "taskId": "1.1.4",
+          "worked": 0,
+          "backlogTaskId": "307fcc51-ff44-47ea-9206-f8f437b254f4",
+          "remain": 1.5,
+          "id": "ab928e58-f858-47e9-97b6-c7b3bfe10d02",
+          "addedDate": "2026-02-16",
+          "doneDate": "",
+          "assignedTo": "dev5@b.com"
+        },
+        {
+          "backlogTaskId": "7f9a9d0e-554c-44c2-b11f-a59c6452f6f7",
+          "worked": 0,
+          "doneDate": "",
+          "assignedTo": "dev6@b.com",
+          "addedDate": "2026-02-16",
+          "id": "64944825-1b3d-429d-bdcb-d309026de5e8",
+          "remain": 1,
+          "estimate": 1,
+          "workedLog": [],
+          "name": "Create login",
+          "remainLog": [],
+          "taskId": "1.2.1",
+          "status": "Todo"
+        },
+        {
+          "remainLog": [],
+          "name": "Validation checking when saving",
+          "workedLog": [],
+          "estimate": 2,
+          "status": "Todo",
+          "taskId": "1.2.2",
+          "worked": 0,
+          "backlogTaskId": "7310c08c-d747-47aa-a729-8b556a3a0b0d",
+          "id": "4f011c0a-7aaf-403c-b19b-f6f7dc1507d2",
+          "remain": 2,
+          "addedDate": "2026-02-16",
+          "assignedTo": "dev5@b.com",
+          "doneDate": ""
+        },
+        {
+          "worked": 0,
+          "backlogTaskId": "4d0cee87-3dae-46f8-86ac-54fb3a8083d6",
+          "id": "b9d0fe4f-3e23-4ad4-8fa5-029a1e521258",
+          "remain": 2,
+          "addedDate": "2026-02-16",
+          "doneDate": "",
+          "assignedTo": "dev4@b.com",
+          "name": "Display validation errors to users",
+          "remainLog": [],
+          "estimate": 2,
+          "workedLog": [],
+          "status": "Todo",
+          "taskId": "1.2.3"
+        },
+        {
+          "remainLog": [],
+          "name": "Report navigation and selection",
+          "workedLog": [],
+          "estimate": 2,
+          "status": "Todo",
+          "taskId": "1.2.4",
+          "worked": 0,
+          "backlogTaskId": "d8735c8b-604c-4783-8cb0-924e33bc4453",
+          "addedDate": "2026-02-16",
+          "remain": 2,
+          "id": "947d2b67-4d11-4a56-a18d-6966371e1cbb",
+          "assignedTo": "dev7@ab.com",
+          "doneDate": ""
+        },
+        {
+          "workedLog": [],
+          "estimate": 2,
+          "remainLog": [],
+          "name": "Create report for tracking xyx",
+          "taskId": "1.2.5",
+          "status": "Todo",
+          "backlogTaskId": "72975ccb-f8a0-459f-9492-4866acbe939b",
+          "worked": 0,
+          "assignedTo": "dev4@b.com",
+          "doneDate": "",
+          "addedDate": "2026-02-16",
+          "remain": 2,
+          "id": "625cec44-a1c5-48f9-955b-af3f7e42da43"
+        },
+        {
+          "worked": 0,
+          "backlogTaskId": "1d0cad58-7de6-4a09-a0aa-a1e7d3ffb3bb",
+          "remain": 2,
+          "id": "e2a568d2-dd8f-4a02-8f28-dfe8c93b7791",
+          "addedDate": "2026-02-16",
+          "doneDate": "",
+          "assignedTo": "dev4@b.com",
+          "name": "Add error wrapper",
+          "remainLog": [],
+          "estimate": 2,
+          "workedLog": [],
+          "status": "Todo",
+          "taskId": "2.1.1"
+        },
+        {
+          "taskId": "2.1.2",
+          "status": "Todo",
+          "estimate": 0.5,
+          "workedLog": [],
+          "name": "Process error report",
+          "remainLog": [],
+          "doneDate": "",
+          "assignedTo": "dev6@b.com",
+          "addedDate": "2026-02-16",
+          "remain": 0.5,
+          "id": "5fbad800-fef1-420c-83f0-65f304b5eff5",
+          "backlogTaskId": "75211254-3da8-42d4-a3f3-4651cc19ad0c",
+          "worked": 0
+        }
+      ]
+    },
+    {
+      "tasks": [
+        {
+          "taskId": "2.1.3",
+          "status": "In Progress",
+          "estimate": 2,
+          "workedLog": [
+            {
+              "worked": 1,
+              "date": "2026-03-02"
+            }
+          ],
+          "name": "Implement error dashboard",
+          "remainLog": [
+            {
+              "date": "2026-03-02",
+              "remain": 1
+            }
+          ],
+          "doneDate": "",
+          "assignedTo": "dev5@b.com",
+          "addedDate": "2026-02-13",
+          "id": "c9bf75e5-a578-408d-9fc1-88e41d7e010f",
+          "remain": 1,
+          "backlogTaskId": "932cd9a1-37e7-4b50-a726-a447c2e69c57",
+          "worked": 1
+        },
+        {
+          "worked": 0,
+          "backlogTaskId": "1683eb09-a034-49b8-b969-5ea484f76006",
+          "addedDate": "2026-02-13",
+          "remain": 2.5,
+          "id": "722c9b81-db17-40ce-90ad-8d63f6a46761",
+          "assignedTo": "dev6@b.com",
+          "doneDate": "",
+          "remainLog": [],
+          "name": "task 2-2-1",
+          "workedLog": [],
+          "estimate": 2.5,
+          "status": "Todo",
+          "taskId": "2.2.1"
+        },
+        {
+          "worked": 0,
+          "backlogTaskId": "60966159-2923-42f1-8756-f549692a9387",
+          "remain": 3,
+          "id": "cb97b840-bebf-4445-91ad-a130d033a0e3",
+          "addedDate": "2026-02-13",
+          "doneDate": "",
+          "assignedTo": "dev5@b.com",
+          "name": "task 2-2-2",
+          "remainLog": [],
+          "estimate": 3,
+          "workedLog": [],
+          "status": "Todo",
+          "taskId": "2.2.2"
+        },
+        {
+          "assignedTo": "dev7@ab.com",
+          "doneDate": "",
+          "id": "bae8f14c-f50a-48c5-99ab-21528c0d5372",
+          "remain": 1.5,
+          "addedDate": "2026-02-13",
+          "backlogTaskId": "19fff5b1-c4a5-496d-abad-f3d7e0e62cb0",
+          "worked": 0,
+          "taskId": "2.2.3",
+          "status": "Todo",
+          "workedLog": [],
+          "estimate": 1.5,
+          "remainLog": [],
+          "name": "task 2-2-3"
+        },
+        {
+          "remain": 1.5,
+          "id": "199c9d9f-d156-4537-99ed-b3e235b54615",
+          "addedDate": "2026-02-13",
+          "assignedTo": "dev6@b.com",
+          "doneDate": "",
+          "worked": 0,
+          "backlogTaskId": "30e2fa50-4f17-4b64-b2b7-bb2b153338ca",
+          "status": "Todo",
+          "taskId": "2.3.1",
+          "remainLog": [],
+          "name": "task 2-3-1",
+          "workedLog": [],
+          "estimate": 1.5
+        },
+        {
+          "estimate": 2,
+          "workedLog": [],
+          "name": "task 2-3-2",
+          "remainLog": [],
+          "taskId": "2.3.2",
+          "status": "Todo",
+          "backlogTaskId": "246063a2-1a69-4b2e-b1ea-d3570726110a",
+          "worked": 0,
+          "doneDate": "",
+          "assignedTo": "dev5@b.com",
+          "addedDate": "2026-02-13",
+          "id": "0b193bca-f42e-4cb5-91e0-c743c8698e35",
+          "remain": 2
+        },
+        {
+          "worked": 0,
+          "backlogTaskId": "811d99dc-b380-4592-8b2a-1d018bced4a6",
+          "id": "62006962-be02-4447-b6f3-f1fd202a442c",
+          "remain": 1.5,
+          "addedDate": "2026-02-13",
+          "assignedTo": "dev4@b.com",
+          "doneDate": "",
+          "remainLog": [],
+          "name": "task 2-3-3",
+          "workedLog": [],
+          "estimate": 1.5,
+          "status": "Todo",
+          "taskId": "2.3.3"
+        },
+        {
+          "doneDate": "",
+          "assignedTo": "dev6@b.com",
+          "id": "47f9f81b-97b3-4118-90c3-30238330140c",
+          "remain": 2,
+          "addedDate": "2026-02-13",
+          "backlogTaskId": "780d5733-3c59-446e-97c5-f557b2a4ab84",
+          "worked": 0,
+          "taskId": "3.1.1",
+          "status": "Todo",
+          "estimate": 2,
+          "workedLog": [],
+          "name": "task 3-1-1",
+          "remainLog": []
+        },
+        {
+          "taskId": "3.1.2",
+          "status": "Todo",
+          "workedLog": [],
+          "estimate": 0.5,
+          "remainLog": [],
+          "name": "task 3-1-2",
+          "assignedTo": "dev5@b.com",
+          "doneDate": "",
+          "id": "cb33e029-77fe-49e9-8c9a-ab6e2c9574f1",
+          "remain": 0.5,
+          "addedDate": "2026-02-13",
+          "backlogTaskId": "4e645e4a-d569-4386-b600-937d2de8c2ab",
+          "worked": 0
+        },
+        {
+          "addedDate": "2026-02-13",
+          "id": "5c6fedb3-e686-411c-b348-f0b244b87714",
+          "remain": 1,
+          "doneDate": "",
+          "assignedTo": "dev7@ab.com",
+          "worked": 0,
+          "backlogTaskId": "0cc70d2f-72a1-4e36-95c8-bdd23811c9f1",
+          "status": "Todo",
+          "taskId": "3.1.3",
+          "name": "task 3-1-3",
+          "remainLog": [],
+          "estimate": 1,
+          "workedLog": []
+        },
+        {
+          "estimate": 2.5,
+          "workedLog": [],
+          "name": "task 4-1-4",
+          "remainLog": [],
+          "taskId": "3.1.4",
+          "status": "Todo",
+          "backlogTaskId": "85ea8798-678e-4b9c-bd79-0e0eb149c33c",
+          "worked": 0,
+          "doneDate": "",
+          "assignedTo": "dev6@b.com",
+          "addedDate": "2026-02-13",
+          "remain": 2.5,
+          "id": "20fbdce4-1b92-407a-a641-b9948553cd5b"
+        }
+      ],
+      "today": "2026-03-09",
+      "description": "",
+      "startDate": "2026-03-02",
+      "id": "1a37fb0c-4c5b-4e30-a6af-a546ac836bf6",
+      "endDate": "2026-03-13",
+      "plannedPoints": 20,
+      "developers": 4,
+      "createdAt": "2026-03-06T14:52:17.732Z",
+      "efficiency": 0.5
+    },
+    {
+      "description": "",
+      "tasks": [
+        {
+          "backlogTaskId": "d2cc8d94-cfbf-4653-a4a7-4908ca08358e",
+          "worked": 0,
+          "doneDate": "",
+          "assignedTo": "dev7@ab.com, dev4@b.com",
+          "addedDate": "2026-02-13",
+          "remain": 2,
+          "id": "b831cdbd-cb1d-494a-a63a-d5beea580b16",
+          "estimate": 2,
+          "workedLog": [],
+          "name": "task 3-2-1",
+          "remainLog": [],
+          "taskId": "3.2.1",
+          "status": "Todo"
+        },
+        {
+          "taskId": "3.2.2",
+          "status": "Todo",
+          "estimate": 1.5,
+          "workedLog": [],
+          "name": "task 3-2-2",
+          "remainLog": [],
+          "doneDate": "",
+          "assignedTo": "dev7@ab.com, dev4@b.com",
+          "addedDate": "2026-02-13",
+          "remain": 1.5,
+          "id": "d4855511-bf22-4a02-91ab-bf18e5684b32",
+          "backlogTaskId": "5aaab419-e606-417b-b231-5b5f40d31dec",
+          "worked": 0
+        },
+        {
+          "worked": 0,
+          "backlogTaskId": "cb136c19-7727-486b-8bf0-2db3f7e3dd53",
+          "addedDate": "2026-02-13",
+          "id": "34cbd222-855c-482e-8b57-88439a69f1e3",
+          "remain": 1.5,
+          "assignedTo": "dev6@b.com, dev5@b.com",
+          "doneDate": "",
+          "remainLog": [],
+          "name": "task 3-2-3",
+          "workedLog": [],
+          "estimate": 1.5,
+          "status": "Todo",
+          "taskId": "3.2.3"
+        },
+        {
+          "id": "943eca92-a6e5-4f9a-8dda-42519066d354",
+          "remain": 3,
+          "addedDate": "2026-02-13",
+          "assignedTo": "dev4@b.com",
+          "doneDate": "",
+          "worked": 0,
+          "backlogTaskId": "029253d5-67d1-4687-820b-b630036a926e",
+          "status": "Todo",
+          "taskId": "3.2.4",
+          "remainLog": [],
+          "name": "task 3-2-4",
+          "workedLog": [],
+          "estimate": 3
+        },
+        {
+          "backlogTaskId": "7905f4f7-328b-42b4-b131-68091de24947",
+          "worked": 0,
+          "assignedTo": "dev6@b.com",
+          "doneDate": "",
+          "addedDate": "2026-02-13",
+          "remain": 2,
+          "id": "0816027b-85b6-44ec-a464-d3c5a9aa09e6",
+          "workedLog": [],
+          "estimate": 2,
+          "remainLog": [],
+          "name": "task 3-3-1",
+          "taskId": "3.3.1",
+          "status": "Todo"
+        },
+        {
+          "taskId": "3.3.2",
+          "status": "Todo",
+          "workedLog": [],
+          "estimate": 1.5,
+          "remainLog": [],
+          "name": "task 3-3-2",
+          "assignedTo": "dev7@ab.com",
+          "doneDate": "",
+          "addedDate": "2026-02-13",
+          "id": "ef5eac79-5582-4c15-b655-a49e4eb1145b",
+          "remain": 1.5,
+          "backlogTaskId": "a46e71cd-1939-45d7-85ec-62f5d04cafc3",
+          "worked": 0
+        },
+        {
+          "status": "Todo",
+          "taskId": "3.3.3",
+          "name": "task 3-3-3",
+          "remainLog": [],
+          "estimate": 1.5,
+          "workedLog": [],
+          "addedDate": "2026-02-13",
+          "remain": 1.5,
+          "id": "8a91d192-ac3d-4c96-a392-17420af1118a",
+          "doneDate": "",
+          "assignedTo": "dev5@b.com",
+          "worked": 0,
+          "backlogTaskId": "5d193be0-c7d6-4751-8c6c-38b621596bae"
+        },
+        {
+          "worked": 0,
+          "backlogTaskId": "3abbb3d8-b281-4253-be9c-237e77ed8c62",
+          "id": "c3456f6d-a726-4768-a310-1e9ebb169051",
+          "remain": 3,
+          "addedDate": "2026-02-13",
+          "doneDate": "",
+          "assignedTo": "dev4@b.com",
+          "name": "task 3-3-4",
+          "remainLog": [],
+          "estimate": 3,
+          "workedLog": [],
+          "status": "Todo",
+          "taskId": "3.3.4"
+        }
+      ],
+      "today": "2026-03-16",
+      "startDate": "2026-03-16",
+      "endDate": "2026-03-27",
+      "id": "8fcf673d-820b-4e9f-8ed7-160a3d00aa71",
+      "plannedPoints": 16,
+      "developers": 2,
+      "createdAt": "2026-03-06T14:52:39.837Z",
+      "efficiency": 1
+    }
+  ]
+}

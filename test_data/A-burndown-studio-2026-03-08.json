@@ -1,0 +1,1407 @@
+{
+  "activeSprintId": "07eca382-7101-44ab-8ffc-6cfc82bfeec8",
+  "preferences": {
+    "holidays": [
+      {
+        "name": "세미나",
+        "date": "2025-10-10"
+      },
+      {
+        "name": "사외 세미나",
+        "date": "2025-10-30"
+      }
+    ],
+    "workWeekends": [
+      "2025-10-19",
+      "2025-11-01",
+      "2026-03-14"
+    ],
+    "assignedToFormat": "email",
+    "members": [
+      "dev1@a.com",
+      "dev2@a.com",
+      "dev3@a.com",
+      "dev7@ab.com",
+      "pm@a.com"
+    ]
+  },
+  "sprints": [
+    {
+      "efficiency": 0.5,
+      "developers": 4,
+      "tasks": [
+        {
+          "doneDate": "2026-02-09",
+          "remain": 0,
+          "taskId": "1.1.1",
+          "estimate": 3,
+          "workedLog": [
+            {
+              "date": "2026-02-03",
+              "worked": 0.5
+            },
+            {
+              "worked": 1.5,
+              "date": "2026-02-04"
+            },
+            {
+              "worked": 2.5,
+              "date": "2026-02-06"
+            },
+            {
+              "worked": 3.5,
+              "date": "2026-02-09"
+            }
+          ],
+          "remainLog": [
+            {
+              "remain": 2.5,
+              "date": "2026-02-03"
+            },
+            {
+              "date": "2026-02-04",
+              "remain": 1.5
+            },
+            {
+              "date": "2026-02-06",
+              "remain": 1
+            },
+            {
+              "date": "2026-02-09",
+              "remain": 0
+            }
+          ],
+          "name": "Add Concurrency Management",
+          "assignedTo": "dev3@a.com",
+          "worked": 3.5,
+          "addedDate": "2026-01-30",
+          "backlogTaskId": "60855a55-a0f2-4bb5-afa6-4ec9e6931e5f",
+          "id": "5319d340-2f00-45d5-8ded-a75d312c505a",
+          "status": "Done"
+        },
+        {
+          "id": "26da36aa-0f59-4bb2-bed6-02dcab46d541",
+          "status": "Done",
+          "worked": 4.5,
+          "addedDate": "2026-01-30",
+          "assignedTo": "dev7@ab.com",
+          "backlogTaskId": "8f0ef4fb-4f17-4c66-89d0-cbe07a454ae6",
+          "name": "Create NHibernate dao classes for entities and main database.",
+          "workedLog": [
+            {
+              "date": "2026-02-03",
+              "worked": 1
+            },
+            {
+              "worked": 2,
+              "date": "2026-02-04"
+            },
+            {
+              "date": "2026-02-06",
+              "worked": 3.5
+            },
+            {
+              "date": "2026-02-09",
+              "worked": 4.5
+            }
+          ],
+          "remainLog": [
+            {
+              "date": "2026-02-03",
+              "remain": 3
+            },
+            {
+              "date": "2026-02-04",
+              "remain": 2.5
+            },
+            {
+              "date": "2026-02-06",
+              "remain": 1
+            },
+            {
+              "remain": 0,
+              "date": "2026-02-09"
+            }
+          ],
+          "doneDate": "2026-02-09",
+          "remain": 0,
+          "taskId": "1.1.2",
+          "estimate": 4
+        },
+        {
+          "name": "Insert logging",
+          "workedLog": [
+            {
+              "date": "2026-02-03",
+              "worked": 0.5
+            },
+            {
+              "date": "2026-02-04",
+              "worked": 1
+            },
+            {
+              "worked": 1,
+              "date": "2026-02-06"
+            }
+          ],
+          "remainLog": [
+            {
+              "date": "2026-02-03",
+              "remain": 1
+            },
+            {
+              "remain": 0,
+              "date": "2026-02-04"
+            },
+            {
+              "date": "2026-02-06",
+              "remain": 0
+            }
+          ],
+          "estimate": 1,
+          "doneDate": "2026-02-04",
+          "taskId": "1.1.3",
+          "remain": 0,
+          "status": "Done",
+          "id": "fbc78740-60c1-403e-96f6-cb32212e9c9e",
+          "backlogTaskId": "78c50cfc-935a-4506-9282-5ef8e6089db6",
+          "worked": 1,
+          "addedDate": "2026-01-30",
+          "assignedTo": "dev3@a.com, dev7@ab.com"
+        },
+        {
+          "workedLog": [
+            {
+              "worked": 0.5,
+              "date": "2026-02-04"
+            },
+            {
+              "date": "2026-02-06",
+              "worked": 1.5
+            },
+            {
+              "date": "2026-02-12",
+              "worked": 2.5
+            }
+          ],
+          "remainLog": [
+            {
+              "date": "2026-02-04",
+              "remain": 2
+            },
+            {
+              "date": "2026-02-06",
+              "remain": 1
+            },
+            {
+              "remain": 0,
+              "date": "2026-02-12"
+            }
+          ],
+          "name": "Main layout",
+          "doneDate": "2026-02-12",
+          "taskId": "1.1.4",
+          "remain": 0,
+          "estimate": 1.5,
+          "id": "354c3dca-18e9-41b1-bc3c-d6da858c9406",
+          "status": "Done",
+          "assignedTo": "dev1@a.com",
+          "worked": 2.5,
+          "addedDate": "2026-01-30",
+          "backlogTaskId": "4c4ee3ee-e6a0-4540-b8d1-d9ce9f7942d0"
+        },
+        {
+          "workedLog": [
+            {
+              "date": "2026-02-06",
+              "worked": 1
+            }
+          ],
+          "remainLog": [
+            {
+              "date": "2026-02-06",
+              "remain": 0
+            }
+          ],
+          "name": "Create login",
+          "doneDate": "2026-02-06",
+          "taskId": "1.2.1",
+          "remain": 0,
+          "estimate": 1,
+          "id": "eb1f7c3e-5cef-4960-a770-479e0529212e",
+          "status": "Done",
+          "assignedTo": "dev2@a.com",
+          "worked": 1,
+          "addedDate": "2026-01-30",
+          "backlogTaskId": "5ae45217-db61-4ca8-b6e3-ef368d67fcb1"
+        },
+        {
+          "backlogTaskId": "204a6979-3ff0-4eb6-a360-1bc22ad09d7e",
+          "assignedTo": "dev3@a.com",
+          "addedDate": "2026-01-30",
+          "worked": 2,
+          "status": "Done",
+          "id": "a39cf2fc-2ebe-4fe3-9d7c-c2e047f01ad8",
+          "estimate": 2,
+          "taskId": "1.2.2",
+          "remain": 0,
+          "doneDate": "2026-02-12",
+          "remainLog": [
+            {
+              "date": "2026-02-06",
+              "remain": 1.5
+            },
+            {
+              "remain": 1,
+              "date": "2026-02-10"
+            },
+            {
+              "date": "2026-02-12",
+              "remain": 0
+            }
+          ],
+          "workedLog": [
+            {
+              "date": "2026-02-06",
+              "worked": 0.5
+            },
+            {
+              "worked": 1,
+              "date": "2026-02-10"
+            },
+            {
+              "worked": 2,
+              "date": "2026-02-12"
+            }
+          ],
+          "name": "Validation checking when saving"
+        },
+        {
+          "taskId": "1.2.3",
+          "remain": 0,
+          "doneDate": "2026-02-12",
+          "estimate": 2,
+          "name": "Display validation errors to users",
+          "remainLog": [
+            {
+              "date": "2026-02-09",
+              "remain": 1.5
+            },
+            {
+              "remain": 0.5,
+              "date": "2026-02-10"
+            },
+            {
+              "date": "2026-02-12",
+              "remain": 0
+            }
+          ],
+          "workedLog": [
+            {
+              "date": "2026-02-09",
+              "worked": 0.5
+            },
+            {
+              "worked": 1,
+              "date": "2026-02-10"
+            },
+            {
+              "worked": 1.5,
+              "date": "2026-02-12"
+            }
+          ],
+          "addedDate": "2026-01-30",
+          "worked": 1.5,
+          "assignedTo": "dev7@ab.com",
+          "backlogTaskId": "3588fb00-02d3-4e5a-b90b-086e242bfa1b",
+          "id": "75de5646-162e-4217-9fe9-43e247a51bc4",
+          "status": "Done"
+        },
+        {
+          "taskId": "1.2.5a",
+          "remain": 0,
+          "doneDate": "2026-02-13",
+          "estimate": 2,
+          "name": "Create report for tracking xyx",
+          "remainLog": [
+            {
+              "remain": 0,
+              "date": "2026-02-13"
+            }
+          ],
+          "workedLog": [
+            {
+              "worked": 0.5,
+              "date": "2026-02-13"
+            }
+          ],
+          "addedDate": "2026-01-30",
+          "worked": 0.5,
+          "assignedTo": "dev3@a.com",
+          "backlogTaskId": "3312319a-681e-4811-a4da-df51b7c5bc58",
+          "id": "0e3af5bf-a95e-402f-b98b-23428b72b542",
+          "status": "Done"
+        }
+      ],
+      "description": "",
+      "endDate": "2026-02-13",
+      "plannedPoints": 20.5,
+      "today": "2026-02-16",
+      "startDate": "2026-02-02",
+      "id": "2be65bed-9468-4631-bed4-abb869b085c8",
+      "scopeDrops": [
+        {
+          "name": "Process error report",
+          "taskId": "2.1.2",
+          "addedDate": "2026-01-30",
+          "estimate": 0.5,
+          "removedDate": "2026-01-30"
+        },
+        {
+          "taskId": "2.2.1",
+          "name": "task 2-2-1",
+          "addedDate": "2026-01-30",
+          "estimate": 2.5,
+          "removedDate": "2026-01-30"
+        },
+        {
+          "estimate": 1.5,
+          "removedDate": "2026-01-30",
+          "addedDate": "2026-01-30",
+          "name": "task 2-2-3",
+          "taskId": "2.2.3"
+        },
+        {
+          "estimate": 2,
+          "removedDate": "2026-02-13",
+          "name": "Add error wrapper",
+          "addedDate": "2026-01-30",
+          "taskId": "2.1.1"
+        },
+        {
+          "removedDate": "2026-02-13",
+          "estimate": 2,
+          "name": "Report navigation and selection",
+          "addedDate": "2026-01-30",
+          "taskId": "1.2.4"
+        }
+      ],
+      "createdAt": "2026-03-06T12:53:50.186Z"
+    },
+    {
+      "efficiency": 0.5,
+      "tasks": [
+        {
+          "estimate": 0.5,
+          "remain": 0,
+          "taskId": "2.1.2",
+          "doneDate": "2026-02-17",
+          "name": "Process error report",
+          "remainLog": [
+            {
+              "remain": 0,
+              "date": "2026-02-17"
+            }
+          ],
+          "workedLog": [
+            {
+              "date": "2026-02-17",
+              "worked": 0.5
+            }
+          ],
+          "backlogTaskId": "a8e7bc9e-a1ef-467e-969a-578a270598ea",
+          "addedDate": "2026-01-30",
+          "worked": 0.5,
+          "assignedTo": "dev1@a.com",
+          "status": "Done",
+          "id": "c843e8c3-2607-4564-88f6-ae734c67dbd7"
+        },
+        {
+          "estimate": 2,
+          "taskId": "2.1.3",
+          "remain": 0,
+          "doneDate": "2026-02-20",
+          "name": "Implement error dashboard",
+          "remainLog": [
+            {
+              "remain": 1,
+              "date": "2026-02-17"
+            },
+            {
+              "date": "2026-02-18",
+              "remain": 0.5
+            },
+            {
+              "remain": 1,
+              "date": "2026-02-19"
+            },
+            {
+              "date": "2026-02-20",
+              "remain": 0
+            }
+          ],
+          "workedLog": [
+            {
+              "worked": 1,
+              "date": "2026-02-17"
+            },
+            {
+              "worked": 2,
+              "date": "2026-02-18"
+            },
+            {
+              "date": "2026-02-19",
+              "worked": 2.5
+            },
+            {
+              "date": "2026-02-20",
+              "worked": 3.5
+            }
+          ],
+          "backlogTaskId": "1aa96c77-db57-41a5-93d3-c9116b381825",
+          "addedDate": "2026-01-30",
+          "worked": 3.5,
+          "assignedTo": "dev2@a.com",
+          "status": "Done",
+          "id": "726dea51-4fc8-4e21-a2f8-8522c5fbdaa4"
+        },
+        {
+          "id": "3ddeca9d-120f-4592-955d-39c534a8099c",
+          "status": "Done",
+          "addedDate": "2026-01-30",
+          "worked": 2.5,
+          "assignedTo": "dev3@a.com",
+          "backlogTaskId": "c70e50ba-1741-4588-b27e-dcb6dabcdf51",
+          "name": "task 2-2-1",
+          "remainLog": [
+            {
+              "remain": 2,
+              "date": "2026-02-17"
+            },
+            {
+              "remain": 1,
+              "date": "2026-02-19"
+            },
+            {
+              "remain": 0.5,
+              "date": "2026-02-20"
+            },
+            {
+              "remain": 0,
+              "date": "2026-02-24"
+            }
+          ],
+          "workedLog": [
+            {
+              "date": "2026-02-17",
+              "worked": 0.5
+            },
+            {
+              "date": "2026-02-19",
+              "worked": 1.5
+            },
+            {
+              "worked": 2,
+              "date": "2026-02-20"
+            },
+            {
+              "worked": 2.5,
+              "date": "2026-02-24"
+            }
+          ],
+          "taskId": "2.2.1",
+          "remain": 0,
+          "doneDate": "2026-02-24",
+          "estimate": 2.5
+        },
+        {
+          "name": "task 2-2-2",
+          "remainLog": [
+            {
+              "remain": 2,
+              "date": "2026-02-17"
+            },
+            {
+              "remain": 0,
+              "date": "2026-02-19"
+            }
+          ],
+          "workedLog": [
+            {
+              "worked": 1,
+              "date": "2026-02-17"
+            },
+            {
+              "date": "2026-02-19",
+              "worked": 2
+            }
+          ],
+          "estimate": 3,
+          "remain": 0,
+          "taskId": "2.2.2",
+          "doneDate": "2026-02-19",
+          "status": "Done",
+          "id": "fd9066ff-6019-4fa2-93f6-eaa6c9157da0",
+          "backlogTaskId": "c3cc97cd-41fa-4df1-acc2-6ddc98691e5e",
+          "addedDate": "2026-01-30",
+          "worked": 2,
+          "assignedTo": "dev1@a.com"
+        },
+        {
+          "name": "task 2-2-3",
+          "workedLog": [
+            {
+              "worked": 0.5,
+              "date": "2026-02-19"
+            },
+            {
+              "date": "2026-02-24",
+              "worked": 1.5
+            }
+          ],
+          "remainLog": [
+            {
+              "date": "2026-02-19",
+              "remain": 1
+            },
+            {
+              "remain": 0,
+              "date": "2026-02-24"
+            }
+          ],
+          "doneDate": "2026-02-24",
+          "remain": 0,
+          "taskId": "2.2.3",
+          "estimate": 1.5,
+          "id": "0d94afdf-85ba-41c3-8cc7-cbc5bc442505",
+          "status": "Done",
+          "worked": 1.5,
+          "addedDate": "2026-01-30",
+          "assignedTo": "dev2@a.com",
+          "backlogTaskId": "e0215245-3a6c-4f92-a006-b82815e3bed7"
+        },
+        {
+          "addedDate": "2026-01-30",
+          "worked": 1.5,
+          "assignedTo": "dev7@ab.com",
+          "backlogTaskId": "0529f0d9-8245-422f-852d-0839a160112e",
+          "id": "794c5624-b28f-48ad-9609-f2815472e457",
+          "status": "Done",
+          "taskId": "2.3.1",
+          "remain": 0,
+          "doneDate": "2026-02-24",
+          "estimate": 1.5,
+          "name": "task 2-3-1",
+          "remainLog": [
+            {
+              "date": "2026-02-19",
+              "remain": 0.5
+            },
+            {
+              "date": "2026-02-24",
+              "remain": 0
+            }
+          ],
+          "workedLog": [
+            {
+              "worked": 1,
+              "date": "2026-02-19"
+            },
+            {
+              "date": "2026-02-24",
+              "worked": 1.5
+            }
+          ]
+        },
+        {
+          "estimate": 2,
+          "doneDate": "2026-02-25",
+          "taskId": "2.3.2",
+          "remain": 0,
+          "workedLog": [
+            {
+              "date": "2026-02-23",
+              "worked": 0.5
+            },
+            {
+              "worked": 2,
+              "date": "2026-02-24"
+            },
+            {
+              "worked": 2.5,
+              "date": "2026-02-25"
+            }
+          ],
+          "remainLog": [
+            {
+              "remain": 1.5,
+              "date": "2026-02-23"
+            },
+            {
+              "date": "2026-02-24",
+              "remain": 1
+            },
+            {
+              "remain": 0,
+              "date": "2026-02-25"
+            }
+          ],
+          "name": "task 2-3-2",
+          "backlogTaskId": "b5525343-3df0-4530-9bd0-09f83c4383a3",
+          "assignedTo": "dev3@a.com, dev1@a.com",
+          "worked": 2.5,
+          "addedDate": "2026-01-30",
+          "status": "Done",
+          "id": "830037ab-2ed3-4410-b59c-34ceb22683f4"
+        },
+        {
+          "workedLog": [
+            {
+              "worked": 0.5,
+              "date": "2026-02-23"
+            },
+            {
+              "date": "2026-02-25",
+              "worked": 1.5
+            }
+          ],
+          "remainLog": [
+            {
+              "date": "2026-02-23",
+              "remain": 1
+            },
+            {
+              "date": "2026-02-25",
+              "remain": 0
+            }
+          ],
+          "name": "task 2-3-3",
+          "doneDate": "2026-02-25",
+          "taskId": "2.3.3",
+          "remain": 0,
+          "estimate": 1.5,
+          "id": "45635808-52df-436b-bb3c-25ac4d8e69ee",
+          "status": "Done",
+          "assignedTo": "dev3@a.com, dev2@a.com",
+          "worked": 1.5,
+          "addedDate": "2026-01-30",
+          "backlogTaskId": "0f3d713b-492d-4f0a-a306-2ac822b1a989"
+        },
+        {
+          "doneDate": "2026-02-27",
+          "remain": 0,
+          "taskId": "3.1.1a",
+          "estimate": 2,
+          "workedLog": [
+            {
+              "date": "2026-02-23",
+              "worked": 0.5
+            },
+            {
+              "worked": 1.5,
+              "date": "2026-02-25"
+            },
+            {
+              "worked": 1.5,
+              "date": "2026-02-27"
+            }
+          ],
+          "remainLog": [
+            {
+              "remain": 2,
+              "date": "2026-02-23"
+            },
+            {
+              "remain": 1.5,
+              "date": "2026-02-25"
+            },
+            {
+              "date": "2026-02-27",
+              "remain": 0
+            }
+          ],
+          "name": "task 3-1-1",
+          "assignedTo": "dev1@a.com",
+          "worked": 1.5,
+          "addedDate": "2026-01-30",
+          "backlogTaskId": "9ffbadaf-a0af-4d21-a341-4f93c6eecf15",
+          "id": "2d0fdb39-42ff-4b63-8c84-2359af7853b4",
+          "status": "Done"
+        },
+        {
+          "id": "79f4356a-cb8f-41d5-a29f-e1ed67fb2e0e",
+          "status": "Done",
+          "assignedTo": "dev3@a.com",
+          "addedDate": "2026-01-30",
+          "worked": 0.5,
+          "backlogTaskId": "112c31ac-11c5-4515-ba94-f7a2b8c1982a",
+          "remainLog": [
+            {
+              "remain": 0,
+              "date": "2026-02-24"
+            }
+          ],
+          "workedLog": [
+            {
+              "date": "2026-02-24",
+              "worked": 0.5
+            }
+          ],
+          "name": "task 3-1-2",
+          "taskId": "3.1.2",
+          "remain": 0,
+          "doneDate": "2026-02-24",
+          "estimate": 0.5
+        },
+        {
+          "name": "task 3-1-3",
+          "workedLog": [
+            {
+              "worked": 1,
+              "date": "2026-02-25"
+            }
+          ],
+          "remainLog": [
+            {
+              "remain": 0,
+              "date": "2026-02-25"
+            }
+          ],
+          "doneDate": "2026-02-25",
+          "remain": 0,
+          "taskId": "3.1.3",
+          "estimate": 1,
+          "id": "77576b5d-6fa7-4d82-9bbd-805dccf43a67",
+          "status": "Done",
+          "worked": 1,
+          "addedDate": "2026-01-30",
+          "assignedTo": "dev1@a.com",
+          "backlogTaskId": "ca1cc0ba-60d4-40c0-a4ce-f53651012df6"
+        },
+        {
+          "backlogTaskId": "30a357d1-4208-4166-b3fe-fb403edec77a",
+          "assignedTo": "dev2@a.com",
+          "addedDate": "2026-01-30",
+          "worked": 2,
+          "status": "Done",
+          "id": "fcdeef07-8337-4800-abfd-91f0066926fb",
+          "estimate": 2.5,
+          "remain": 0,
+          "taskId": "3.1.4",
+          "doneDate": "2026-02-26",
+          "remainLog": [
+            {
+              "date": "2026-02-25",
+              "remain": 2
+            },
+            {
+              "date": "2026-02-26",
+              "remain": 0
+            }
+          ],
+          "workedLog": [
+            {
+              "date": "2026-02-25",
+              "worked": 0.5
+            },
+            {
+              "worked": 2,
+              "date": "2026-02-26"
+            }
+          ],
+          "name": "task 4-1-4"
+        },
+        {
+          "remainLog": [
+            {
+              "date": "2026-02-27",
+              "remain": 0
+            }
+          ],
+          "workedLog": [
+            {
+              "worked": 1.5,
+              "date": "2026-02-27"
+            }
+          ],
+          "name": "Create report for tracking xyx",
+          "id": "78a20af7-d04f-4d2f-a3fb-5277246960b0",
+          "status": "Done",
+          "assignedTo": "dev3@a.com",
+          "taskId": "1.2.5b",
+          "remain": 0,
+          "worked": 1.5,
+          "doneDate": "2026-02-27",
+          "backlogTaskId": "3312319a-681e-4811-a4da-df51b7c5bc58",
+          "estimate": 1.5
+        }
+      ],
+      "developers": 4,
+      "description": "Second Sprint",
+      "plannedPoints": 24,
+      "endDate": "2026-02-27",
+      "startDate": "2026-02-16",
+      "today": "2026-03-02",
+      "id": "ed795367-6e9b-46cc-a4e8-c64731f00125",
+      "scopeDrops": [
+        {
+          "estimate": 2,
+          "removedDate": "2026-02-27",
+          "taskId": "2.1.1",
+          "addedDate": "2026-02-16",
+          "name": "Add error wrapper"
+        },
+        {
+          "taskId": "1.2.4",
+          "addedDate": "2026-02-16",
+          "name": "Report navigation and selection",
+          "estimate": 2,
+          "removedDate": "2026-02-27"
+        }
+      ],
+      "createdAt": "2026-03-06T12:56:39.097Z"
+    },
+    {
+      "description": "",
+      "tasks": [
+        {
+          "addedDate": "2026-01-30",
+          "worked": 1,
+          "assignedTo": "dev7@ab.com",
+          "backlogTaskId": "058cae04-0fc6-4c28-9401-0e871ef82053",
+          "id": "f42a5e0b-8908-4734-abd1-78f9aa23ab3c",
+          "status": "In Progress",
+          "remain": 1,
+          "taskId": "3.2.1",
+          "doneDate": "",
+          "estimate": 2,
+          "name": "task 3-2-1",
+          "remainLog": [
+            {
+              "date": "2026-03-02",
+              "remain": 1
+            }
+          ],
+          "workedLog": [
+            {
+              "date": "2026-03-02",
+              "worked": 1
+            }
+          ]
+        },
+        {
+          "doneDate": "",
+          "taskId": "3.2.2",
+          "remain": 1.5,
+          "estimate": 1.5,
+          "workedLog": [],
+          "remainLog": [],
+          "name": "task 3-2-2",
+          "assignedTo": "dev3@a.com",
+          "worked": 0,
+          "addedDate": "2026-01-30",
+          "backlogTaskId": "eba1b68f-fb58-48d3-b50b-bc2df6bdaccb",
+          "id": "8f8336ab-c2e2-4289-bf11-3c96f7e321ed",
+          "status": "Todo"
+        },
+        {
+          "name": "task 3-2-3",
+          "workedLog": [],
+          "remainLog": [],
+          "estimate": 1.5,
+          "doneDate": "",
+          "remain": 1.5,
+          "taskId": "3.2.3",
+          "status": "Todo",
+          "id": "9c6ed3a3-822d-46bc-b6e9-1370cdbb95e6",
+          "backlogTaskId": "a646e64c-9f92-4d7f-a684-7c221600b8d8",
+          "worked": 0,
+          "addedDate": "2026-01-30",
+          "assignedTo": "dev2@a.com"
+        },
+        {
+          "estimate": 3,
+          "doneDate": "",
+          "taskId": "3.2.4",
+          "remain": 3,
+          "name": "task 3-2-4",
+          "workedLog": [],
+          "remainLog": [],
+          "backlogTaskId": "aeae9257-9cc4-4ba7-b784-36712a2281fe",
+          "worked": 0,
+          "addedDate": "2026-01-30",
+          "assignedTo": "dev1@a.com",
+          "status": "Todo",
+          "id": "74e01a19-1424-44e0-9807-e4aeec7a1ef3"
+        },
+        {
+          "remainLog": [],
+          "workedLog": [],
+          "name": "task 3-3-1",
+          "remain": 2,
+          "taskId": "3.3.1",
+          "doneDate": "",
+          "estimate": 2,
+          "id": "941d8504-9808-43f4-be59-4da8e0c514df",
+          "status": "Todo",
+          "assignedTo": "dev2@a.com",
+          "addedDate": "2026-01-30",
+          "worked": 0,
+          "backlogTaskId": "31196061-980a-487b-90de-e35f3bfd2bb2"
+        },
+        {
+          "backlogTaskId": "bf6bcb08-e495-48da-a522-45f7cc88d8ae",
+          "addedDate": "2026-01-30",
+          "worked": 0,
+          "assignedTo": "dev3@a.com",
+          "status": "Todo",
+          "id": "826299c2-72fd-40ee-b390-b90bb531da94",
+          "estimate": 1.5,
+          "remain": 1.5,
+          "taskId": "3.3.2",
+          "doneDate": "",
+          "name": "task 3-3-2",
+          "remainLog": [],
+          "workedLog": []
+        },
+        {
+          "name": "task 3-3-3",
+          "remainLog": [],
+          "workedLog": [],
+          "taskId": "3.3.3",
+          "remain": 1.5,
+          "doneDate": "",
+          "estimate": 1.5,
+          "id": "56143076-245b-41c7-90c5-436cdc659fd5",
+          "status": "Todo",
+          "addedDate": "2026-01-30",
+          "worked": 0,
+          "assignedTo": "dev1@a.com",
+          "backlogTaskId": "e40c24f4-ac1d-4413-9ad5-31903a1ebb35"
+        },
+        {
+          "backlogTaskId": "82678021-642a-4776-b002-a13ecf525e16",
+          "assignedTo": "dev1@a.com",
+          "worked": 0,
+          "addedDate": "2026-01-30",
+          "status": "Todo",
+          "id": "d1b499b2-a9fc-42a1-9556-e3293db8d7d7",
+          "estimate": 3,
+          "doneDate": "",
+          "remain": 3,
+          "taskId": "3.3.4",
+          "workedLog": [],
+          "remainLog": [],
+          "name": "task 3-3-4"
+        },
+        {
+          "workedLog": [],
+          "remainLog": [],
+          "id": "b99230f3-b827-4715-b906-6a2596aac56e",
+          "name": "task 3-1-1",
+          "status": "Todo",
+          "assignedTo": "dev1@a.com",
+          "worked": 0,
+          "doneDate": "",
+          "remain": 1.5,
+          "taskId": "3.1.1b",
+          "backlogTaskId": "9ffbadaf-a0af-4d21-a341-4f93c6eecf15",
+          "estimate": 1.5
+        },
+        {
+          "id": "9d030a24-4ce7-4b54-a449-1dc47a1ffa8b",
+          "name": "Add error wrapper",
+          "workedLog": [],
+          "remainLog": [],
+          "status": "Todo",
+          "worked": 0,
+          "doneDate": "",
+          "remain": 2,
+          "taskId": "2.1.1",
+          "assignedTo": "dev3@a.com",
+          "estimate": 2,
+          "backlogTaskId": "804fc3c5-addf-49f0-825c-133ea6e96d1d"
+        },
+        {
+          "assignedTo": "dev1@a.com",
+          "taskId": "1.2.4",
+          "remain": 2,
+          "doneDate": "",
+          "worked": 0,
+          "backlogTaskId": "b9555a0b-b44b-468a-bc86-cc79acf52db3",
+          "estimate": 2,
+          "remainLog": [],
+          "workedLog": [],
+          "name": "Report navigation and selection",
+          "id": "5fa99ca3-570c-4811-b399-f9c326f7e979",
+          "status": "Todo"
+        }
+      ],
+      "developers": 3,
+      "efficiency": 0.5,
+      "createdAt": "2026-03-06T13:02:23.918Z",
+      "id": "07eca382-7101-44ab-8ffc-6cfc82bfeec8",
+      "startDate": "2026-03-02",
+      "today": "2026-03-09",
+      "plannedPoints": 16,
+      "endDate": "2026-03-13"
+    }
+  ],
+  "projectToday": "2026-03-09",
+  "backlog": {
+    "stories": [
+      {
+        "description": "User story 1.1",
+        "priority": 20,
+        "id": "7539013d-5a59-4025-a421-db464bbc3aa8",
+        "tasks": [
+          {
+            "assignedTo": [
+              "dev3@a.com"
+            ],
+            "description": "Add Concurrency Management",
+            "taskId": "1.1.1",
+            "id": "60855a55-a0f2-4bb5-afa6-4ec9e6931e5f",
+            "estimate": 3
+          },
+          {
+            "estimate": 4,
+            "assignedTo": [
+              "dev7@ab.com"
+            ],
+            "id": "8f0ef4fb-4f17-4c66-89d0-cbe07a454ae6",
+            "taskId": "1.1.2",
+            "description": "Create NHibernate dao classes for entities and main database."
+          },
+          {
+            "estimate": 1,
+            "taskId": "1.1.3",
+            "description": "Insert logging",
+            "id": "78c50cfc-935a-4506-9282-5ef8e6089db6",
+            "assignedTo": [
+              "dev3@a.com",
+              "dev7@ab.com"
+            ]
+          },
+          {
+            "assignedTo": [
+              "dev1@a.com"
+            ],
+            "id": "4c4ee3ee-e6a0-4540-b8d1-d9ce9f7942d0",
+            "taskId": "1.1.4",
+            "description": "Main layout",
+            "estimate": 1.5
+          }
+        ],
+        "storyId": "1.1"
+      },
+      {
+        "storyId": "1.2",
+        "tasks": [
+          {
+            "taskId": "1.2.1",
+            "description": "Create login",
+            "id": "5ae45217-db61-4ca8-b6e3-ef368d67fcb1",
+            "assignedTo": [
+              "dev2@a.com"
+            ],
+            "estimate": 1
+          },
+          {
+            "id": "204a6979-3ff0-4eb6-a360-1bc22ad09d7e",
+            "description": "Validation checking when saving",
+            "taskId": "1.2.2",
+            "assignedTo": [
+              "dev3@a.com"
+            ],
+            "estimate": 2
+          },
+          {
+            "estimate": 2,
+            "assignedTo": [
+              "dev7@ab.com"
+            ],
+            "taskId": "1.2.3",
+            "description": "Display validation errors to users",
+            "id": "3588fb00-02d3-4e5a-b90b-086e242bfa1b"
+          },
+          {
+            "description": "Report navigation and selection",
+            "taskId": "1.2.4",
+            "id": "b9555a0b-b44b-468a-bc86-cc79acf52db3",
+            "assignedTo": [
+              "dev1@a.com"
+            ],
+            "estimate": 2
+          },
+          {
+            "assignedTo": [
+              "dev3@a.com"
+            ],
+            "description": "Create report for tracking xyx",
+            "taskId": "1.2.5",
+            "id": "3312319a-681e-4811-a4da-df51b7c5bc58",
+            "estimate": 2
+          }
+        ],
+        "description": "User story 1.2",
+        "priority": 30,
+        "id": "ab570b54-356c-4c77-a7bc-538cec080a7f"
+      },
+      {
+        "storyId": "2.1",
+        "tasks": [
+          {
+            "description": "Add error wrapper",
+            "taskId": "2.1.1",
+            "id": "804fc3c5-addf-49f0-825c-133ea6e96d1d",
+            "assignedTo": [
+              "dev3@a.com"
+            ],
+            "estimate": 2
+          },
+          {
+            "estimate": 0.5,
+            "id": "a8e7bc9e-a1ef-467e-969a-578a270598ea",
+            "description": "Process error report",
+            "taskId": "2.1.2",
+            "assignedTo": [
+              "dev1@a.com"
+            ]
+          },
+          {
+            "estimate": 2,
+            "description": "Implement error dashboard",
+            "taskId": "2.1.3",
+            "id": "1aa96c77-db57-41a5-93d3-c9116b381825",
+            "assignedTo": [
+              "dev2@a.com"
+            ]
+          }
+        ],
+        "description": "User story 2.1",
+        "priority": 50,
+        "id": "d85301c9-610c-4ed9-9f94-0ac17da91c41"
+      },
+      {
+        "id": "1d397c9b-7608-4bf0-8c17-19e5aee6b72a",
+        "priority": 60,
+        "description": "User story 2.2",
+        "tasks": [
+          {
+            "taskId": "2.2.1",
+            "description": "task 2-2-1",
+            "id": "c70e50ba-1741-4588-b27e-dcb6dabcdf51",
+            "assignedTo": [
+              "dev3@a.com"
+            ],
+            "estimate": 2.5
+          },
+          {
+            "estimate": 3,
+            "assignedTo": [
+              "dev1@a.com"
+            ],
+            "id": "c3cc97cd-41fa-4df1-acc2-6ddc98691e5e",
+            "description": "task 2-2-2",
+            "taskId": "2.2.2"
+          },
+          {
+            "assignedTo": [
+              "dev2@a.com"
+            ],
+            "id": "e0215245-3a6c-4f92-a006-b82815e3bed7",
+            "description": "task 2-2-3",
+            "taskId": "2.2.3",
+            "estimate": 1.5
+          }
+        ],
+        "storyId": "2.2"
+      },
+      {
+        "storyId": "2.3",
+        "tasks": [
+          {
+            "id": "0529f0d9-8245-422f-852d-0839a160112e",
+            "description": "task 2-3-1",
+            "taskId": "2.3.1",
+            "assignedTo": [
+              "dev7@ab.com"
+            ],
+            "estimate": 1.5
+          },
+          {
+            "estimate": 2,
+            "id": "b5525343-3df0-4530-9bd0-09f83c4383a3",
+            "taskId": "2.3.2",
+            "description": "task 2-3-2",
+            "assignedTo": [
+              "dev3@a.com",
+              "dev1@a.com"
+            ]
+          },
+          {
+            "estimate": 1.5,
+            "assignedTo": [
+              "dev3@a.com",
+              "dev2@a.com"
+            ],
+            "description": "task 2-3-3",
+            "taskId": "2.3.3",
+            "id": "0f3d713b-492d-4f0a-a306-2ac822b1a989"
+          }
+        ],
+        "id": "f72ad386-7de5-4252-994f-fc72392e04a3",
+        "priority": 70,
+        "description": "User story 2.3"
+      },
+      {
+        "description": "User story 3.1",
+        "id": "6eef744e-b822-4501-8dff-01885626f837",
+        "priority": 80,
+        "storyId": "3.1",
+        "tasks": [
+          {
+            "estimate": 2,
+            "id": "9ffbadaf-a0af-4d21-a341-4f93c6eecf15",
+            "taskId": "3.1.1",
+            "description": "task 3-1-1",
+            "assignedTo": [
+              "dev1@a.com"
+            ]
+          },
+          {
+            "taskId": "3.1.2",
+            "description": "task 3-1-2",
+            "id": "112c31ac-11c5-4515-ba94-f7a2b8c1982a",
+            "assignedTo": [
+              "dev3@a.com"
+            ],
+            "estimate": 0.5
+          },
+          {
+            "description": "task 3-1-3",
+            "taskId": "3.1.3",
+            "id": "ca1cc0ba-60d4-40c0-a4ce-f53651012df6",
+            "assignedTo": [
+              "dev1@a.com"
+            ],
+            "estimate": 1
+          },
+          {
+            "assignedTo": [
+              "dev2@a.com"
+            ],
+            "description": "task 4-1-4",
+            "taskId": "3.1.4",
+            "id": "30a357d1-4208-4166-b3fe-fb403edec77a",
+            "estimate": 2.5
+          }
+        ]
+      },
+      {
+        "storyId": "3.2",
+        "tasks": [
+          {
+            "assignedTo": [
+              "dev7@ab.com"
+            ],
+            "id": "058cae04-0fc6-4c28-9401-0e871ef82053",
+            "description": "task 3-2-1",
+            "taskId": "3.2.1",
+            "estimate": 2
+          },
+          {
+            "estimate": 1.5,
+            "taskId": "3.2.2",
+            "description": "task 3-2-2",
+            "id": "eba1b68f-fb58-48d3-b50b-bc2df6bdaccb",
+            "assignedTo": [
+              "dev3@a.com"
+            ]
+          },
+          {
+            "estimate": 1.5,
+            "assignedTo": [
+              "dev2@a.com"
+            ],
+            "description": "task 3-2-3",
+            "taskId": "3.2.3",
+            "id": "a646e64c-9f92-4d7f-a684-7c221600b8d8"
+          },
+          {
+            "estimate": 3,
+            "id": "aeae9257-9cc4-4ba7-b784-36712a2281fe",
+            "taskId": "3.2.4",
+            "description": "task 3-2-4",
+            "assignedTo": [
+              "dev1@a.com"
+            ]
+          }
+        ],
+        "priority": 120,
+        "id": "7ef7c6a3-e043-4bc4-9508-c6384765f852",
+        "description": "User story 3.2"
+      },
+      {
+        "tasks": [
+          {
+            "estimate": 2,
+            "assignedTo": [
+              "dev2@a.com"
+            ],
+            "taskId": "3.3.1",
+            "description": "task 3-3-1",
+            "id": "31196061-980a-487b-90de-e35f3bfd2bb2"
+          },
+          {
+            "assignedTo": [
+              "dev3@a.com"
+            ],
+            "id": "bf6bcb08-e495-48da-a522-45f7cc88d8ae",
+            "description": "task 3-3-2",
+            "taskId": "3.3.2",
+            "estimate": 1.5
+          },
+          {
+            "estimate": 1.5,
+            "assignedTo": [
+              "dev1@a.com"
+            ],
+            "description": "task 3-3-3",
+            "taskId": "3.3.3",
+            "id": "e40c24f4-ac1d-4413-9ad5-31903a1ebb35"
+          },
+          {
+            "assignedTo": [
+              "dev1@a.com"
+            ],
+            "description": "task 3-3-4",
+            "taskId": "3.3.4",
+            "id": "82678021-642a-4776-b002-a13ecf525e16",
+            "estimate": 3
+          }
+        ],
+        "storyId": "3.3",
+        "description": "User story 3.2",
+        "id": "e0c9aeca-9655-4c6f-8bee-8783358b4f06",
+        "priority": 120
+      },
+      {
+        "tasks": [
+          {
+            "estimate": 0.5,
+            "id": "e67aceae-5baf-4239-870b-285d2d2c7eda",
+            "taskId": "4.1.1",
+            "description": "AAAA",
+            "assignedTo": []
+          }
+        ],
+        "storyId": "4.1",
+        "description": "A-team only Story",
+        "id": "7f6a78af-b857-4f14-8d03-d335b068ab1e",
+        "priority": 100
+      }
+    ]
+  }
+}
