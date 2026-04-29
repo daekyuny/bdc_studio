@@ -30,4 +30,6 @@ dist/
 # Secrets
 .env
 src/firebase-config.ts
+*-firebase-adminsdk-*.json
+*-service-account*.json
 
